@@ -1,0 +1,33 @@
+sudo: false
+
+language: go
+
+go:
+  - '1.13.x'
+
+services:
+  - docker
+
+notifications:
+  email: false
+
+branches:
+  only:
+    - master
+
+cache:
+  directories:
+    - $HOME/gopath/pkg/mod         # Cache the Go modules
+
+before_script:
+  - curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(go env GOPATH)/bin latest
+
+jobs:
+  include:
+    - stage: tests
+      script: make coverage
+
+    - stage: push images
+      if: type != pull_request
+      script:
+          - bash ./build/bin/push-images
