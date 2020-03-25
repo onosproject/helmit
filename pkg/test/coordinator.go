@@ -18,10 +18,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/onosproject/helmet/pkg/job"
-	kube "github.com/onosproject/helmet/pkg/kubernetes"
+	"github.com/onosproject/helmet/pkg/kubernetes"
 	"github.com/onosproject/helmet/pkg/registry"
 	"google.golang.org/grpc"
-	"k8s.io/client-go/kubernetes"
 	"os"
 	"strconv"
 	"sync"
@@ -30,14 +29,13 @@ import (
 // newCoordinator returns a new test coordinator
 func newCoordinator(config *Config) (*Coordinator, error) {
 	return &Coordinator{
-		client: kube.NewClient(config.ID).Clientset(),
 		config: config,
 	}, nil
 }
 
 // Coordinator coordinates workers for suites of tests
 type Coordinator struct {
-	client *kubernetes.Clientset
+	client kubernetes.Client
 	config *Config
 }
 
@@ -73,7 +71,6 @@ func (c *Coordinator) Run() error {
 				Iterations: c.config.Iterations,
 			}
 			worker := &WorkerTask{
-				client: c.client,
 				runner: job.NewNamespace(config.ID),
 				config: config,
 			}
@@ -134,7 +131,6 @@ func newJobID(testID, suite string) string {
 
 // WorkerTask manages a single test job for a test worker
 type WorkerTask struct {
-	client *kubernetes.Clientset
 	runner *job.Runner
 	config *Config
 }

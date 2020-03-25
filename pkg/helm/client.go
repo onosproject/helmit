@@ -15,8 +15,9 @@
 package helm
 
 import (
-	"github.com/onosproject/helmet/pkg/kubernetes"
+	"github.com/onosproject/helmet/pkg/kubernetes/config"
 	"helm.sh/helm/v3/pkg/action"
+	"k8s.io/client-go/kubernetes"
 	"log"
 )
 
@@ -24,26 +25,27 @@ var clients = make(map[string]Client)
 
 // Namespace returns the Helm namespace
 func Namespace() string {
-	return kubernetes.GetNamespaceFromEnv()
+	return config.GetNamespaceFromEnv()
 }
 
 // Helm returns the Helm client
 func Helm() Client {
-	return getClient(kubernetes.GetNamespaceFromEnv())
+	return getClient(config.GetNamespaceFromEnv())
 }
 
 // getClient returns the client for the given namespace
 func getClient(namespace string) Client {
 	client, ok := clients[namespace]
 	if !ok {
-		config, err := getConfig(namespace)
+		configuration, err := getConfig(namespace)
 		if err != nil {
 			panic(err)
 		}
 		client = &helmClient{
-			Client: kubernetes.NewClient(namespace),
-			charts: make(map[string]*Chart),
-			config: config,
+			namespace: namespace,
+			client:    kubernetes.NewForConfigOrDie(config.GetRestConfigOrDie()),
+			charts:    make(map[string]*Chart),
+			config:    configuration,
 		}
 		clients[namespace] = client
 	}
@@ -88,9 +90,10 @@ type ReleaseClient interface {
 
 // helmClient is an implementation of the Client interface
 type helmClient struct {
-	kubernetes.Client
-	charts map[string]*Chart
-	config *action.Configuration
+	namespace string
+	client    *kubernetes.Clientset
+	charts    map[string]*Chart
+	config    *action.Configuration
 }
 
 func (c *helmClient) Namespace(namespace string) Client {
@@ -110,7 +113,7 @@ func (c *helmClient) Charts() []*Chart {
 func (c *helmClient) Chart(name string) *Chart {
 	chart, ok := c.charts[name]
 	if !ok {
-		chart = newChart(name, c.Client, c.config)
+		chart = newChart(name, c.namespace, c.client, c.config)
 		c.charts[name] = chart
 	}
 	return chart

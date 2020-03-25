@@ -16,7 +16,7 @@ build-helmet-tests:
 
 generate: # @HELP generate k8s client interfaces and implementations
 generate:
-	go run github.com/onosproject/helmet/cmd/helmet-generate ./build/helmet-generate/generate.yaml ./pkg/helm/api
+	go run github.com/onosproject/helmet/cmd/helmet-generate ./build/helmet-generate/generate.yaml ./pkg/kubernetes
 
 test: # @HELP run the unit tests and source code validation
 test: license_check build deps linters

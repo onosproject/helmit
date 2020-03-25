@@ -15,23 +15,25 @@
 package helm
 
 import (
-	"github.com/onosproject/helmet/pkg/helm/api/resource"
 	"helm.sh/helm/v3/pkg/action"
+	"k8s.io/client-go/kubernetes"
 )
 
-func newChart(name string, client resource.Client, config *action.Configuration) *Chart {
+func newChart(name string, namespace string, client *kubernetes.Clientset, config *action.Configuration) *Chart {
 	return &Chart{
-		Client:   client,
-		name:     name,
-		config:   config,
-		releases: make(map[string]*Release),
+		namespace: namespace,
+		client:    client,
+		name:      name,
+		config:    config,
+		releases:  make(map[string]*Release),
 	}
 }
 
 // Chart is a Helm chart
 type Chart struct {
-	resource.Client
 	ReleaseClient
+	namespace  string
+	client     *kubernetes.Clientset
 	config     *action.Configuration
 	name       string
 	repository string
@@ -67,7 +69,7 @@ func (c *Chart) Releases() []*Release {
 func (c *Chart) Release(name string) *Release {
 	release, ok := c.releases[name]
 	if !ok {
-		release = newRelease(name, c, c.config)
+		release = newRelease(name, c.namespace, c.client, c, c.config)
 		c.releases[name] = release
 	}
 	return release

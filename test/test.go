@@ -17,6 +17,7 @@ package test
 import (
 	"fmt"
 	"github.com/onosproject/helmet/pkg/helm"
+	"github.com/onosproject/helmet/pkg/kubernetes"
 	"github.com/onosproject/helmet/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -43,7 +44,9 @@ func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
 	err = topo.Install(true)
 	assert.NoError(t, err)
 
-	deployment, err := topo.AppsV1().
+	client := kubernetes.NewForReleaseOrDie(topo)
+
+	deployment, err := client.AppsV1().
 		Deployments().
 		Get("onos-topo")
 	assert.NoError(t, err)

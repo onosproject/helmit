@@ -16,7 +16,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/onosproject/helmet/pkg/helm/codegen"
+	"github.com/onosproject/helmet/pkg/kubernetes/codegen"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"

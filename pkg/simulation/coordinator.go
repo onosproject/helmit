@@ -18,12 +18,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/onosproject/helmet/pkg/job"
-	kube "github.com/onosproject/helmet/pkg/kubernetes"
+	"github.com/onosproject/helmet/pkg/kubernetes/config"
 	"github.com/onosproject/helmet/pkg/registry"
 	"github.com/onosproject/helmet/pkg/util/async"
 	"github.com/onosproject/helmet/pkg/util/logging"
 	"google.golang.org/grpc"
-	"k8s.io/client-go/kubernetes"
 	"os"
 	"sync"
 	"time"
@@ -32,14 +31,12 @@ import (
 // newCoordinator returns a new simulation coordinator
 func newCoordinator(config *Config) (*Coordinator, error) {
 	return &Coordinator{
-		client: kube.NewClient(config.ID).Clientset(),
 		config: config,
 	}, nil
 }
 
 // Coordinator coordinates workers for suites of simulators
 type Coordinator struct {
-	client *kubernetes.Clientset
 	config *Config
 }
 
@@ -59,7 +56,7 @@ func (c *Coordinator) Run() error {
 		if env == nil {
 			env = make(map[string]string)
 		}
-		env[kube.NamespaceEnv] = c.config.ID
+		env[config.NamespaceEnv] = c.config.ID
 		env[simulationTypeEnv] = string(simulationTypeWorker)
 		env[simulationWorkerEnv] = fmt.Sprintf("%d", i)
 		env[simulationJobEnv] = c.config.ID
@@ -83,7 +80,6 @@ func (c *Coordinator) Run() error {
 			Args:       c.config.Args,
 		}
 		worker := &WorkerTask{
-			client: c.client,
 			runner: job.NewNamespace(jobID),
 			config: config,
 		}
@@ -139,7 +135,6 @@ func newJobID(testID, suite string) string {
 
 // WorkerTask manages a single test job for a test worker
 type WorkerTask struct {
-	client  *kubernetes.Clientset
 	runner  *job.Runner
 	config  *Config
 	workers []SimulatorServiceClient

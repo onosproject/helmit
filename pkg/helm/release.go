@@ -19,8 +19,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/iancoleman/strcase"
-	"github.com/onosproject/helmet/pkg/helm/api"
-	"github.com/onosproject/helmet/pkg/helm/api/resource"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -31,6 +29,7 @@ import (
 	helm "helm.sh/helm/v3/pkg/kube"
 	"helm.sh/helm/v3/pkg/release"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"os"
 	"reflect"
 	"strings"
@@ -38,26 +37,7 @@ import (
 
 var settings = cli.New()
 
-func newRelease(name string, chart *Chart, config *action.Configuration) *Release {
-	var release *Release
-	var filter resource.Filter = func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-		resources, err := release.getResources()
-		if err != nil {
-			return false, err
-		}
-		for _, resource := range resources {
-			resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
-			if resourceKind.Group == kind.Group &&
-				resourceKind.Version == kind.Version &&
-				resourceKind.Kind == kind.Kind &&
-				resource.Namespace == meta.Namespace &&
-				resource.Name == meta.Name {
-				return true, nil
-			}
-		}
-		return false, nil
-	}
-
+func newRelease(name string, namespace string, client *kubernetes.Clientset, chart *Chart, config *action.Configuration) *Release {
 	ctx := context.Release(name)
 	opts := &values.Options{
 		ValueFiles: ctx.ValueFiles,
@@ -68,8 +48,9 @@ func newRelease(name string, chart *Chart, config *action.Configuration) *Releas
 		panic(err)
 	}
 
-	release = &Release{
-		Client:    api.NewClient(chart.Client, filter),
+	return &Release{
+		namespace: namespace,
+		client:    client,
 		chart:     chart,
 		config:    config,
 		context:   ctx,
@@ -77,12 +58,12 @@ func newRelease(name string, chart *Chart, config *action.Configuration) *Releas
 		values:    make(map[string]interface{}),
 		overrides: values,
 	}
-	return release
 }
 
 // Release is a Helm chart release
 type Release struct {
-	api.Client
+	namespace string
+	client    *kubernetes.Clientset
 	chart     *Chart
 	config    *action.Configuration
 	context   *ReleaseContext
@@ -91,6 +72,11 @@ type Release struct {
 	overrides map[string]interface{}
 	skipCRDs  bool
 	release   *release.Release
+}
+
+// Namespace returns the release namespace
+func (r *Release) Namespace() string {
+	return r.namespace
 }
 
 // Name returns the release name
@@ -142,6 +128,25 @@ func (r *Release) setContextDir() error {
 		}
 	}
 	return nil
+}
+
+// Filter is the release filter function
+func (r *Release) Filter(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+	resources, err := r.getResources()
+	if err != nil {
+		return false, err
+	}
+	for _, resource := range resources {
+		resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
+		if resourceKind.Group == kind.Group &&
+			resourceKind.Version == kind.Version &&
+			resourceKind.Kind == kind.Kind &&
+			resource.Namespace == meta.Namespace &&
+			resource.Name == meta.Name {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // Install installs the Helm chart

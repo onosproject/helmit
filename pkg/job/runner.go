@@ -18,7 +18,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	kube "github.com/onosproject/helmet/pkg/kubernetes"
+	"github.com/onosproject/helmet/pkg/kubernetes"
 	"github.com/onosproject/helmet/pkg/util/files"
 	"github.com/onosproject/helmet/pkg/util/logging"
 	batchv1 "k8s.io/api/batch/v1"
@@ -42,14 +42,14 @@ func NewNamespace(namespace string) *Runner {
 // newRunner returns a new job runner
 func newRunner(namespace string, server bool) *Runner {
 	return &Runner{
-		Client: kube.NewClient(namespace),
+		Client: kubernetes.NewForNamespaceOrDie(namespace),
 		server: server,
 	}
 }
 
 // Runner manages test jobs within a namespace
 type Runner struct {
-	kube.Client
+	kubernetes.Client
 	server bool
 }
 

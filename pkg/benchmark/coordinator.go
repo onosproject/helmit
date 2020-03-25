@@ -18,15 +18,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/onosproject/helmet/pkg/job"
-	kube "github.com/onosproject/helmet/pkg/kubernetes"
+	"github.com/onosproject/helmet/pkg/kubernetes/config"
 	"github.com/onosproject/helmet/pkg/registry"
 	"github.com/onosproject/helmet/pkg/util/async"
 	"github.com/onosproject/helmet/pkg/util/logging"
 	"google.golang.org/grpc"
-	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"math"
 	"os"
 	"sync"
@@ -37,14 +33,12 @@ import (
 // newCoordinator returns a new benchmark coordinator
 func newCoordinator(config *Config) (*Coordinator, error) {
 	return &Coordinator{
-		client: kube.NewClient(config.ID).Clientset(),
 		config: config,
 	}, nil
 }
 
 // Coordinator coordinates workers for suites of benchmarks
 type Coordinator struct {
-	client *kubernetes.Clientset
 	config *Config
 }
 
@@ -64,7 +58,7 @@ func (c *Coordinator) Run() error {
 		if env == nil {
 			env = make(map[string]string)
 		}
-		env[kube.NamespaceEnv] = c.config.ID
+		env[config.NamespaceEnv] = c.config.ID
 		env[benchmarkTypeEnv] = string(benchmarkTypeWorker)
 		env[benchmarkWorkerEnv] = fmt.Sprintf("%d", i)
 		env[benchmarkJobEnv] = c.config.ID
@@ -90,7 +84,6 @@ func (c *Coordinator) Run() error {
 			Args:        c.config.Args,
 		}
 		worker := &WorkerTask{
-			client: c.client,
 			runner: job.NewNamespace(jobID),
 			config: config,
 		}
@@ -146,7 +139,6 @@ func newJobID(testID, suite string) string {
 
 // WorkerTask manages a single test job for a test worker
 type WorkerTask struct {
-	client  *kubernetes.Clientset
 	runner  *job.Runner
 	config  *Config
 	workers []WorkerServiceClient
@@ -218,15 +210,6 @@ func (t *WorkerTask) getWorkers() ([]WorkerServiceClient, error) {
 	}
 	t.workers = workers
 	return workers, nil
-}
-
-// getPod finds the Pod for the given test
-func (t *WorkerTask) getPod(worker int) (*corev1.Pod, error) {
-	pod, err := t.client.CoreV1().Pods(t.config.ID).Get(getWorkerName(worker), metav1.GetOptions{})
-	if err != nil && !k8serrors.IsNotFound(err) {
-		return nil, err
-	}
-	return pod, nil
 }
 
 // setupSuite sets up the benchmark suite
