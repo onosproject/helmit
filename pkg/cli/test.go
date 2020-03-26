@@ -46,7 +46,7 @@ func getTestCommand() *cobra.Command {
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    runTestCommand,
 	}
-	cmd.Flags().StringP("package", "p", "", "the package to run")
+	cmd.Flags().StringP("context", "c", "", "the test context")
 	cmd.Flags().StringP("image", "i", "", "the test image to run")
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
 	cmd.Flags().StringArrayP("values", "f", []string{}, "release values paths")
@@ -63,7 +63,12 @@ func getTestCommand() *cobra.Command {
 func runTestCommand(cmd *cobra.Command, args []string) error {
 	setupCommand(cmd)
 
-	pkgPath, _ := cmd.Flags().GetString("package")
+	pkgPath := ""
+	if len(args) > 0 {
+		pkgPath = args[0]
+	}
+
+	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	files, _ := cmd.Flags().GetStringArray("values")
 	sets, _ := cmd.Flags().GetStringArray("set")
@@ -74,8 +79,36 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	iterations, _ := cmd.Flags().GetInt("iterations")
 	untilFailure, _ := cmd.Flags().GetBool("until-failure")
 
+	// Either a command package or image must be specified
 	if pkgPath == "" && image == "" {
-		return errors.New("must specify either a --package or --image to run")
+		return errors.New("must specify either a test package or --image to run")
+	}
+
+	// Generate a unique test ID
+	testID := random.NewPetName(2)
+
+	// If a command package was provided, build a binary and update the image tag
+	var executable string
+	if pkgPath != "" {
+		executable = filepath.Join(os.TempDir(), "helmet", testID)
+		err := buildBinary(pkgPath, executable)
+		if err != nil {
+			cmd.SilenceUsage = true
+			cmd.SilenceErrors = true
+			return err
+		}
+		if image == "" {
+			image = "onosproject/helmet-runner:latest"
+		}
+	}
+
+	// If a context was provided, convert the context to its absolute path
+	if context != "" {
+		path, err := filepath.Abs(args[0])
+		if err != nil {
+			return err
+		}
+		context = path
 	}
 
 	if untilFailure {
@@ -90,33 +123,6 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	values, err := parseOverrides(sets)
 	if err != nil {
 		return err
-	}
-
-	testID := random.NewPetName(2)
-
-	var executable string
-	if pkgPath != "" {
-		executable = filepath.Join(os.TempDir(), "helmet", testID)
-		err = buildBinary(pkgPath, executable)
-		if err != nil {
-			cmd.SilenceUsage = true
-			cmd.SilenceErrors = true
-			return err
-		}
-		if image == "" {
-			image = "onosproject/helmet-runner:latest"
-		}
-	}
-
-	var context string
-	if len(args) > 0 {
-		path, err := filepath.Abs(args[0])
-		if err != nil {
-			cmd.SilenceUsage = true
-			cmd.SilenceErrors = true
-			return err
-		}
-		context = path
 	}
 
 	config := &test.Config{

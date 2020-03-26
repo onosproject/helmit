@@ -52,7 +52,7 @@ func getSimulateCommand() *cobra.Command {
 		Example: simulateExample,
 		RunE:    runSimulateCommand,
 	}
-	cmd.Flags().StringP("package", "p", "", "the package to run")
+	cmd.Flags().StringP("context", "c", "", "the simulation context")
 	cmd.Flags().StringP("image", "i", "", "the simulation image to run")
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
 	cmd.Flags().StringArrayP("values", "f", []string{}, "release values paths")
@@ -68,7 +68,12 @@ func getSimulateCommand() *cobra.Command {
 func runSimulateCommand(cmd *cobra.Command, args []string) error {
 	setupCommand(cmd)
 
-	pkgPath, _ := cmd.Flags().GetString("package")
+	pkgPath := ""
+	if len(args) > 0 {
+		pkgPath = args[0]
+	}
+
+	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	sim, _ := cmd.Flags().GetString("simulation")
 	workers, _ := cmd.Flags().GetInt("simulators")
@@ -81,10 +86,39 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 	imagePullPolicy, _ := cmd.Flags().GetString("image-pull-policy")
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
 
+	// Either a command package or image must be specified
 	if pkgPath == "" && image == "" {
-		return errors.New("must specify either a --package or --image to run")
+		return errors.New("must specify either a simulation package or --image to run")
 	}
 
+	// Generate a unique simulation ID
+	simID := random.NewPetName(2)
+
+	// If a command package was provided, build a binary and update the image tag
+	var executable string
+	if pkgPath != "" {
+		executable = filepath.Join(os.TempDir(), "helmet", simID)
+		err := buildBinary(pkgPath, executable)
+		if err != nil {
+			cmd.SilenceUsage = true
+			cmd.SilenceErrors = true
+			return err
+		}
+		if image == "" {
+			image = "onosproject/helmet-runner:latest"
+		}
+	}
+
+	// If a context was provided, convert the context to its absolute path
+	if context != "" {
+		path, err := filepath.Abs(args[0])
+		if err != nil {
+			return err
+		}
+		context = path
+	}
+
+	// Parse the rate and jitter flags
 	rates := make(map[string]time.Duration)
 	jitters := make(map[string]float64)
 	for name, value := range operations {
@@ -118,34 +152,9 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	testID := random.NewPetName(2)
-
-	var executable string
-	if pkgPath != "" {
-		executable = filepath.Join(os.TempDir(), "helmet", testID)
-		err = buildBinary(pkgPath, executable)
-		if err != nil {
-			cmd.SilenceUsage = true
-			cmd.SilenceErrors = true
-			return err
-		}
-		if image == "" {
-			image = "onosproject/helmet-runner:latest"
-		}
-	}
-
-	var context string
-	if len(args) > 0 {
-		path, err := filepath.Abs(args[0])
-		if err != nil {
-			return err
-		}
-		context = path
-	}
-
 	config := &simulation.Config{
 		Config: &job.Config{
-			ID:              testID,
+			ID:              simID,
 			Image:           image,
 			ImagePullPolicy: corev1.PullPolicy(pullPolicy),
 			Executable:      executable,
