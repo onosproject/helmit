@@ -197,7 +197,63 @@ and then run the suite using the `helmet bench` tool:
 helmet bench ./cmd/benchmarks
 ```
 
+The benchmark coordinator supports benchmarking a single function on a single node or scaling benchmarks across multiple
+containers running inside a Kubernetes cluster.
+
 ### Writing Benchmark Suites
+
+To run a benchmark you must first define a benchmark suite. Benchmark suites are Golang structs containing a series 
+of receivers to benchmark:
+
+```go
+import "github.com/onosproject/helmet/pkg/benchmark"
+
+type MyBenchSuite struct {
+	benchmark.Suite
+}
+```
+
+Helmet runs each suite within its own namespace, and each benchmark consists of a `Benchmark*` received on the suite.
+Prior to running benchmarks, benchmarks suites typically need to set up resources within the Kubernetes namespace.
+Benchmarks can implement the following interfaces to manage the namespace:
+* `SetupBenchmarkSuite` - Called on a single worker prior to running benchmarks
+* `SetupBenchmarkWorker` - Called on each worker pod prior to running benchmarks
+* `SetupBenchmark` - Called on each worker pod prior to running each benchmark
+
+Typically, benchmark suites should implement the `SetupBenchmarkSuite` interface to install Helm charts:
+
+```go
+func (s *MyBenchSuite) SetupBenchmarkSuite(c *benchmark.Context) error {
+    return helm.Chart("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator").
+        Release("kafka").
+        Set("replicas", 2).
+        Set("zookeeper.replicaCount", 3).
+        Install(true)
+}
+```
+
+Benchmarks are written as `Benchmark*` receivers:
+
+```go
+func (s *MyBenchSuite) BenchmarkFoo(b *benchmark.Benchmark) error {
+    ...
+}
+```
+
+Each benchmark receiver will be called repeatedly for a configured duration of number of iterations. To generate
+randomized benchmark input, the `input` package provides input utilities:
+
+```go
+import "github.com/onosproject/helmet/pkg/input"
+
+var values = input.RandomString(8)
+
+func (s *MyBenchSuite) BenchmarkFoo(b *benchmark.Benchmark) error {
+	value := values.Next()
+	// Do something with value
+	return nil
+}
+```
 
 ### Registering Benchmarks
 
@@ -228,6 +284,71 @@ func main() {
 ```
 
 ### Running Benchmarks
+
+Benchmarks are run using the `helmet bench` command. To run a benchmark, run `helmet bench` with the path to
+the command in which benchmarks are registered:
+
+```bash
+helmet bench ./cmd/benchmarks
+```
+
+By default, the `helmet bench` command will run every benchmark suite registered in the provided main.
+To run a specific benchmark suite, use the `--suite` flag:
+
+```bash
+helmet bench ./cmd/benchmarks --suite my-bench
+```
+
+To run a specific benchmark function, use the `--benchmark` flag:
+
+```bash
+helmet bench ./cmd/benchmarks --suite my-bench --benchmark BenchmarkFoo
+```
+
+Benchmarks can either be run for a specific number of iterations:
+
+```bash
+helmet bench ./cmd/benchmarks --requests 10000
+```
+
+Or for a duration of time:
+
+```bash
+helmet bench ./cmd/benchmarks --duration 10m
+```
+
+By default, benchmarks are run with a single benchmark goroutine on a single client pod. Benchmarks can be scaled
+across many client pods by setting the `--workers` flag:
+
+```go
+helmet bench ./cmd/benchmarks --duration 10m --workers 10
+```
+
+To scale the number of goroutines within each benchmark worker, set the `--parallel` flag:
+
+```go
+helmet bench ./cmd/benchmarks --duration 10m --parallel 10
+```
+
+As with tests, the `helmet bench` command supports Helm value files and overrides:
+
+```bash
+helmet bench ./cmd/benchmarks -f kafka=kafka-values.yaml --set kafka.replicas=2 --duration 10m
+```
+
+Additionally, benchmarks may need to access local files for deployment, e.g. to benchmark changes to a Helm chart:
+
+```go
+helm.Chart("./atomix-controller").
+	Release("atomix-controller").
+	Install(true)
+```
+
+The benchmarking tool supports copying a local context to the benchmark containers by setting the `--context` flag:
+
+```bash
+helmet bench ./cmd/benchmarks --context ./deploy/charts --duration 10m
+```
 
 ## Simulation
 
