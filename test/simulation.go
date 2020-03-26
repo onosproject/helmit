@@ -28,7 +28,7 @@ type ChartSimulationSuite struct {
 // SetupSimulation :: simulation
 func (s *ChartSimulationSuite) SetupSimulation(sim *simulation.Simulator) error {
 	return helm.Helm().
-		Chart("/etc/charts/atomix-controller").
+		Chart("atomix-controller").
 		Release("atomix-controller").
 		Set("scope", "Namespace").
 		Install(true)

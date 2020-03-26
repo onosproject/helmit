@@ -54,14 +54,6 @@ func (c *Coordinator) Run() error {
 	workers := make([]*WorkerTask, len(suites))
 	for i, suite := range suites {
 		jobID := newJobID(c.config.ID, suite)
-		env := c.config.Env
-		if env == nil {
-			env = make(map[string]string)
-		}
-		env[config.NamespaceEnv] = c.config.ID
-		env[benchmarkTypeEnv] = string(benchmarkTypeWorker)
-		env[benchmarkWorkerEnv] = fmt.Sprintf("%d", i)
-		env[benchmarkJobEnv] = c.config.ID
 		config := &Config{
 			Config: &job.Config{
 				ID:              jobID,
@@ -71,7 +63,7 @@ func (c *Coordinator) Run() error {
 				Context:         c.config.Config.Context,
 				Values:          c.config.Config.Values,
 				ValueFiles:      c.config.Config.ValueFiles,
-				Env:             env,
+				Env:             c.config.Config.Env,
 				Timeout:         c.config.Config.Timeout,
 			},
 			Suite:       suite,
@@ -187,11 +179,51 @@ func (t *WorkerTask) createWorkers() error {
 
 // createWorker creates the given worker
 func (t *WorkerTask) createWorker(worker int) error {
-	return t.runner.StartJob(&job.Job{
-		Config:    t.config.Config,
-		JobConfig: t.config,
-		Type:      benchmarkJobType,
-	})
+	jobID := getWorkerName(worker)
+	env := t.config.Env
+	if env == nil {
+		env = make(map[string]string)
+	}
+	env[config.NamespaceEnv] = t.config.ID
+	env[benchmarkTypeEnv] = string(benchmarkTypeWorker)
+	env[benchmarkWorkerEnv] = fmt.Sprintf("%d", worker)
+	env[benchmarkJobEnv] = t.config.ID
+	job := &job.Job{
+		Config: &job.Config{
+			ID:              jobID,
+			Image:           t.config.Config.Image,
+			ImagePullPolicy: t.config.Config.ImagePullPolicy,
+			Executable:      t.config.Config.Executable,
+			Context:         t.config.Config.Context,
+			Values:          t.config.Config.Values,
+			ValueFiles:      t.config.Config.ValueFiles,
+			Env:             env,
+			Timeout:         t.config.Config.Timeout,
+		},
+		JobConfig: &Config{
+			Config: &job.Config{
+				ID:              jobID,
+				Image:           t.config.Config.Image,
+				ImagePullPolicy: t.config.Config.ImagePullPolicy,
+				Executable:      t.config.Config.Executable,
+				Context:         t.config.Config.Context,
+				Values:          t.config.Config.Values,
+				ValueFiles:      t.config.Config.ValueFiles,
+				Env:             env,
+				Timeout:         t.config.Config.Timeout,
+			},
+			Suite:       t.config.Suite,
+			Benchmark:   t.config.Benchmark,
+			Workers:     t.config.Workers,
+			Parallelism: t.config.Parallelism,
+			Requests:    t.config.Requests,
+			Duration:    t.config.Duration,
+			MaxLatency:  t.config.MaxLatency,
+			Args:        t.config.Args,
+		},
+		Type: benchmarkJobType,
+	}
+	return t.runner.StartJob(job)
 }
 
 // getWorkerConns returns the worker clients for the given benchmark

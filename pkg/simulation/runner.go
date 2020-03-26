@@ -17,6 +17,7 @@ package simulation
 import (
 	jobs "github.com/onosproject/helmet/pkg/job"
 	"os"
+	"path"
 )
 
 // The executor is the entrypoint for simulation images. It takes the input and environment and runs
@@ -24,10 +25,50 @@ import (
 
 // Run runs the benchmark
 func Run(config *Config) error {
+	configValueFiles := make(map[string][]string)
+	if config.ValueFiles != nil {
+		for release, valueFiles := range config.ValueFiles {
+			configReleaseFiles := make([]string, 0)
+			for _, valueFile := range valueFiles {
+				configReleaseFiles = append(configReleaseFiles, path.Base(valueFile))
+			}
+			configValueFiles[release] = configReleaseFiles
+		}
+	}
+
+	configExecutable := ""
+	if config.Executable != "" {
+		configExecutable = path.Base(config.Executable)
+	}
+
+	configContext := ""
+	if config.Context != "" {
+		configContext = path.Base(config.Context)
+	}
+
 	job := &jobs.Job{
-		Config:    config.Config,
-		JobConfig: config,
-		Type:      simulationJobType,
+		Config: config.Config,
+		JobConfig: &Config{
+			Config: &jobs.Config{
+				ID:              config.ID,
+				Image:           config.Image,
+				ImagePullPolicy: config.ImagePullPolicy,
+				Executable:      configExecutable,
+				Context:         configContext,
+				Values:          config.Values,
+				ValueFiles:      configValueFiles,
+				Args:            config.Config.Args,
+				Env:             config.Env,
+				Timeout:         config.Timeout,
+			},
+			Simulation: config.Simulation,
+			Simulators: config.Simulators,
+			Duration:   config.Duration,
+			Rates:      config.Rates,
+			Jitter:     config.Jitter,
+			Args:       config.Args,
+		},
+		Type: simulationJobType,
 	}
 	return jobs.Run(job)
 }

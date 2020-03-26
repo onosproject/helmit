@@ -52,15 +52,6 @@ func (c *Coordinator) Run() error {
 	workers := make([]*WorkerTask, len(suites))
 	for i, suite := range suites {
 		jobID := newJobID(c.config.ID, suite)
-		env := c.config.Env
-		if env == nil {
-			env = make(map[string]string)
-		}
-		env[config.NamespaceEnv] = c.config.ID
-		env[simulationTypeEnv] = string(simulationTypeWorker)
-		env[simulationWorkerEnv] = fmt.Sprintf("%d", i)
-		env[simulationJobEnv] = c.config.ID
-
 		config := &Config{
 			Config: &job.Config{
 				ID:              jobID,
@@ -70,7 +61,7 @@ func (c *Coordinator) Run() error {
 				Context:         c.config.Config.Context,
 				Values:          c.config.Config.Values,
 				ValueFiles:      c.config.Config.ValueFiles,
-				Env:             env,
+				Env:             c.config.Config.Env,
 				Timeout:         c.config.Config.Timeout,
 			},
 			Simulation: suite,
@@ -189,11 +180,49 @@ func (t *WorkerTask) createWorkers() error {
 
 // createWorker creates the given worker
 func (t *WorkerTask) createWorker(worker int) error {
-	return t.runner.StartJob(&job.Job{
-		Config:    t.config.Config,
-		JobConfig: t.config,
-		Type:      simulationJobType,
-	})
+	env := t.config.Env
+	if env == nil {
+		env = make(map[string]string)
+	}
+	env[config.NamespaceEnv] = t.config.ID
+	env[simulationTypeEnv] = string(simulationTypeWorker)
+	env[simulationWorkerEnv] = fmt.Sprintf("%d", worker)
+	env[simulationJobEnv] = t.config.ID
+
+	jobID := getSimulatorName(worker)
+	job := &job.Job{
+		Config: &job.Config{
+			ID:              jobID,
+			Image:           t.config.Config.Image,
+			ImagePullPolicy: t.config.Config.ImagePullPolicy,
+			Executable:      t.config.Config.Executable,
+			Context:         t.config.Config.Context,
+			Values:          t.config.Config.Values,
+			ValueFiles:      t.config.Config.ValueFiles,
+			Env:             env,
+			Timeout:         t.config.Config.Timeout,
+		},
+		JobConfig: &Config{
+			Config: &job.Config{
+				ID:              jobID,
+				Image:           t.config.Config.Image,
+				ImagePullPolicy: t.config.Config.ImagePullPolicy,
+				Executable:      t.config.Config.Executable,
+				Context:         t.config.Config.Context,
+				Values:          t.config.Config.Values,
+				ValueFiles:      t.config.Config.ValueFiles,
+				Env:             env,
+				Timeout:         t.config.Config.Timeout,
+			},
+			Simulation: t.config.Simulation,
+			Simulators: t.config.Simulators,
+			Rates:      t.config.Rates,
+			Jitter:     t.config.Jitter,
+			Args:       t.config.Args,
+		},
+		Type: simulationJobType,
+	}
+	return t.runner.StartJob(job)
 }
 
 // getSimulators returns the worker clients for the given simulation
