@@ -703,7 +703,7 @@ func (n *Runner) copyValueFiles(job *Job) error {
 		return nil
 	}
 
-	step := logging.NewStep(job.ID, "Upload value files")
+	step := logging.NewStep(job.ID, "Copy value files")
 	step.Start()
 
 	pod, err := n.getPod(job, func(pod corev1.Pod) bool {
@@ -716,7 +716,7 @@ func (n *Runner) copyValueFiles(job *Job) error {
 
 	for _, valueFiles := range job.ValueFiles {
 		for _, valueFile := range valueFiles {
-			fileStep := logging.NewStep(job.ID, "Upload value file %s", valueFile)
+			fileStep := logging.NewStep(job.ID, "Copy value file %s", valueFile)
 			fileStep.Start()
 			err := files.Copy(n).
 				From(valueFile).
