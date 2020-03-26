@@ -50,21 +50,48 @@ func (s *MyTestSuite) SetupTestSuite() error {
 ```
 
 Typically, suite or test setup functions are used to deploy Kubernetes resources within the test namespace, whether
-using the Kubernetes Golang client API or Helm. For Helm deployments, Helmet provides an API for deploying Helm charts:
+using the Kubernetes Golang client API or Helm. For Helm deployments, Helmet provides an API for deploying Helm charts.
+The Helm API can be used to install and uninstall local or remote Helm charts. To install a local chart, use
+the path as the chart name:
 
 ```go
-import "github.com/onosproject/helmet/pkg/helm"
-
-func (s *MyTestSuite) SetupTestSuite() error {
-	kafka := helm.Helm().
-		Chart("kafka").
-		SetRepository("http://storage.googleapis.com/kubernetes-charts-incubator").
-		Release("kafka").
-		Set("replicas", 1).
-		Set("zookeeper.replicaCount", 1)
-	return kafka.Install(true)
-}
+helm.Chart("/opt/charts/atomix-controller").
+	Release("atomix-controller").
+	Install(true)
 ```
+
+To install a remote chart, simply use the chart name:
+
+```go
+helm.Chart("kafka").
+	Release("kafka").
+	Install(true)
+```
+
+If the chart repository is not accessible from within the test container, you can optionally specify a repository
+URL when creating the chart:
+
+```go
+helm.Chart("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator").
+	Release("kafka").
+	Install(true)
+```
+
+The `Install` method installs the chart in the same was as the `helm install` command does. The boolean flags to the
+`Install` method indicates whether to block until the chart's resources are ready. 
+
+Finally, the Helm API supports overriding chart values via the `Set` method:
+
+```go
+helm.Chart("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator").
+	Release("kafka").
+	Set("replicas", 2).
+	Set("zookeeper.replicaCount", 3).
+	Install(true)
+```
+
+Note that the test tool supports value files and overrides via command line flags. When values are specified via
+the test CLI, values in code (like above) can be overwritten.
 
 Tests are receivers on the test suite that follow the pattern `Test*`. The standard Golang `testing` library is
 used, so all your favorite assertion libraries can be used as well:
@@ -78,14 +105,14 @@ func (s *MyTestSuite) TestFoo(t *testing.T) error {
 }
 ```
 
-Helmet supports `TearDownTestSuite` and `TearDownTest` functions for tearing down test suites and tests respectively:
+Helmet also supports `TearDownTestSuite` and `TearDownTest` functions for tearing down test suites and tests 
+respectively:
 
 ```go
 func (s *MyTestSuite) TearDownTest() error {
-	kafka := helm.Helm().
-		Chart("kafka").
-		Release("kafka")
-	return kafka.Uninstall()
+	return helm.Chart("kafka").
+		Release("kafka").
+		Uninstall()
 }
 ```
 
@@ -145,8 +172,7 @@ helmet test ./cmd/tests --context ./deploy/charts
 This allows tests to reference charts by path from within test containers deployed inside Kubernetes:
 
 ```go
-helm.Helm().
-	Chart("./atomix-controller").
+helm.Chart("./atomix-controller").
 	Release("atomix-controller-1").
 	Install(true)
 ```
@@ -173,6 +199,8 @@ helmet bench ./cmd/benchmarks
 
 ### Writing Benchmark Suites
 
+### Registering Benchmarks
+
 In order to run benchmarks, a main must be provided that registers and names benchmark suites.
 
 ```go
@@ -198,8 +226,6 @@ func main() {
     benchmark.Main()
 }
 ```
-
-### Registering Benchmarks
 
 ### Running Benchmarks
 

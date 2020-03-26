@@ -69,12 +69,12 @@ type Client interface {
 }
 
 // NewForRelease returns a new Kubernetes client for the given release
-func NewForRelease(release *helm.Release) (Client, error) {
+func NewForRelease(release *helm.HelmRelease) (Client, error) {
 	return newFilteredClient(release.Namespace(), release.Filter)
 }
 
 // NewForReleaseOrDie returns a new Kubernetes client for the given release
-func NewForReleaseOrDie(release *helm.Release) Client {
+func NewForReleaseOrDie(release *helm.HelmRelease) Client {
 	client, err := NewForRelease(release)
 	if err != nil {
 		panic(err)

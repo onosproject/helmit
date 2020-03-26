@@ -37,7 +37,26 @@ import (
 
 var settings = cli.New()
 
-func newRelease(name string, namespace string, client *kubernetes.Clientset, chart *Chart, config *action.Configuration) *Release {
+// HelmReleaseClient is a Helm release client
+type HelmReleaseClient interface {
+	// Releases returns a list of releases in the namespace
+	Releases() []*HelmRelease
+
+	// Release gets a chart release in the namespace
+	Release(name string) *HelmRelease
+}
+
+// Release returns a Helm chart release
+func Release(name string) *HelmRelease {
+	return Client().Release(name)
+}
+
+// Releases returns a list of Helm chart releases
+func Releases() []*HelmRelease {
+	return Client().Releases()
+}
+
+func newRelease(name string, namespace string, client *kubernetes.Clientset, chart *HelmChart, config *action.Configuration) *HelmRelease {
 	ctx := context.Release(name)
 	opts := &values.Options{
 		ValueFiles: ctx.ValueFiles,
@@ -48,7 +67,7 @@ func newRelease(name string, namespace string, client *kubernetes.Clientset, cha
 		panic(err)
 	}
 
-	return &Release{
+	return &HelmRelease{
 		namespace: namespace,
 		client:    client,
 		chart:     chart,
@@ -60,11 +79,11 @@ func newRelease(name string, namespace string, client *kubernetes.Clientset, cha
 	}
 }
 
-// Release is a Helm chart release
-type Release struct {
+// HelmRelease is a Helm chart release
+type HelmRelease struct {
 	namespace string
 	client    *kubernetes.Clientset
-	chart     *Chart
+	chart     *HelmChart
 	config    *action.Configuration
 	context   *ReleaseContext
 	name      string
@@ -75,44 +94,44 @@ type Release struct {
 }
 
 // Namespace returns the release namespace
-func (r *Release) Namespace() string {
+func (r *HelmRelease) Namespace() string {
 	return r.namespace
 }
 
 // Name returns the release name
-func (r *Release) Name() string {
+func (r *HelmRelease) Name() string {
 	return r.name
 }
 
 // Set sets a value
-func (r *Release) Set(path string, value interface{}) *Release {
+func (r *HelmRelease) Set(path string, value interface{}) *HelmRelease {
 	setKey(r.values, getPathNames(path), value)
 	return r
 }
 
 // Get gets a value
-func (r *Release) Get(path string) interface{} {
+func (r *HelmRelease) Get(path string) interface{} {
 	return getValue(r.values, getPathNames(path))
 }
 
 // Values is the release's values
-func (r *Release) Values() map[string]interface{} {
+func (r *HelmRelease) Values() map[string]interface{} {
 	return r.values
 }
 
 // SetSkipCRDs sets whether to skip CRDs
-func (r *Release) SetSkipCRDs(skipCRDs bool) *Release {
+func (r *HelmRelease) SetSkipCRDs(skipCRDs bool) *HelmRelease {
 	r.skipCRDs = skipCRDs
 	return r
 }
 
 // SkipCRDs returns whether CRDs are skipped in the release
-func (r *Release) SkipCRDs() bool {
+func (r *HelmRelease) SkipCRDs() bool {
 	return r.skipCRDs
 }
 
 // getResources returns a list of chart resources
-func (r *Release) getResources() (helm.ResourceList, error) {
+func (r *HelmRelease) getResources() (helm.ResourceList, error) {
 	resources, err := r.config.KubeClient.Build(bytes.NewBufferString(r.release.Manifest), true)
 	if err != nil {
 		return nil, err
@@ -121,7 +140,7 @@ func (r *Release) getResources() (helm.ResourceList, error) {
 }
 
 // setContextDir sets the directory to the context dir
-func (r *Release) setContextDir() error {
+func (r *HelmRelease) setContextDir() error {
 	if context.WorkDir != "" {
 		if err := os.Chdir(context.WorkDir); err != nil {
 			return err
@@ -131,7 +150,7 @@ func (r *Release) setContextDir() error {
 }
 
 // Filter is the release filter function
-func (r *Release) Filter(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+func (r *HelmRelease) Filter(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
 	resources, err := r.getResources()
 	if err != nil {
 		return false, err
@@ -150,7 +169,7 @@ func (r *Release) Filter(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (
 }
 
 // Install installs the Helm chart
-func (r *Release) Install(wait bool) error {
+func (r *HelmRelease) Install(wait bool) error {
 	if err := r.setContextDir(); err != nil {
 		return err
 	}
@@ -213,7 +232,7 @@ func (r *Release) Install(wait bool) error {
 }
 
 // Uninstall uninstalls the Helm chart
-func (r *Release) Uninstall() error {
+func (r *HelmRelease) Uninstall() error {
 	if err := r.setContextDir(); err != nil {
 		return err
 	}

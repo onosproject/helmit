@@ -21,20 +21,20 @@ import (
 	"log"
 )
 
-var clients = make(map[string]Client)
+var clients = make(map[string]HelmClient)
 
 // Namespace returns the Helm namespace
 func Namespace() string {
 	return config.GetNamespaceFromEnv()
 }
 
-// Helm returns the Helm client
-func Helm() Client {
-	return getClient(config.GetNamespaceFromEnv())
+// Client returns the Helm client
+func Client() HelmClient {
+	return getClient(Namespace())
 }
 
 // getClient returns the client for the given namespace
-func getClient(namespace string) Client {
+func getClient(namespace string) HelmClient {
 	client, ok := clients[namespace]
 	if !ok {
 		configuration, err := getConfig(namespace)
@@ -44,7 +44,7 @@ func getClient(namespace string) Client {
 		client = &helmClient{
 			namespace: namespace,
 			client:    kubernetes.NewForConfigOrDie(config.GetRestConfigOrDie()),
-			charts:    make(map[string]*Chart),
+			charts:    make(map[string]*HelmChart),
 			config:    configuration,
 		}
 		clients[namespace] = client
@@ -61,67 +61,49 @@ func getConfig(namespace string) (*action.Configuration, error) {
 	return config, nil
 }
 
-// Client is a Helm client
-type Client interface {
-	ChartClient
-	ReleaseClient
+// HelmClient is a Helm client
+type HelmClient interface {
+	HelmChartClient
+	HelmReleaseClient
 
 	// Namespace returns the client for the given namespace
-	Namespace(namespace string) Client
+	Namespace(namespace string) HelmClient
 }
 
-// ChartClient is a Helm chart client
-type ChartClient interface {
-	// Charts returns a list of charts in the namespace
-	Charts() []*Chart
-
-	// Chart gets a chart in the namespace
-	Chart(name string) *Chart
-}
-
-// ReleaseClient is a Helm release client
-type ReleaseClient interface {
-	// Releases returns a list of releases in the namespace
-	Releases() []*Release
-
-	// Release gets a chart release in the namespace
-	Release(name string) *Release
-}
-
-// helmClient is an implementation of the Client interface
+// helmClient is an implementation of the HelmClient interface
 type helmClient struct {
 	namespace string
 	client    *kubernetes.Clientset
-	charts    map[string]*Chart
+	charts    map[string]*HelmChart
 	config    *action.Configuration
 }
 
-func (c *helmClient) Namespace(namespace string) Client {
+func (c *helmClient) Namespace(namespace string) HelmClient {
 	return getClient(namespace)
 }
 
 // Charts returns a list of charts in the cluster
-func (c *helmClient) Charts() []*Chart {
-	charts := make([]*Chart, 0, len(c.charts))
+func (c *helmClient) Charts() []*HelmChart {
+	charts := make([]*HelmChart, 0, len(c.charts))
 	for _, chart := range c.charts {
 		charts = append(charts, chart)
 	}
 	return charts
 }
 
-// Chart returns a chart
-func (c *helmClient) Chart(name string) *Chart {
+// HelmChart returns a chart
+func (c *helmClient) Chart(name string, repository ...string) *HelmChart {
 	chart, ok := c.charts[name]
 	if !ok {
-		chart = newChart(name, c.namespace, c.client, c.config)
+		chart = newChart(name, repository, c.namespace, c.client, c.config)
 		c.charts[name] = chart
 	}
 	return chart
 }
 
 // Releases returns a list of releases
-func (c *helmClient) Releases() []*Release {
-	releases := make([]*Release, 0)
+func (c *helmClient) Releases() []*HelmRelease {
+	releases := make([]*HelmRelease, 0)
 	for _, chart := range c.charts {
 		releases = append(releases, chart.Releases()...)
 	}
@@ -129,7 +111,7 @@ func (c *helmClient) Releases() []*Release {
 }
 
 // Release returns the release with the given name
-func (c *helmClient) Release(name string) *Release {
+func (c *helmClient) Release(name string) *HelmRelease {
 	for _, chart := range c.charts {
 		for _, release := range chart.Releases() {
 			if release.Name() == name {

@@ -30,15 +30,13 @@ type ChartTestSuite struct {
 
 // TestLocalInstall tests a local chart installation
 func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
-	atomix := helm.Helm().
-		Chart("atomix-controller").
+	atomix := helm.Chart("atomix-controller").
 		Release("atomix-controller").
 		Set("scope", "Namespace")
 	err := atomix.Install(true)
 	assert.NoError(t, err)
 
-	topo := helm.Helm().
-		Chart("onos-topo").
+	topo := helm.Chart("onos-topo").
 		Release("onos-topo").
 		Set("store.controller", fmt.Sprintf("atomix-controller.%s.svc.cluster.local:5679", helm.Namespace()))
 	err = topo.Install(true)
@@ -58,9 +56,7 @@ func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
 
 // TestRemoteInstall tests a remote chart installation
 func (s *ChartTestSuite) TestRemoteInstall(t *testing.T) {
-	kafka := helm.Helm().
-		Chart("kafka").
-		SetRepository("http://storage.googleapis.com/kubernetes-charts-incubator").
+	kafka := helm.Chart("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator").
 		Release("kafka").
 		Set("replicas", 1).
 		Set("zookeeper.replicaCount", 1)
