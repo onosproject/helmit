@@ -7,7 +7,7 @@ To run the benchmarks, use the `./cmd/helmit-examples` command, passing the `exa
 benchmark context:
 
 ```bash
-helmit bench ./cmd/helmit-examples \
+helmit bench ./examples/benchmark/cmd \
     --suite atomix \
     --context examples/charts \
     --duration 5m
@@ -16,7 +16,7 @@ helmit bench ./cmd/helmit-examples \
 To run a specific benchmark, specify the benchmark name with the `--benchmark` flag:
 
 ```bash
-helmit bench ./cmd/helmit-examples \
+helmit bench ./examples/benchmark/cmd \
     --suite atomix \
     --benchmark BenchmarkMapPut \
     --context examples/charts \
@@ -26,7 +26,7 @@ helmit bench ./cmd/helmit-examples \
 To change the size of the Raft database, set the `atomix-raft` chart values:
 
 ```bash
-helmit bench ./cmd/helmit-examples \
+helmit bench ./examples/benchmark/cmd \
     --suite atomix \
     --benchmark BenchmarkMapPut \
     --context examples/charts \

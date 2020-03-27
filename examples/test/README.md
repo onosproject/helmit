@@ -12,7 +12,7 @@ To run the tests, use the `./cmd/helmit-examples` command, passing the `examples
 test context:
 
 ```bash
-helmit test ./cmd/helmit-examples \
+helmit test ./examples/test/cmd \
     --suite atomix \
     --context examples/charts
 ```
@@ -20,7 +20,7 @@ helmit test ./cmd/helmit-examples \
 To run a specific test, specify the benchmark name with the `--test` flag:
 
 ```bash
-helmit bench ./cmd/helmit-examples \
+helmit bench ./examples/test/cmd \
     --suite atomix \
     --test TestMap \
     --context examples/charts
@@ -29,7 +29,7 @@ helmit bench ./cmd/helmit-examples \
 To change the size of the Raft database, set the `atomix-raft` chart values:
 
 ```bash
-helmit test ./cmd/helmit-examples \
+helmit test ./examples/test/cmd \
     --suite atomix \
     --context examples/charts \
     --set atomix-raft.clusters=3 \

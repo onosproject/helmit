@@ -12,28 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package cmd
 
 import (
-	tests "github.com/onosproject/helmit/examples/test"
+	benchmarks "github.com/onosproject/helmit/examples/benchmark"
 	"github.com/onosproject/helmit/pkg/benchmark"
 	"github.com/onosproject/helmit/pkg/registry"
-	"github.com/onosproject/helmit/pkg/simulation"
-	"github.com/onosproject/helmit/pkg/test"
-	"os"
 )
 
 func main() {
-	jobType := os.Getenv("JOB_TYPE")
-	switch jobType {
-	case "test":
-		registry.RegisterTestSuite("atomix", &tests.AtomixTestSuite{})
-		test.Main()
-	case "benchmark":
-		registry.RegisterBenchmarkSuite("atomix", &benchmarks.AtomixBenchmarkSuite{})
-		benchmark.Main()
-	case "simulation":
-		registry.RegisterSimulationSuite("atomix", &simulations.AtomixSimulationSuite{})
-		simulation.Main()
-	}
+	registry.RegisterTestSuite("atomix", &benchmarks.AtomixBenchmarkSuite{})
+	benchmark.Main()
 }

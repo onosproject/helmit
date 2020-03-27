@@ -7,7 +7,7 @@ To run the simulation, use the `./cmd/helmit-examples` command, passing the `exa
 simulation context:
 
 ```bash
-helmit sim ./cmd/helmit-examples \
+helmit sim ./examples/simulation/cmd \
     --suite atomix \
     --context examples/charts \
     --duration 5m
@@ -16,7 +16,7 @@ helmit sim ./cmd/helmit-examples \
 To change the size of the Raft database, set the `atomix-raft` chart values:
 
 ```bash
-helmit sim ./cmd/helmit-examples \
+helmit sim ./examples/simulation/cmd \
     --suite atomix \
     --context examples/charts \
     --duration 5m \
