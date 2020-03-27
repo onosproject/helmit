@@ -28,7 +28,6 @@ func main() {
 	switch jobType {
 	case "test":
 		registry.RegisterTestSuite("chart", &tests.ChartTestSuite{})
-		registry.RegisterTestSuite("chart2", &tests.ChartTestSuite2{})
 		test.Main()
 	case "benchmark":
 		registry.RegisterBenchmarkSuite("chart", &tests.ChartBenchmarkSuite{})

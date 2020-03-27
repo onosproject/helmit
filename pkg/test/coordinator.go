@@ -162,9 +162,6 @@ func (t *WorkerTask) Run() (int, error) {
 		Suite: t.config.Suites[0],
 		Tests: t.config.Tests,
 	})
-	if err != nil {
-		return 0, err
-	}
 
 	status, err := t.runner.WaitForExit(job)
 	if err != nil {
