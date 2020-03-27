@@ -44,8 +44,8 @@ func (s *AtomixSimulationSuite) ScheduleSimulator(sim *simulation.Simulator) {
 	sim.Schedule("remove", s.SimulateMapRemove, 30*time.Second, 1)
 }
 
-// SetupSimulationSuite sets up the Atomix cluster
-func (s *AtomixSimulationSuite) SetupSimulationSuite() error {
+// SetupSimulation sets up the Atomix cluster
+func (s *AtomixSimulationSuite) SetupSimulation(c *simulation.Simulator) error {
 	err := helm.Chart("atomix-controller").
 		Release("atomix-controller").
 		Set("scope", "Namespace").

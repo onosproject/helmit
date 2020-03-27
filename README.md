@@ -6,17 +6,18 @@ Helmit is a [Golang] framework and tool for end-to-end testing of [Kubernetes] a
 Helmit supports testing, benchmarking, and simulation inside Kubernetes clusters.
 
 * [Installation](#installation)
-* [Testing](#testing)
-   * [User Guide](#testing)
-   * [Examples](./examples/test)
-* [Benchmarking](#benchmarking)
-   * [User Guide](#benchmarking)
-   * [Examples](./examples/benchmark)
-* [Simulation](#simulation)
-   * [User Guide](#simulation)
-   * [Examples](./examples/simulation)
+* [User Guide](#user-guide)
+   1. [Helm API](#helm-api)
+   1. [Command-Line Tools](#command-line-tools)
+   1. [Testing](#testing)
+   1. [Benchmarking](#benchmarking)
+   1. [Simulation](#simulation)
+* [Examples](#examples)
+   * [Test Example](./examples/test)
+   * [Benchmark Example](./examples/benchmark)
+   * [Simulation Example](./examples/simulation)
 
-## Installation
+# Installation
 
 Helmit uses [Go modules](https://github.com/golang/go/wiki/Modules) for dependency management. When installing the
 `helmit` command, ensure Go modules are enabled:
@@ -25,41 +26,24 @@ Helmit uses [Go modules](https://github.com/golang/go/wiki/Modules) for dependen
 GO111MODULE=on go get github.com/onosproject/helmit/cmd/helmit
 ```
 
-## Testing
+# User Guide
 
-Helmit supports testing of [Kubernetes] resources and [Helm] charts using a custom test framework and
-command line tool. To test a Kubernetes application, simply [write a Golang test suite](#writing-tests)
-and then run the suite using the `helmit test` tool:
+## Helm API
 
-```bash
-helmit test ./cmd/tests
-```
+Helmit provides a Go API for managing Helm charts within a Kubernetes cluster. Tests, benchmarks, and simulations
+can use the Helmit Helm API to configure and install charts to test and query resources within releases.
 
-### Writing Tests
-
-Helmit tests are written as suites. When tests are run, each test suite will be deployed and run in its own namespace.
-Test suite functions are executed serially.
+The Helm API is provided by the `github.com/onosproject/helmit/pkg/helm` package:
 
 ```go
-import "github.com/onosproject/helmit/pkg/test"
+import "github.com/onosproject/helmit/pkg/helm"
 
-type MyTestSuite struct {
-	test.Suite
-}
+chart := helm.Chart("my-chart")
+release := chart.Release("my-release")
 ```
 
-The `SetupTestSuite` interface can be implemented to set up the test namespace prior to running tests:
-
-```go
-func (s *MyTestSuite) SetupTestSuite() error {
-	
-}
-```
-
-Typically, suite or test setup functions are used to deploy Kubernetes resources within the test namespace, whether
-using the Kubernetes Golang client API or Helm. For Helm deployments, Helmit provides an API for deploying Helm charts.
-The Helm API can be used to install and uninstall local or remote Helm charts. To install a local chart, use
-the path as the chart name:
+The Helmit API supports installation of local or remote charts. To install a local chart, use the path 
+as the chart name:
 
 ```go
 helm.Chart("/opt/charts/atomix-controller").
@@ -87,7 +71,7 @@ helm.Chart("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator")
 The `Install` method installs the chart in the same was as the `helm install` command does. The boolean flags to the
 `Install` method indicates whether to block until the chart's resources are ready. 
 
-Finally, the Helm API supports overriding chart values via the `Set` method:
+Release values can be set programmatically using the `Set` receiver:
 
 ```go
 helm.Chart("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator").
@@ -97,8 +81,104 @@ helm.Chart("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator")
 	Install(true)
 ```
 
-Note that the test tool supports value files and overrides via command line flags. When values are specified via
-the test CLI, values in code (like above) can be overwritten.
+Note that values set via command line flags take precedence over programmatically configured values.
+
+## Command-Line Tools
+
+The `helmit` command-line tool is used to run tests, benchmarks, and simulations inside a Kubernetes cluster. To
+install the `helmit` CLI, use `go get` with Go modules enabled:
+
+```bash
+GO111MODULE=on go get github.com/onosproject/helmit/cmd/helmit
+```
+
+To use the Helmit CLI, you must have [kubectl](https://kubernetes.io/docs/reference/kubectl/overview/) installed and
+configured. Helmit will use the Kubernetes configuration to connect to the cluster to deploy and run tests.
+
+The Helmit CLI consists of only three commands:
+
+* `helmit test` - Runs a [test](#testing) command
+* `helmit bench` - Runs a [benchmark](#benchmarking) command
+* `helmit sim` - Runs a [simulation](#simulation) command
+
+Each command deploys and runs pods which can deploy Helm charts from within the Kubernetes cluster using the
+[Helm API](#helm-api). Each Helmit command supports configuring Helm values in the same way the `helm` command
+itself does.
+
+The `helmit` sub-commands support an optional context within which to run tests. When the `--context` flag is set,
+the specified context directory will be copied to the Helmit pod running inside Kubernetes and set as the current 
+working directory during runs:
+
+```bash
+helmit test ./cmd/tests --context ./deploy/charts
+```
+
+This allows suites to reference charts by path from within Helmit containers deployed inside Kubernetes:
+
+```go
+helm.Chart("./atomix-controller").
+	Release("atomix-controller-1").
+	Install(true)
+```
+
+As with Helm, the `helmit` commands also support values files and flags:
+
+```bash
+helmit test ./cmd/tests -f atomix-controller-1=atomix-values.yaml --set atomix-controller-1.replicas=2
+```
+
+Because suites may install multiple Helm releases, values files and flags must be prefixed by the *release* name. 
+For example, `-f my-release=values.yaml` will add a values file to the release named `my-release`, and
+`--set my-release.replicas=3` will set the `replicas` value for the release named `my-release`.
+
+## Testing
+
+Helmit supports testing of [Kubernetes] resources and [Helm] charts using a custom test framework and
+command line tool. To test a Kubernetes application, simply [write a Golang test suite](#writing-tests)
+and then run the suite using the `helmit test` tool:
+
+```bash
+helmit test ./cmd/tests
+```
+
+### Writing Tests
+
+Helmit tests are written as suites. When tests are run, each test suite will be deployed and run in its own namespace.
+Test suite functions are executed serially.
+
+```go
+import "github.com/onosproject/helmit/pkg/test"
+
+type AtomixTestSuite struct {
+	test.Suite
+}
+```
+
+The `SetupTestSuite` interface can be implemented to set up the test namespace prior to running tests:
+
+```go
+func (s *AtomixTestSuite) SetupTestSuite() error {
+	err := helm.Chart("atomix-controller").
+        Release("atomix-controller").
+        Set("scope", "Namespace").
+        Install(true)
+    if err != nil {
+        return err
+    }
+
+    err = helm.Chart("atomix-database").
+        Release("atomix-raft").
+        Set("clusters", 3).
+        Set("partitions", 10).
+        Set("backend.replicas", 3).
+        Set("backend.image", "atomix/raft-replica:latest").
+        Install(true)
+    if err != nil {
+        return err
+    }
+    return nil
+}
+```
 
 Tests are receivers on the test suite that follow the pattern `Test*`. The standard Golang `testing` library is
 used, so all your favorite assertion libraries can be used as well:
@@ -106,9 +186,18 @@ used, so all your favorite assertion libraries can be used as well:
 ```go
 import "testing"
 
-func (s *MyTestSuite) TestFoo(t *testing.T) error {
-	// Do some assertions
-	return nil
+func (s *AtomixTestSuite) TestMap(t *testing.T) {
+    address, err := s.getController()
+    assert.NoError(t, err)
+
+    client, err := atomix.New(address)
+    assert.NoError(t, err)
+
+    database, err := client.GetDatabase(context.Background(), "atomix-raft")
+    assert.NoError(t, err)
+
+    m, err := database.GetMap(context.Background(), "TestMap")
+    assert.NoError(t, err)
 }
 ```
 
@@ -116,9 +205,9 @@ Helmit also supports `TearDownTestSuite` and `TearDownTest` functions for tearin
 respectively:
 
 ```go
-func (s *MyTestSuite) TearDownTest() error {
-	return helm.Chart("kafka").
-		Release("kafka").
+func (s *AtomixTestSuite) TearDownTest() error {
+	return helm.Chart("atomix-database").
+		Release("atomix-database").
 		Uninstall()
 }
 ```
@@ -131,7 +220,7 @@ In order to run tests, a main must be provided that registers and names test sui
 import "github.com/onosproject/helmit/pkg/registry"
 
 func init() {
-    registry.RegisterTestSuite("my-tests", &tests.MyTestSuite{})
+	registry.RegisterTestSuite("atomix", &tests.AtomixTestSuite{})
 }
 ```
 
@@ -146,8 +235,8 @@ import (
 )
 
 func main() {
-    registry.RegisterTestSuite("my-tests", &tests.MyTestSuite{})
-    test.Main()
+	registry.RegisterTestSuite("atomix", &tests.AtomixTestSuite{})
+	test.Main()
 }
 ```
 
@@ -167,32 +256,8 @@ in parallel and each within its own namespace. To run a specific test suite, use
 helmit test ./cmd/tests --suite my-tests
 ```
 
-Sometimes test suites need to operate on Helm charts that are not available via a remote repository. The `helmit test`
-command supports an optional context within which to run tests. When the `--context` flag is set, the specified
-context directory will be copied to the test image running inside Kubernetes and set as the current working directory
-during test runs:
-
-```bash
-helmit test ./cmd/tests --context ./deploy/charts
-```
-
-This allows tests to reference charts by path from within test containers deployed inside Kubernetes:
-
-```go
-helm.Chart("./atomix-controller").
-	Release("atomix-controller-1").
-	Install(true)
-```
-
-As with Helm, the `helmit test` command also supports values files and flags:
-
-```bash
-helmit test ./cmd/tests -f atomix-controller-1=atomix-values.yaml --set atomix-controller-1.replicas=2
-```
-
-Because tests may install multiple Helm releases, values files and flags must be prefixed by the *release* name. 
-For example, `-f my-release=values.yaml` will add a values file to the release named `my-release`, and
-`--set my-release.replicas=3` will set the `replicas` value for the release named `my-release`.
+The `helmit test` command also supports configuring tested Helm charts from the command-line. See the 
+[command-line tools](#command-line-tools) documentation for more info.
 
 ## Benchmarking
 
@@ -215,12 +280,12 @@ of receivers to benchmark:
 ```go
 import "github.com/onosproject/helmit/pkg/benchmark"
 
-type MyBenchSuite struct {
+type AtomixBenchSuite struct {
 	benchmark.Suite
 }
 ```
 
-Helmit runs each suite within its own namespace, and each benchmark consists of a `Benchmark*` received on the suite.
+Helmit runs each suite within its own namespace, and each benchmark consists of a `Benchmark*` receivers on the suite.
 Prior to running benchmarks, benchmarks suites typically need to set up resources within the Kubernetes namespace.
 Benchmarks can implement the following interfaces to manage the namespace:
 * `SetupBenchmarkSuite` - Called on a single worker prior to running benchmarks
@@ -230,19 +295,33 @@ Benchmarks can implement the following interfaces to manage the namespace:
 Typically, benchmark suites should implement the `SetupBenchmarkSuite` interface to install Helm charts:
 
 ```go
-func (s *MyBenchSuite) SetupBenchmarkSuite(c *benchmark.Context) error {
-    return helm.Chart("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator").
-        Release("kafka").
-        Set("replicas", 2).
-        Set("zookeeper.replicaCount", 3).
-        Install(true)
+func (s *AtomixBenchSuite) SetupBenchmarkSuite(c *benchmark.Context) error {
+	err := helm.Chart("atomix-controller").
+		Release("atomix-controller").
+		Set("scope", "Namespace").
+		Install(true)
+	if err != nil {
+		return err
+	}
+
+	err = helm.Chart("atomix-database").
+		Release("atomix-raft").
+		Set("clusters", 3).
+		Set("partitions", 10).
+		Set("backend.replicas", 3).
+		Set("backend.image", "atomix/raft-replica:latest").
+		Install(true)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 ```
 
 Benchmarks are written as `Benchmark*` receivers:
 
 ```go
-func (s *MyBenchSuite) BenchmarkFoo(b *benchmark.Benchmark) error {
+func (s *AtomixBenchSuite) BenchmarkMapPut(b *benchmark.Benchmark) error {
     ...
 }
 ```
@@ -253,12 +332,14 @@ randomized benchmark input, the `input` package provides input utilities:
 ```go
 import "github.com/onosproject/helmit/pkg/input"
 
-var values = input.RandomString(8)
+var keys = input.RandomChoice(input.SetOf(input.RandomString(8), 1000))
+var values = input.RandomBytes(128)
 
-func (s *MyBenchSuite) BenchmarkFoo(b *benchmark.Benchmark) error {
-	value := values.Next()
-	// Do something with value
-	return nil
+func (s *AtomixBenchSuite) BenchmarkMapPut(b *benchmark.Benchmark) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_, err := s.m.Put(ctx, keys.Next().String(), values.Next().Bytes())
+	return err
 }
 ```
 
@@ -270,7 +351,7 @@ In order to run benchmarks, a main must be provided that registers and names ben
 import "github.com/onosproject/helmit/pkg/registry"
 
 func init() {
-    registry.RegisterBenchmarkSuite("my-bench", &tests.MyBenchSuite{})
+    registry.RegisterBenchmarkSuite("atomix", &tests.AtomixBenchSuite{})
 }
 ```
 
@@ -285,7 +366,7 @@ import (
 )
 
 func main() {
-    registry.RegisterBenchmarkSuite("my-bench", &tests.MyBenchSuite{})
+    registry.RegisterBenchmarkSuite("atomix", &tests.AtomixBenchSuite{})
     benchmark.Main()
 }
 ```
@@ -303,13 +384,13 @@ By default, the `helmit bench` command will run every benchmark suite registered
 To run a specific benchmark suite, use the `--suite` flag:
 
 ```bash
-helmit bench ./cmd/benchmarks --suite my-bench
+helmit bench ./cmd/benchmarks --suite atomix
 ```
 
 To run a specific benchmark function, use the `--benchmark` flag:
 
 ```bash
-helmit bench ./cmd/benchmarks --suite my-bench --benchmark BenchmarkFoo
+helmit bench ./cmd/benchmarks --suite atomix --benchmark BenchmarkMapPut
 ```
 
 Benchmarks can either be run for a specific number of iterations:
@@ -337,24 +418,10 @@ To scale the number of goroutines within each benchmark worker, set the `--paral
 helmit bench ./cmd/benchmarks --duration 10m --parallel 10
 ```
 
-As with tests, the `helmit bench` command supports Helm value files and overrides:
+As with all Helmit commands, the `helmit bench` command supports contexts and Helm values and value files:
 
 ```bash
-helmit bench ./cmd/benchmarks -f kafka=kafka-values.yaml --set kafka.replicas=2 --duration 10m
-```
-
-Additionally, benchmarks may need to access local files for deployment, e.g. to benchmark changes to a Helm chart:
-
-```go
-helm.Chart("./atomix-controller").
-	Release("atomix-controller").
-	Install(true)
-```
-
-The benchmarking tool supports copying a local context to the benchmark containers by setting the `--context` flag:
-
-```bash
-helmit bench ./cmd/benchmarks --context ./deploy/charts --duration 10m
+helmit bench ./cmd/benchmarks -c . -f kafka=kafka-values.yaml --set kafka.replicas=2 --duration 10m
 ```
 
 ## Simulation
@@ -370,6 +437,78 @@ helmit sim ./cmd/sims
 
 ### Writing Simulations
 
+To run a simulation you must first define a simulation suite. Simulation suites are Golang structs containing a series 
+of receivers that simulate operations on Kubernetes applications:
+
+```go
+import "github.com/onosproject/helmit/pkg/simulation"
+
+type AtomixSimSuite struct {
+	simulation.Suite
+}
+```
+
+Helmit runs each suite within its own namespace, and each simulation consists of a set of simulator functions to run.
+Prior to running simulations, simulation suites typically need to set up resources within the Kubernetes namespace.
+Simulations can implement the following interfaces to manage the namespace:
+* `SetupSimulation` - Called on a single simulation pod prior to running a simulation
+* `SetupSimulator` - Called on each simulator pod prior to running a simulation
+
+Typically, simulation suites should implement the `SetupSimulation` interface to install Helm charts:
+
+```go
+func (s *AtomixSimSuite) SetupSimulation(c *simulation.Simulator) error {
+	err := helm.Chart("atomix-controller").
+		Release("atomix-controller").
+		Set("scope", "Namespace").
+		Install(true)
+	if err != nil {
+		return err
+	}
+
+	err = helm.Chart("atomix-database").
+		Release("atomix-raft").
+		Set("clusters", 3).
+		Set("partitions", 10).
+		Set("backend.replicas", 3).
+		Set("backend.image", "atomix/raft-replica:latest").
+		Install(true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+```
+
+Simulator functions can be written with any name pattern:
+
+```go
+import "github.com/onosproject/helmit/pkg/input"
+
+var keys = input.RandomChoice(input.SetOf(input.RandomString(8), 1000))
+var values = input.RandomBytes(128)
+
+func (s *AtomixSimSuite) SimulateMapPut(c *simulation.Simulator) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_, err := s.m.Put(ctx, keys.Next().String(), values.Next().Bytes())
+	return err
+}
+```
+
+Simulations must schedule their simulator functions by implementing the `ScheduleSimulator` interface:
+
+```go
+func (s *AtomixSimSuite) ScheduleSimulator(sim *simulation.Simulator) {
+	sim.Schedule("get", s.SimulateMapGet, 1*time.Second, 1)
+	sim.Schedule("put", s.SimulateMapPut, 5*time.Second, 1)
+	sim.Schedule("remove", s.SimulateMapRemove, 30*time.Second, 1)
+}
+```
+
+When scheduling simulators, the simulation specifies a default rate at which the simulators are executed. Note
+that simulator rates can be overridden from the [simulator command line](#running-simulations)
+
 ### Registering Simulation Suites
 
 In order to run simulations, a main must be provided that registers and names simulation suites.
@@ -378,7 +517,7 @@ In order to run simulations, a main must be provided that registers and names si
 import "github.com/onosproject/helmit/pkg/registry"
 
 func init() {
-    registry.RegisterSimulationSuite("my-bench", &tests.MySimSuite{})
+    registry.RegisterSimulationSuite("atomix", &sims.AtomixSimulationSuite{})
 }
 ```
 
@@ -393,12 +532,51 @@ import (
 )
 
 func main() {
-    registry.RegisterSimulationSuite("my-sim", &tests.MySimSuite{})
-    simulation.Main()
+	registry.RegisterSimulationSuite("atomix", &sims.AtomixSimulationSuite{})
+	simulation.Main()
 }
 ```
 
 ### Running Simulations
+
+Simulations are run using the `helmit sim` command. To run a simulation, run `helmit sim` with the path to
+the command in which simulations are registered:
+
+```bash
+helmit sim ./cmd/simulations
+```
+
+By default, the `helmit sim` command will run every simulation registered in the provided main.
+To run a specific simulation, use the `--simulation` flag:
+
+```bash
+helmit sim ./cmd/simulations --suite atomix
+```
+
+Simulations can either be run for a configurable duration of time:
+
+```bash
+helmit sim ./cmd/simulations --duration 10m
+```
+
+By default, simulations are run on a single client pod. Simulations can be scaled across many client pods by 
+setting the `--simulators` flag:
+
+```go
+helmit sim ./cmd/simulations --duration 10m --simulators 10
+```
+
+As with all Helmit commands, the `helmit sim` command supports contexts and Helm values and value files:
+
+```bash
+helmit sim ./cmd/simulations -c . -f kafka=kafka-values.yaml --set kafka.replicas=2 --duration 10m
+```
+
+# Examples
+
+* [Test Example](./examples/test)
+* [Benchmark Example](./examples/benchmark)
+* [Simulation Example](./examples/simulation)
 
 [Golang]: https://golang.org/
 [Helm]: https://helm.sh
