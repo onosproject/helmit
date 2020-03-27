@@ -5,9 +5,16 @@
 Helmit is a [Golang] framework and tool for end-to-end testing of [Kubernetes] and [Helm] applications.
 Helmit supports testing, benchmarking, and simulation inside Kubernetes clusters.
 
+* [Installation](#installation)
 * [Testing](#testing)
+   * [User Guide](#testing)
+   * [Examples](./examples/test)
 * [Benchmarking](#benchmarking)
+   * [User Guide](#benchmarking)
+   * [Examples](./examples/benchmark)
 * [Simulation](#simulation)
+   * [User Guide](#simulation)
+   * [Examples](./examples/simulation)
 
 ## Installation
 
