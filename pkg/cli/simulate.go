@@ -111,7 +111,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 
 	// If a context was provided, convert the context to its absolute path
 	if context != "" {
-		path, err := filepath.Abs(args[0])
+		path, err := filepath.Abs(context)
 		if err != nil {
 			return err
 		}

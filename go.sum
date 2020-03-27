@@ -57,6 +57,7 @@ github.com/atomix/api v0.0.0-20200206050905-3494e48c0084/go.mod h1:yD3KAX7yCeVhV
 github.com/atomix/api v0.0.0-20200206211058-f075fb5b6d1b/go.mod h1:yD3KAX7yCeVhVjM2CD/5AXe9NW4yO6+siRQ5nfY+M1s=
 github.com/atomix/api v0.0.0-20200207212403-a55e2fa6e823/go.mod h1:N+Jv8qV9klP+/RDAVxRbPdluB0cm1ZjKLDjd40/Ccv4=
 github.com/atomix/api v0.0.0-20200211005812-591fe8b07ea8/go.mod h1:N+Jv8qV9klP+/RDAVxRbPdluB0cm1ZjKLDjd40/Ccv4=
+github.com/atomix/api v0.0.0-20200219005318-0350f11bfcde h1:r6a6Uqw4UIXQfuqJo5EzRgfDXZuHHJO7rb7QeKktLiI=
 github.com/atomix/api v0.0.0-20200219005318-0350f11bfcde/go.mod h1:N+Jv8qV9klP+/RDAVxRbPdluB0cm1ZjKLDjd40/Ccv4=
 github.com/atomix/atomix-api v0.0.0-20190826211343-dd8f4db3bf77/go.mod h1:joWKUd0zIeYbAQ0vmYHGsnV03ZgRalhceHgnJ3EN0mI=
 github.com/atomix/atomix-api v0.0.0-20191002225141-1ee9c98c7dfd/go.mod h1:joWKUd0zIeYbAQ0vmYHGsnV03ZgRalhceHgnJ3EN0mI=
@@ -116,6 +117,7 @@ github.com/atomix/go-client v0.0.0-20200203180003-61799b5ca7c2/go.mod h1:VWAEeWd
 github.com/atomix/go-client v0.0.0-20200206051325-cdc03bd1c8bc/go.mod h1:8Gdux/UtiBQK5nmzN9jtWXuH16T6JPNsAxUA2wY4xVk=
 github.com/atomix/go-client v0.0.0-20200207221255-96f6ea5d353d/go.mod h1:xzh4ualJT1ftRWaYIZ3eMWkc9CW3GWJSUovzelObU4o=
 github.com/atomix/go-client v0.0.0-20200211010855-927b10345735/go.mod h1:THcFijpvzJI1W3ePewp5nnJEj6gdX2dfVpOJ1/AgwYY=
+github.com/atomix/go-client v0.0.0-20200218200323-6fd69e684d05 h1:BXCRt2NzbiJDCR5WWFcwEu6Cdiy3SVPjU42xHFfjuVk=
 github.com/atomix/go-client v0.0.0-20200218200323-6fd69e684d05/go.mod h1:GWfCdTYMKNFkyf9lWHjuJeuPvNeuAjTui6Hi7JC0yrw=
 github.com/atomix/go-framework v0.0.0-20200123235029-e29fc7d6e104/go.mod h1:Dn7tjt5LIRA/qr5afQZDh9hdtvK82uQpMrADYIlVtfQ=
 github.com/atomix/go-framework v0.0.0-20200124003840-f24758b13aa2/go.mod h1:vo5K/v+rc5mohoZIw9vbyj+Y/EGGaEdF6XVkEvM9CSM=
@@ -149,6 +151,7 @@ github.com/bshuster-repo/logrus-logstash-hook v0.4.1/go.mod h1:zsTqEiSzDgAa/8GZR
 github.com/bugsnag/bugsnag-go v0.0.0-20141110184014-b1d153021fcd/go.mod h1:2oa8nejYd4cQ/b0hMIopN0lCRxU0bueqREvZLWFrtK8=
 github.com/bugsnag/osext v0.0.0-20130617224835-0dd3f918b21b/go.mod h1:obH5gd0BsqsP2LwDJ9aOkm/6J86V6lyAXCoQWGw3K50=
 github.com/bugsnag/panicwrap v0.0.0-20151223152923-e2c28503fcd0/go.mod h1:D/8v3kj0zr8ZAKg1AQ6crr+5VwKN5eIywRkfhyM/+dE=
+github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
 github.com/cenkalti/backoff v2.2.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/xxhash v1.1.0/go.mod h1:XrSqR1VqqWfGrhpAt58auRo0WTKS1nRRg3ghfAqPWnc=
