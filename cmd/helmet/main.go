@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/onosproject/helmet/pkg/cli"
+	"github.com/onosproject/helmit/pkg/cli"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 )
 

@@ -16,7 +16,7 @@ package v1
 
 import (
 	"fmt"
-	"github.com/onosproject/helmet/pkg/kubernetes/resource"
+	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 )
 

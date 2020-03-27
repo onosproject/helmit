@@ -16,15 +16,15 @@ package cli
 
 import (
 	"errors"
-	"github.com/onosproject/helmet/pkg/job"
-	"github.com/onosproject/helmet/pkg/simulation"
+	"github.com/onosproject/helmit/pkg/job"
+	"github.com/onosproject/helmit/pkg/simulation"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/onosproject/helmet/pkg/util/random"
+	"github.com/onosproject/helmit/pkg/util/random"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -32,16 +32,16 @@ import (
 var (
 	simulateExample = `
 		# Simulate operations on an Atomix map
-		helmet simulate --image atomix/kubernetes-simulations --simulation map --duration 1m
+		helmit simulate --image atomix/kubernetes-simulations --simulation map --duration 1m
 
 		# Configure the simulated Atomix cluster
-		helmet simulate --image atomix/kubernetes-simulations --simulation map --duration 1m --set raft.clusters=3 --set raft.partitions=3
+		helmit simulate --image atomix/kubernetes-simulations --simulation map --duration 1m --set raft.clusters=3 --set raft.partitions=3
 
 		# Configure scheduled operations on an Atomix map
-		helmet simulate --image atomix/kubernetes-simulations --simulation map --schedule put=2s --schedule get=1s,.5 --schedule remove=5s --duration 5m
+		helmit simulate --image atomix/kubernetes-simulations --simulation map --schedule put=2s --schedule get=1s,.5 --schedule remove=5s --duration 5m
 
 		# Verify an Atomix map simulation against a TLA+ model
-		helmet simulate --image atomix/kubernetes-simulations --simulation map --duration 5m --verify --model models/MapCacheTrace.tla --module models/MapHistory.tla --spec Spec --invariant StateInvariant`
+		helmit simulate --image atomix/kubernetes-simulations --simulation map --duration 5m --verify --model models/MapCacheTrace.tla --module models/MapHistory.tla --spec Spec --invariant StateInvariant`
 )
 
 func getSimulateCommand() *cobra.Command {
@@ -97,7 +97,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 	// If a command package was provided, build a binary and update the image tag
 	var executable string
 	if pkgPath != "" {
-		executable = filepath.Join(os.TempDir(), "helmet", simID)
+		executable = filepath.Join(os.TempDir(), "helmit", simID)
 		err := buildBinary(pkgPath, executable)
 		if err != nil {
 			cmd.SilenceUsage = true
@@ -105,7 +105,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if image == "" {
-			image = "onosproject/helmet-runner:latest"
+			image = "onosproject/helmit-runner:latest"
 		}
 	}
 

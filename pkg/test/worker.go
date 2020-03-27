@@ -17,8 +17,8 @@ package test
 import (
 	"context"
 	"fmt"
-	"github.com/onosproject/helmet/pkg/helm"
-	"github.com/onosproject/helmet/pkg/registry"
+	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/registry"
 	"google.golang.org/grpc"
 	"net"
 	"os"

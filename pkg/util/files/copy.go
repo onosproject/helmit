@@ -18,7 +18,7 @@ import (
 	"archive/tar"
 	"errors"
 	"fmt"
-	"github.com/onosproject/helmet/pkg/kubernetes"
+	"github.com/onosproject/helmit/pkg/kubernetes"
 	"io"
 	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"

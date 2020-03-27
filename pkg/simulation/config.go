@@ -15,7 +15,7 @@
 package simulation
 
 import (
-	"github.com/onosproject/helmet/pkg/job"
+	"github.com/onosproject/helmit/pkg/job"
 	"os"
 	"strconv"
 	"time"

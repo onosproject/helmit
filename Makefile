@@ -3,25 +3,25 @@ export GO111MODULE=on
 
 .PHONY: build
 
-HELMET_VERSION := latest
+HELMIT_VERSION := latest
 
 build: # @HELP build the Go binaries and run all validations (default)
-build: build-helmet
+build: build-helmit
 
-build-helmet:
-	go build -o build/_output/helmet ./cmd/helmet
+build-helmit:
+	go build -o build/_output/helmit ./cmd/helmit
 
-build-helmet-tests:
-	go build -o build/helmet-tests/_output/bin/onos-tests ./cmd/onos-tests
+build-helmit-tests:
+	go build -o build/helmit-tests/_output/bin/onos-tests ./cmd/onos-tests
 
 generate: # @HELP generate k8s client interfaces and implementations
 generate:
-	go run github.com/onosproject/helmet/cmd/helmet-generate ./build/helmet-generate/generate.yaml ./pkg/kubernetes
+	go run github.com/onosproject/helmit/cmd/helmit-generate ./build/helmit-generate/generate.yaml ./pkg/kubernetes
 
 test: # @HELP run the unit tests and source code validation
 test: license_check build deps linters
-	go test github.com/onosproject/helmet/pkg/...
-	go test github.com/onosproject/helmet/cmd/...
+	go test github.com/onosproject/helmit/pkg/...
+	go test github.com/onosproject/helmit/cmd/...
 
 coverage: # @HELP generate unit test coverage data
 coverage: build deps linters license_check
@@ -44,32 +44,32 @@ license_check: # @HELP examine and ensure license headers exist
 
 proto: # @HELP build Protobuf/gRPC input types
 proto:
-	docker run -it -v `pwd`:/go/src/github.com/onosproject/helmet \
-		-w /go/src/github.com/onosproject/helmet \
+	docker run -it -v `pwd`:/go/src/github.com/onosproject/helmit \
+		-w /go/src/github.com/onosproject/helmit \
 		--entrypoint build/bin/compile_protos.sh \
 		onosproject/protoc-go:stable
 
-helmet-runner-docker: # @HELP build helmet-runner Docker image
-helmet-runner-docker:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/helmet-runner/_output/bin/helmet-runner ./cmd/helmet-runner
-	docker build build/helmet-runner -f build/helmet-runner/Dockerfile \
+helmit-runner-docker: # @HELP build helmit-runner Docker image
+helmit-runner-docker:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/helmit-runner/_output/bin/helmit-runner ./cmd/helmit-runner
+	docker build build/helmit-runner -f build/helmit-runner/Dockerfile \
 		--build-arg ONOS_BUILD_VERSION=${ONOS_BUILD_VERSION} \
-		-t onosproject/helmet-runner:${HELMET_VERSION}
+		-t onosproject/helmit-runner:${HELMIT_VERSION}
 
-helmet-tests-docker: # @HELP build helmet tests Docker image
-helmet-tests-docker:
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/helmet-tests/_output/bin/helmet-tests ./cmd/helmet-tests
-	docker build build/helmet-tests -f build/helmet-tests/Dockerfile \
-		-t onosproject/helmet-tests:${HELMET_VERSION}
+helmit-tests-docker: # @HELP build helmit tests Docker image
+helmit-tests-docker:
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/helmit-tests/_output/bin/helmit-tests ./cmd/helmit-tests
+	docker build build/helmit-tests -f build/helmit-tests/Dockerfile \
+		-t onosproject/helmit-tests:${HELMIT_VERSION}
 
 images: # @HELP build all Docker images
-images: helmet-runner-docker helmet-tests-docker
+images: helmit-runner-docker helmit-tests-docker
 
 kind: # @HELP build Docker images and add them to the currently configured kind cluster
 kind: images
 	@if [ "`kind get clusters`" = '' ]; then echo "no kind cluster found" && exit 1; fi
-	kind load docker-image onosproject/helmet-runner:${HELMET_VERSION}
-	kind load docker-image onosproject/helmet-tests:${HELMET_VERSION}
+	kind load docker-image onosproject/helmit-runner:${HELMIT_VERSION}
+	kind load docker-image onosproject/helmit-tests:${HELMIT_VERSION}
 
 all: build images tests
 

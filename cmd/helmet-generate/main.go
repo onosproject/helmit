@@ -16,7 +16,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/onosproject/helmet/pkg/kubernetes/codegen"
+	"github.com/onosproject/helmit/pkg/kubernetes/codegen"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -25,7 +25,7 @@ import (
 
 func main() {
 	cmd := &cobra.Command{
-		Use:  "helmet-generate",
+		Use:  "helmit-generate",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			file, err := os.Open(args[0])

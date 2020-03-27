@@ -3,11 +3,11 @@
 The simulation example includes simulators for [Atomix](https://atomix.io) map put, get, and remove operations
 against a Raft database.
 
-To run the simulation, use the `./cmd/helmet-examples` command, passing the `examples/charts` directory as the
+To run the simulation, use the `./cmd/helmit-examples` command, passing the `examples/charts` directory as the
 simulation context:
 
 ```bash
-helmet sim ./cmd/helmet-examples \
+helmit sim ./cmd/helmit-examples \
     --suite atomix \
     --context examples/charts \
     --duration 5m
@@ -16,7 +16,7 @@ helmet sim ./cmd/helmet-examples \
 To change the size of the Raft database, set the `atomix-raft` chart values:
 
 ```bash
-helmet sim ./cmd/helmet-examples \
+helmit sim ./cmd/helmit-examples \
     --suite atomix \
     --context examples/charts \
     --duration 5m \

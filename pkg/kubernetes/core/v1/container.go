@@ -16,8 +16,8 @@ package v1
 
 import (
 	"bytes"
-	"github.com/onosproject/helmet/pkg/kubernetes/config"
-	"github.com/onosproject/helmet/pkg/kubernetes/resource"
+	"github.com/onosproject/helmit/pkg/kubernetes/config"
+	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"

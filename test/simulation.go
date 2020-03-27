@@ -15,8 +15,8 @@
 package test
 
 import (
-	"github.com/onosproject/helmet/pkg/helm"
-	"github.com/onosproject/helmet/pkg/simulation"
+	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/simulation"
 	"time"
 )
 

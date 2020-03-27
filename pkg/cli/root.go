@@ -20,7 +20,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/onosproject/helmet/pkg/util/logging"
+	"github.com/onosproject/helmit/pkg/util/logging"
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 )
@@ -29,10 +29,10 @@ func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
 }
 
-// GetRootCommand returns the root helmet command
+// GetRootCommand returns the root helmit command
 func GetRootCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:          "helmet <command> [args]",
+		Use:          "helmit <command> [args]",
 		Short:        "Setup test clusters and run integration tests on Kubernetes",
 		SilenceUsage: true,
 	}
@@ -43,7 +43,7 @@ func GetRootCommand() *cobra.Command {
 	return cmd
 }
 
-// GenerateCliDocs generate markdown files for helmet commands
+// GenerateCliDocs generate markdown files for helmit commands
 func GenerateCliDocs() {
 	cmd := GetRootCommand()
 	err := doc.GenMarkdownTree(cmd, "docs/cli")

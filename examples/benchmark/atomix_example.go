@@ -19,10 +19,10 @@ import (
 	"fmt"
 	atomix "github.com/atomix/go-client/pkg/client"
 	"github.com/atomix/go-client/pkg/client/map"
-	"github.com/onosproject/helmet/pkg/benchmark"
-	"github.com/onosproject/helmet/pkg/helm"
-	"github.com/onosproject/helmet/pkg/input"
-	"github.com/onosproject/helmet/pkg/kubernetes"
+	"github.com/onosproject/helmit/pkg/benchmark"
+	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/input"
+	"github.com/onosproject/helmit/pkg/kubernetes"
 	"time"
 )
 

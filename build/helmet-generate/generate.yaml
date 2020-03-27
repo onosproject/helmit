@@ -1,4 +1,4 @@
-package: "github.com/onosproject/helmet/pkg/kubernetes"
+package: "github.com/onosproject/helmit/pkg/kubernetes"
 resources:
   - group: "apps"
     version: "v1"

@@ -14,7 +14,7 @@
 
 package test
 
-import "github.com/onosproject/helmet/pkg/registry"
+import "github.com/onosproject/helmit/pkg/registry"
 
 // Register registers a test suite
 // Deprecated: Use registry.RegisterTestSuite instead

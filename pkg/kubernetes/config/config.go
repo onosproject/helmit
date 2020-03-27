@@ -15,7 +15,7 @@
 package config
 
 import (
-	"github.com/onosproject/helmet/pkg/util/random"
+	"github.com/onosproject/helmit/pkg/util/random"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"os"

@@ -23,7 +23,7 @@ import (
 	"time"
 )
 
-const configPath = "/etc/helmet"
+const configPath = "/etc/helmit"
 const configFile = "job.json"
 const readyFile = "/tmp/job-ready"
 

@@ -15,7 +15,7 @@
 package simulation
 
 import (
-	jobs "github.com/onosproject/helmet/pkg/job"
+	jobs "github.com/onosproject/helmit/pkg/job"
 	"os"
 	"path"
 )

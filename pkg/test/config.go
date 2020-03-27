@@ -15,7 +15,7 @@
 package test
 
 import (
-	"github.com/onosproject/helmet/pkg/job"
+	"github.com/onosproject/helmit/pkg/job"
 	"os"
 )
 

@@ -15,11 +15,11 @@
 package main
 
 import (
-	tests "github.com/onosproject/helmet/examples/test"
-	"github.com/onosproject/helmet/pkg/benchmark"
-	"github.com/onosproject/helmet/pkg/registry"
-	"github.com/onosproject/helmet/pkg/simulation"
-	"github.com/onosproject/helmet/pkg/test"
+	tests "github.com/onosproject/helmit/examples/test"
+	"github.com/onosproject/helmit/pkg/benchmark"
+	"github.com/onosproject/helmit/pkg/registry"
+	"github.com/onosproject/helmit/pkg/simulation"
+	"github.com/onosproject/helmit/pkg/test"
 	"os"
 )
 

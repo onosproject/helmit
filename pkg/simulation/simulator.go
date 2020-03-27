@@ -17,9 +17,9 @@ package simulation
 import (
 	"context"
 	"fmt"
-	"github.com/onosproject/helmet/pkg/helm"
-	"github.com/onosproject/helmet/pkg/registry"
-	"github.com/onosproject/helmet/pkg/util/logging"
+	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/registry"
+	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
 	"math/rand"
 	"net"

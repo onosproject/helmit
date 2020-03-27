@@ -17,9 +17,9 @@ package test
 import (
 	"context"
 	"fmt"
-	"github.com/onosproject/helmet/pkg/job"
-	"github.com/onosproject/helmet/pkg/kubernetes"
-	"github.com/onosproject/helmet/pkg/registry"
+	"github.com/onosproject/helmit/pkg/job"
+	"github.com/onosproject/helmit/pkg/kubernetes"
+	"github.com/onosproject/helmit/pkg/registry"
 	"google.golang.org/grpc"
 	"os"
 	"strconv"

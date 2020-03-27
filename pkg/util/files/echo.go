@@ -17,7 +17,7 @@ package files
 import (
 	"errors"
 	"fmt"
-	"github.com/onosproject/helmet/pkg/kubernetes"
+	"github.com/onosproject/helmit/pkg/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"

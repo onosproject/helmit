@@ -20,9 +20,9 @@ import (
 	"fmt"
 	atomix "github.com/atomix/go-client/pkg/client"
 	"github.com/atomix/go-client/pkg/client/map"
-	"github.com/onosproject/helmet/pkg/helm"
-	"github.com/onosproject/helmet/pkg/kubernetes"
-	"github.com/onosproject/helmet/pkg/test"
+	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/kubernetes"
+	"github.com/onosproject/helmit/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

@@ -2,12 +2,12 @@ FROM alpine:3.8
 
 RUN apk upgrade --update --no-cache
 
-RUN addgroup -S helmet && adduser -S helmet -G helmet
+RUN addgroup -S helmit && adduser -S helmit -G helmit
 
-USER helmet
+USER helmit
 
-ADD _output/bin/helmet-tests /usr/local/bin/helmet-tests
+ADD _output/bin/helmit-tests /usr/local/bin/helmit-tests
 
-WORKDIR /home/helmet
+WORKDIR /home/helmit
 
-ENTRYPOINT ["helmet-tests"]
+ENTRYPOINT ["helmit-tests"]

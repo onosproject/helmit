@@ -1,4 +1,4 @@
-module github.com/onosproject/helmet
+module github.com/onosproject/helmit
 
 go 1.13
 

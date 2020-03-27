@@ -17,7 +17,7 @@ package cli
 import (
 	"bytes"
 	"errors"
-	"github.com/onosproject/helmet/pkg/job"
+	"github.com/onosproject/helmit/pkg/job"
 	"go/build"
 	"math/rand"
 	"os"
@@ -26,10 +26,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/onosproject/helmet/pkg/util/logging"
+	"github.com/onosproject/helmit/pkg/util/logging"
 
-	"github.com/onosproject/helmet/pkg/test"
-	"github.com/onosproject/helmet/pkg/util/random"
+	"github.com/onosproject/helmit/pkg/test"
+	"github.com/onosproject/helmit/pkg/util/random"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -90,7 +90,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	// If a command package was provided, build a binary and update the image tag
 	var executable string
 	if pkgPath != "" {
-		executable = filepath.Join(os.TempDir(), "helmet", testID)
+		executable = filepath.Join(os.TempDir(), "helmit", testID)
 		err := buildBinary(pkgPath, executable)
 		if err != nil {
 			cmd.SilenceUsage = true
@@ -98,7 +98,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if image == "" {
-			image = "onosproject/helmet-runner:latest"
+			image = "onosproject/helmit-runner:latest"
 		}
 	}
 
