@@ -1,0 +1,7 @@
+clusters: 1
+partitions: 1
+proxy:
+  image: ""
+backend:
+  replicas: 1
+  image: atomix/raft-replica:latest

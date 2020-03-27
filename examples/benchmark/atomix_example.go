@@ -49,6 +49,7 @@ func (s *AtomixBenchmarkSuite) SetupBenchmarkSuite() error {
 		Release("atomix-raft").
 		Set("clusters", 3).
 		Set("partitions", 10).
+		Set("backend.replicas", 3).
 		Set("backend.image", "atomix/raft-replica:latest").
 		Install(true)
 	if err != nil {

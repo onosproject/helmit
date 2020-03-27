@@ -1,7 +1,37 @@
 # Atomix Benchmark Example
 
-To run the benchmarks:
+The benchmark example includes benchmarks for [Atomix](https://atomix.io) map put, get, and remove operations
+against a Raft database.
+
+To run the benchmarks, use the `./cmd/helmet-examples` command, passing the `examples/charts` directory as the
+benchmark context:
 
 ```bash
-helmet bench ./cmd/helmet-examples --suite atomix --benchmark BenchmarkMapPut --context ../onos-helm-charts --duration 5m
+helmet bench ./cmd/helmet-examples \
+    --suite atomix \
+    --context examples/charts \
+    --duration 5m
+```
+
+To run a specific benchmark, specify the benchmark name with the `--benchmark` flag:
+
+```bash
+helmet bench ./cmd/helmet-examples \
+    --suite atomix \
+    --benchmark BenchmarkMapPut \
+    --context examples/charts \
+    --duration 5m
+```
+
+To change the size of the Raft database, set the `atomix-raft` chart values:
+
+```bash
+helmet bench ./cmd/helmet-examples \
+    --suite atomix \
+    --benchmark BenchmarkMapPut \
+    --context examples/charts \
+    --duration 5m \
+    --set atomix-raft.clusters=3 \
+    --set atomix-raft.partitions=9 \
+    --set atomix-raft.backend.replicas=3
 ```
