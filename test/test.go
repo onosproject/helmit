@@ -54,8 +54,13 @@ func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
 	assert.Len(t, pods, 1)
 }
 
+// ChartTestSuite2 is a test for chart deployment
+type ChartTestSuite2 struct {
+	test.Suite
+}
+
 // TestRemoteInstall tests a remote chart installation
-func (s *ChartTestSuite) TestRemoteInstall(t *testing.T) {
+func (s *ChartTestSuite2) TestRemoteInstall(t *testing.T) {
 	kafka := helm.Chart("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator").
 		Release("kafka").
 		Set("replicas", 1).

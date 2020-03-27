@@ -59,9 +59,15 @@ func (w *Worker) Run() error {
 
 // RunTests runs a suite of tests
 func (w *Worker) RunTests(ctx context.Context, request *TestRequest) (*TestResponse, error) {
+	go w.runTests(request)
+	return &TestResponse{}, nil
+}
+
+func (w *Worker) runTests(request *TestRequest) {
 	test := registry.GetTestSuite(request.Suite)
 	if test == nil {
-		return nil, fmt.Errorf("unknown test suite %s", request.Suite)
+		fmt.Println(fmt.Errorf("unknown test suite %s", request.Suite))
+		os.Exit(1)
 	}
 
 	tests := []testing.InternalTest{
@@ -80,5 +86,4 @@ func (w *Worker) RunTests(ctx context.Context, request *TestRequest) (*TestRespo
 	}
 
 	testing.Main(func(_, _ string) (bool, error) { return true, nil }, tests, nil, nil)
-	return &TestResponse{}, nil
 }
