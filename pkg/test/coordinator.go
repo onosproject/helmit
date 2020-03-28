@@ -17,13 +17,14 @@ package test
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
+	"sync"
+
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/kubernetes"
 	"github.com/onosproject/helmit/pkg/registry"
 	"google.golang.org/grpc"
-	"os"
-	"strconv"
-	"sync"
 )
 
 // newCoordinator returns a new test coordinator
@@ -162,6 +163,10 @@ func (t *WorkerTask) Run() (int, error) {
 		Suite: t.config.Suites[0],
 		Tests: t.config.Tests,
 	})
+
+	if err != nil {
+		return 0, err
+	}
 
 	status, err := t.runner.WaitForExit(job)
 	if err != nil {

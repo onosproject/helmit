@@ -17,12 +17,13 @@ package files
 import (
 	"errors"
 	"fmt"
+	"os"
+
 	"github.com/onosproject/helmit/pkg/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
-	"os"
 )
 
 // Echo returns a new echo client
@@ -60,7 +61,7 @@ func (o *EchoOptions) To(filename string) *EchoOptions {
 	return o
 }
 
-// To configures the copy destination pod
+// On To configures the copy destination pod
 func (o *EchoOptions) On(pod string, container ...string) *EchoOptions {
 	o.pod = pod
 	if len(container) > 0 {

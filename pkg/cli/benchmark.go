@@ -16,10 +16,11 @@ package cli
 
 import (
 	"errors"
-	"github.com/onosproject/helmit/pkg/job"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/onosproject/helmit/pkg/job"
 
 	"github.com/onosproject/helmit/pkg/benchmark"
 	"github.com/onosproject/helmit/pkg/util/random"
@@ -137,7 +138,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 			ID:              benchID,
 			Executable:      executable,
 			Image:           image,
-			ImagePullPolicy: corev1.PullPolicy(pullPolicy),
+			ImagePullPolicy: pullPolicy,
 			Context:         context,
 			ValueFiles:      valueFiles,
 			Values:          values,
