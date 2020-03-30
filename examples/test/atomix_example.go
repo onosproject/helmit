@@ -17,11 +17,9 @@ package test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	atomix "github.com/atomix/go-client/pkg/client"
 	"github.com/atomix/go-client/pkg/client/map"
 	"github.com/onosproject/helmit/pkg/helm"
-	"github.com/onosproject/helmit/pkg/kubernetes"
 	"github.com/onosproject/helmit/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -55,28 +53,12 @@ func (s *AtomixTestSuite) SetupTestSuite() error {
 	return nil
 }
 
-func (s *AtomixTestSuite) getController() (string, error) {
-	client, err := kubernetes.NewForRelease(helm.Release("atomix-controller"))
-	if err != nil {
-		return "", err
-	}
-	services, err := client.CoreV1().Services().List()
-	if err != nil {
-		return "", err
-	}
-	if len(services) == 0 {
-		return "", nil
-	}
-	service := services[0]
-	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", service.Name, service.Namespace, service.Ports()[0].Port), nil
-}
-
 // TestMap tests Atomix map operations
 func (s *AtomixTestSuite) TestMap(t *testing.T) {
-	address, err := s.getController()
-	assert.NoError(t, err)
-
-	client, err := atomix.New(address)
+	client, err := atomix.New(
+		"atomix-controller:5679",
+		atomix.WithNamespace(helm.Namespace()),
+		atomix.WithScope("test"))
 	assert.NoError(t, err)
 
 	database, err := client.GetDatabase(context.Background(), "atomix-raft")

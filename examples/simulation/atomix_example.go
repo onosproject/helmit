@@ -16,13 +16,11 @@ package simulation
 
 import (
 	"context"
-	"fmt"
 	atomix "github.com/atomix/go-client/pkg/client"
 	"github.com/atomix/go-client/pkg/client/map"
 	"github.com/onosproject/helmit/pkg/benchmark"
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/input"
-	"github.com/onosproject/helmit/pkg/kubernetes"
 	"github.com/onosproject/helmit/pkg/simulation"
 	"github.com/onosproject/helmit/pkg/test"
 	"time"
@@ -67,30 +65,12 @@ func (s *AtomixSimulationSuite) SetupSimulation(c *simulation.Simulator) error {
 	return nil
 }
 
-func (s *AtomixSimulationSuite) getController() (string, error) {
-	client, err := kubernetes.NewForRelease(helm.Release("atomix-controller"))
-	if err != nil {
-		return "", err
-	}
-	services, err := client.CoreV1().Services().List()
-	if err != nil {
-		return "", err
-	}
-	if len(services) == 0 {
-		return "", nil
-	}
-	service := services[0]
-	return fmt.Sprintf("%s.%s.svc.cluster.local:%d", service.Name, service.Namespace, service.Ports()[0].Port), nil
-}
-
 // SetupSimulator creates an instance of the map on each simulator pod
 func (s *AtomixSimulationSuite) SetupSimulator(c *benchmark.Context) error {
-	address, err := s.getController()
-	if err != nil {
-		return err
-	}
-
-	client, err := atomix.New(address)
+	client, err := atomix.New(
+		"atomix-controller:5679",
+		atomix.WithNamespace(helm.Namespace()),
+		atomix.WithScope(c.Name))
 	if err != nil {
 		return err
 	}

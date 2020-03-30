@@ -1,4 +1,3 @@
-{{- if .Values.store.consensus.enabled }}
 apiVersion: cloud.atomix.io/v1beta1
 kind: Database
 metadata:
@@ -16,4 +15,3 @@ spec:
       backend:
         image: {{ .Values.backend.image }}
         replicas: {{ .Values.backend.replicas }}
-{{- end }}
