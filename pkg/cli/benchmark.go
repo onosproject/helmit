@@ -17,7 +17,6 @@ package cli
 import (
 	"errors"
 	"github.com/onosproject/helmit/pkg/job"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -56,11 +55,6 @@ func getBenchCommand() *cobra.Command {
 func runBenchCommand(cmd *cobra.Command, args []string) error {
 	setupCommand(cmd)
 
-	pkgPath := ""
-	if len(args) > 0 {
-		pkgPath = args[0]
-	}
-
 	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	suite, _ := cmd.Flags().GetString("suite")
@@ -76,7 +70,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
 
 	// Either a command package or image must be specified
-	if pkgPath == "" && image == "" {
+	if len(args) == 0 && image == "" {
 		return errors.New("must specify either a benchmark package or --image to run")
 	}
 
@@ -84,15 +78,15 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	benchID := random.NewPetName(2)
 
 	// If a command package was provided, build a binary and update the image tag
-	var executable string
-	if pkgPath != "" {
-		executable = filepath.Join(os.TempDir(), "helmit", benchID)
-		err := buildBinary(pkgPath, executable)
+	var bin string
+	if len(args) > 0 {
+		ex, err := buildMain(args[0], testType)
 		if err != nil {
 			cmd.SilenceUsage = true
 			cmd.SilenceErrors = true
 			return err
 		}
+		bin = ex
 		if image == "" {
 			image = "onosproject/helmit-runner:latest"
 		}
@@ -135,7 +129,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	config := &benchmark.Config{
 		Config: &job.Config{
 			ID:              benchID,
-			Executable:      executable,
+			Executable:      bin,
 			Image:           image,
 			ImagePullPolicy: corev1.PullPolicy(pullPolicy),
 			Context:         context,

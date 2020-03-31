@@ -15,13 +15,10 @@
 package cli
 
 import (
-	"bytes"
 	"errors"
 	"github.com/onosproject/helmit/pkg/job"
-	"go/build"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -33,6 +30,8 @@ import (
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 )
+
+const testType = "test"
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -63,11 +62,6 @@ func getTestCommand() *cobra.Command {
 func runTestCommand(cmd *cobra.Command, args []string) error {
 	setupCommand(cmd)
 
-	pkgPath := ""
-	if len(args) > 0 {
-		pkgPath = args[0]
-	}
-
 	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	files, _ := cmd.Flags().GetStringArray("values")
@@ -80,7 +74,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	untilFailure, _ := cmd.Flags().GetBool("until-failure")
 
 	// Either a command package or image must be specified
-	if pkgPath == "" && image == "" {
+	if len(args) == 0 && image == "" {
 		return errors.New("must specify either a test package or --image to run")
 	}
 
@@ -88,15 +82,15 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	testID := random.NewPetName(2)
 
 	// If a command package was provided, build a binary and update the image tag
-	var executable string
-	if pkgPath != "" {
-		executable = filepath.Join(os.TempDir(), "helmit", testID)
-		err := buildBinary(pkgPath, executable)
+	var bin string
+	if len(args) > 0 {
+		ex, err := buildMain(args[0], testType)
 		if err != nil {
 			cmd.SilenceUsage = true
 			cmd.SilenceErrors = true
 			return err
 		}
+		bin = ex
 		if image == "" {
 			image = "onosproject/helmit-runner:latest"
 		}
@@ -130,7 +124,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 			ID:              testID,
 			Image:           image,
 			ImagePullPolicy: corev1.PullPolicy(pullPolicy),
-			Executable:      executable,
+			Executable:      bin,
 			Context:         context,
 			ValueFiles:      valueFiles,
 			Values:          values,
@@ -142,53 +136,6 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		Verbose:    logging.GetVerbose(),
 	}
 	return test.Run(config)
-}
-
-func buildBinary(pkgPath, binPath string) error {
-	workDir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	pkg, err := build.Import(pkgPath, workDir, build.ImportComment)
-	if err != nil {
-		return err
-	}
-
-	if !pkg.IsCommand() {
-		return errors.New("test package must be a command")
-	}
-
-	// Build the command
-	build := exec.Command("go", "build", "-o", binPath, pkgPath)
-	build.Stderr = os.Stderr
-	build.Stdout = os.Stdout
-	env := os.Environ()
-	env = append(env, "GOOS=linux", "CGO_ENABLED=0")
-	build.Env = env
-	return build.Run()
-}
-
-func isKindCluster() (bool, error) {
-	kubeConfig := os.Getenv("KUBECONFIG")
-	if kubeConfig == "" {
-		return false, nil
-	}
-
-	buffer := bytes.NewBuffer(nil)
-	cmd := exec.Command("kind", "get", "kubeconfig-path")
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = buffer
-	if err := cmd.Run(); err != nil {
-		return false, nil
-	}
-	kubeConfigPaths := strings.Split(strings.TrimSuffix(buffer.String(), "\n"), "\n")
-	for _, path := range kubeConfigPaths {
-		if kubeConfig == path {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func parseFiles(files []string) (map[string][]string, error) {

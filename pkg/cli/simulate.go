@@ -18,7 +18,6 @@ import (
 	"errors"
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/simulation"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -68,11 +67,6 @@ func getSimulateCommand() *cobra.Command {
 func runSimulateCommand(cmd *cobra.Command, args []string) error {
 	setupCommand(cmd)
 
-	pkgPath := ""
-	if len(args) > 0 {
-		pkgPath = args[0]
-	}
-
 	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	sim, _ := cmd.Flags().GetString("simulation")
@@ -87,7 +81,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
 
 	// Either a command package or image must be specified
-	if pkgPath == "" && image == "" {
+	if len(args) == 0 && image == "" {
 		return errors.New("must specify either a simulation package or --image to run")
 	}
 
@@ -95,15 +89,15 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 	simID := random.NewPetName(2)
 
 	// If a command package was provided, build a binary and update the image tag
-	var executable string
-	if pkgPath != "" {
-		executable = filepath.Join(os.TempDir(), "helmit", simID)
-		err := buildBinary(pkgPath, executable)
+	var bin string
+	if len(args) > 0 {
+		ex, err := buildMain(args[0], testType)
 		if err != nil {
 			cmd.SilenceUsage = true
 			cmd.SilenceErrors = true
 			return err
 		}
+		bin = ex
 		if image == "" {
 			image = "onosproject/helmit-runner:latest"
 		}
@@ -157,7 +151,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 			ID:              simID,
 			Image:           image,
 			ImagePullPolicy: corev1.PullPolicy(pullPolicy),
-			Executable:      executable,
+			Executable:      bin,
 			Context:         context,
 			ValueFiles:      valueFiles,
 			Values:          values,
