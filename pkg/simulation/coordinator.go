@@ -24,6 +24,7 @@ import (
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -51,7 +52,7 @@ func (c *Coordinator) Run() error {
 
 	workers := make([]*WorkerTask, len(suites))
 	for i, suite := range suites {
-		jobID := newJobID(c.config.ID, suite)
+		jobID := newJobID(c.config.ID, strings.ToLower(suite))
 		config := &Config{
 			Config: &job.Config{
 				ID:              jobID,

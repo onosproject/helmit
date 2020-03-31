@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -48,7 +49,7 @@ func (c *Coordinator) Run() error {
 		}
 		workers := make([]*WorkerTask, len(suites))
 		for i, suite := range suites {
-			jobID := newJobID(c.config.ID+"-"+strconv.Itoa(iteration), suite)
+			jobID := newJobID(c.config.ID+"-"+strconv.Itoa(iteration), strings.ToLower(suite))
 			env := c.config.Env
 			if env == nil {
 				env = make(map[string]string)
