@@ -19,8 +19,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// HelmChartClient is a Helm chart client
-type HelmChartClient interface {
+// ChartClient is a Helm chart client
+type ChartClient interface {
 	// Charts returns a list of charts in the namespace
 	Charts() []*HelmChart
 
@@ -55,7 +55,7 @@ func newChart(name string, repo []string, namespace string, client *kubernetes.C
 
 // HelmChart is a Helm chart
 type HelmChart struct {
-	HelmReleaseClient
+	ReleaseClient
 	namespace  string
 	client     *kubernetes.Clientset
 	config     *action.Configuration

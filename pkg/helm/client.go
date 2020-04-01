@@ -15,10 +15,11 @@
 package helm
 
 import (
+	"log"
+
 	"github.com/onosproject/helmit/pkg/kubernetes/config"
 	"helm.sh/helm/v3/pkg/action"
 	"k8s.io/client-go/kubernetes"
-	"log"
 )
 
 var clients = make(map[string]HelmClient)
@@ -63,8 +64,8 @@ func getConfig(namespace string) (*action.Configuration, error) {
 
 // HelmClient is a Helm client
 type HelmClient interface {
-	HelmChartClient
-	HelmReleaseClient
+	ChartClient
+	ReleaseClient
 
 	// Namespace returns the client for the given namespace
 	Namespace(namespace string) HelmClient
