@@ -45,6 +45,9 @@ func generateVersionClient(options GroupOptions) error {
 	}
 
 	for _, resource := range options.Resources {
+		if err := generateResourceFilter(*resource); err != nil {
+			return err
+		}
 		if err := generateResourceReader(*resource); err != nil {
 			return err
 		}

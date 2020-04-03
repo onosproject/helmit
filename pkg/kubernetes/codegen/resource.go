@@ -19,6 +19,7 @@ import "path"
 // ResourceOptions contains options for generating a resource
 type ResourceOptions struct {
 	Client    *ResourceClientOptions
+	Filter    *ResourceFilterOptions
 	Reader    *ResourceReaderOptions
 	Reference *ResourceReferenceOptions
 	Resource  *ResourceObjectOptions
