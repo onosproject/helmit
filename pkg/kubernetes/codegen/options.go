@@ -195,7 +195,5 @@ func getOptionsFromConfig(config Config) ClientOptions {
 		resourceOpts := options.Groups[fmt.Sprintf("%s%s", resource.Group, resource.Version)].Resources[resource.Kind]
 		resourceOpts.Resource.References = references
 	}
-
-	println(fmt.Sprintf("%v", options))
 	return options
 }

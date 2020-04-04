@@ -28,7 +28,6 @@ import (
 	"helm.sh/helm/v3/pkg/getter"
 	helm "helm.sh/helm/v3/pkg/kube"
 	"helm.sh/helm/v3/pkg/release"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"os"
 	"reflect"
@@ -130,8 +129,8 @@ func (r *HelmRelease) SkipCRDs() bool {
 	return r.skipCRDs
 }
 
-// getResources returns a list of chart resources
-func (r *HelmRelease) getResources() (helm.ResourceList, error) {
+// GetResources returns a list of chart resources
+func (r *HelmRelease) GetResources() (helm.ResourceList, error) {
 	resources, err := r.config.KubeClient.Build(bytes.NewBufferString(r.release.Manifest), true)
 	if err != nil {
 		return nil, err
@@ -147,25 +146,6 @@ func (r *HelmRelease) setContextDir() error {
 		}
 	}
 	return nil
-}
-
-// Filter is the release filter function
-func (r *HelmRelease) Filter(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-	resources, err := r.getResources()
-	if err != nil {
-		return false, err
-	}
-	for _, resource := range resources {
-		resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
-		if resourceKind.Group == kind.Group &&
-			resourceKind.Version == kind.Version &&
-			resourceKind.Kind == kind.Kind &&
-			resource.Namespace == meta.Namespace &&
-			resource.Name == meta.Name {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // Install installs the Helm chart

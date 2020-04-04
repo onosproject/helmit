@@ -9,8 +9,11 @@ import (
 	"github.com/onosproject/helmit/pkg/helm"
     "github.com/onosproject/helmit/pkg/kubernetes/config"
     "github.com/onosproject/helmit/pkg/kubernetes/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/kubernetes"
+	helmkube "helm.sh/helm/v3/pkg/kube"
+	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 // New returns a new Kubernetes client for the current namespace
@@ -29,7 +32,20 @@ func NewOrDie() Client {
 
 // NewForNamespace returns a new Kubernetes client for the given namespace
 func NewForNamespace(namespace string) (Client, error) {
-    return newFiltered{{ .Types.Interface }}(namespace, resource.NoFilter)
+	kubernetesConfig, err := config.GetRestConfig()
+	if err != nil {
+		return nil, err
+	}
+	kubernetesClient, err := kubernetes.NewForConfig(kubernetesConfig)
+	if err != nil {
+    	return nil, err
+	}
+    return &{{ .Types.Struct }}{
+        namespace: namespace,
+        config:    kubernetesConfig,
+        client:    kubernetesClient,
+        filter:    resource.NoFilter,
+    }, nil
 }
 
 // NewForNamespaceOrDie returns a new Kubernetes client for the given namespace
@@ -58,20 +74,7 @@ type {{ .Types.Interface }} interface {
 }
 
 // NewForRelease returns a new Kubernetes client for the given release
-func NewForRelease(release *helm.Release) ({{ .Types.Interface }}, error) {
-    return newFiltered{{ .Types.Interface }}(release.Namespace(), release.Filter)
-}
-
-// NewForReleaseOrDie returns a new Kubernetes client for the given release
-func NewForReleaseOrDie(release *helm.Release) {{ .Types.Interface }} {
-    client, err := NewForRelease(release)
-    if err != nil {
-        panic(err)
-    }
-    return client
-}
-
-func newFiltered{{ .Types.Interface }}(namespace string, filter resource.Filter) ({{ .Types.Interface }}, error) {
+func NewForRelease(release *helm.HelmRelease) ({{ .Types.Interface }}, error) {
 	kubernetesConfig, err := config.GetRestConfig()
 	if err != nil {
 		return nil, err
@@ -80,12 +83,138 @@ func newFiltered{{ .Types.Interface }}(namespace string, filter resource.Filter)
 	if err != nil {
     	return nil, err
 	}
-    return &{{ .Types.Struct }}{
-        namespace: namespace,
+	parentClient := &{{ .Types.Struct }}{
+        namespace: release.Namespace(),
         config:    kubernetesConfig,
         client:    kubernetesClient,
-        filter:    filter,
+        filter:    resource.NoFilter,
+    }
+    return &{{ .Types.Struct }}{
+        namespace: release.Namespace(),
+        config:    kubernetesConfig,
+        client:    kubernetesClient,
+        filter:    filterRelease(parentClient, release),
     }, nil
+}
+
+// NewForReleaseOrDie returns a new Kubernetes client for the given release
+func NewForReleaseOrDie(release *helm.HelmRelease) {{ .Types.Interface }} {
+    client, err := NewForRelease(release)
+    if err != nil {
+        panic(err)
+    }
+    return client
+}
+
+func filterRelease(client resource.Client, release *helm.HelmRelease) resource.Filter {
+	return func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+		resources, err := release.GetResources()
+		if err != nil {
+			return false, err
+		}
+		return filterResources(client, resources, kind, meta)
+	}
+}
+
+func filterResources(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+	for _, resource := range resources {
+		resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
+		if resourceKind.Group == kind.Group &&
+			resourceKind.Version == kind.Version &&
+			resourceKind.Kind == kind.Kind &&
+			resource.Namespace == meta.Namespace &&
+			resource.Name == meta.Name {
+			return true, nil
+		}
+	}
+	return filterOwners(client, resources, kind, meta)
+}
+
+func filterOwners(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+	for _, owner := range meta.OwnerReferences {
+		ok, err := filterOwner(client, resources, owner)
+		if ok {
+			return true, nil
+		} else if err != nil {
+			return false, err
+		}
+	}
+	return filterApp(client, resources, kind, meta)
+}
+
+func filterOwner(client resource.Client, resources helmkube.ResourceList, owner metav1.OwnerReference) (bool, error) {
+	for _, resource := range resources {
+		resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
+		if resourceKind.Kind == owner.Kind &&
+			resourceKind.GroupVersion().String() == owner.APIVersion &&
+			resource.Name == owner.Name {
+			return true, nil
+		}
+	}
+
+    switch owner.APIVersion {
+    {{- range $groupName, $group := .Groups }}
+    case "{{ $group.Group }}/{{ $group.Version }}":
+        switch owner.Kind {
+        {{- range $resourceName, $resource := $group.Resources }}
+        case "{{ $resource.Resource.Kind.Kind }}":
+            {{- $name := ($resource.Resource.Names.Singular | toLowerCamel) }}
+            {{ $name }}Client := {{ $resource.Resource.Kind.Package.Alias }}.New{{ $resource.Reader.Types.Interface }}(client, resource.NoFilter)
+            {{ $name }}, err := {{ $name }}Client.Get(owner.Name)
+            if err != nil && !errors.IsNotFound(err) {
+                return false, err
+            } else if err == nil {
+                groupVersionKind := metav1.GroupVersionKind{
+                    Group:   {{ $resource.Resource.Kind.Package.Alias }}.{{ $resource.Resource.Types.Kind }}.Group,
+                    Version: {{ $resource.Resource.Kind.Package.Alias }}.{{ $resource.Resource.Types.Kind }}.Version,
+                    Kind:    {{ $resource.Resource.Kind.Package.Alias }}.{{ $resource.Resource.Types.Kind }}.Kind,
+                }
+                ok, err := filterResources(client, resources, groupVersionKind, {{ $name }}.Object.ObjectMeta)
+                if ok {
+                    return true, nil
+                } else if err != nil {
+                    return false, err
+                }
+            }
+        {{- end }}
+        }
+    {{- end }}
+    }
+	return false, nil
+}
+
+func filterApp(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+    {{- range $groupName, $group := .Groups }}
+    {{- range $resourceName, $resource := $group.Resources }}
+    {{- range $referenceName, $reference := $resource.Resource.References }}
+    {{- $name := ($resource.Resource.Names.Singular | toLowerCamel) }}
+    if isSameKind(kind, {{ $reference.Resource.Package.Alias }}.{{ $reference.Resource.Types.Kind }}) {
+        instance, ok := meta.Labels["app.kubernetes.io/instance"]
+        if ok {
+            {{ $name }}Client := {{ $resource.Resource.Kind.Package.Alias }}.New{{ $resource.Reader.Types.Interface }}(client, resource.NoFilter)
+            {{ $name }}, err := {{ $name }}Client.Get(instance)
+            if err != nil && !errors.IsNotFound(err) {
+                return false, err
+            } else if err == nil {
+                groupVersionKind := metav1.GroupVersionKind{
+                    Group:   {{ $resource.Resource.Kind.Package.Alias }}.{{ $resource.Resource.Types.Kind }}.Group,
+                    Version: {{ $resource.Resource.Kind.Package.Alias }}.{{ $resource.Resource.Types.Kind }}.Version,
+                    Kind:    {{ $resource.Resource.Kind.Package.Alias }}.{{ $resource.Resource.Types.Kind }}.Kind,
+                }
+                return filterResources(client, resources, groupVersionKind, {{ $name }}.Object.ObjectMeta)
+            }
+        }
+    }
+    {{- end }}
+    {{- end }}
+    {{- end }}
+    return false, nil
+}
+
+func isSameKind(groupVersionKind metav1.GroupVersionKind, kind resource.Kind) bool {
+	return groupVersionKind.Group == kind.Group &&
+		groupVersionKind.Version == kind.Version &&
+		groupVersionKind.Kind == kind.Kind
 }
 
 type {{ .Types.Struct }} struct {
