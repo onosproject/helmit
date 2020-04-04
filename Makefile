@@ -24,7 +24,7 @@ test: license_check build deps
 	go test github.com/onosproject/helmit/cmd/...
 
 coverage: # @HELP generate unit test coverage data
-coverage: build deps linters license_check
+coverage: build deps license_check
 	#./build/bin/coveralls-coverage
 
 
