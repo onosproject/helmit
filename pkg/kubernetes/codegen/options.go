@@ -106,20 +106,6 @@ func getOptionsFromConfig(config Config) ClientOptions {
 						Struct:    toLowerCamelCase(fmt.Sprintf("%sClient", resource.PluralKind)),
 					},
 				},
-				Filter: &ResourceFilterOptions{
-					Location: Location{
-						Path: fmt.Sprintf("%s/%s/%s", config.Path, group, resource.Version),
-						File: fmt.Sprintf("%sfilter.go", toLowerCase(resource.PluralKind)),
-					},
-					Package: Package{
-						Name:  resource.Version,
-						Path:  fmt.Sprintf("%s/%s/%s", config.Package, group, resource.Version),
-						Alias: fmt.Sprintf("%s%s", group, resource.Version),
-					},
-					Types: ResourceFilterTypes{
-						Func: fmt.Sprintf("New%sFilter", resource.Kind),
-					},
-				},
 				Reader: &ResourceReaderOptions{
 					Location: Location{
 						Path: fmt.Sprintf("%s/%s/%s", config.Path, group, resource.Version),
@@ -209,7 +195,5 @@ func getOptionsFromConfig(config Config) ClientOptions {
 		resourceOpts := options.Groups[fmt.Sprintf("%s%s", resource.Group, resource.Version)].Resources[resource.Kind]
 		resourceOpts.Resource.References = references
 	}
-
-	println(fmt.Sprintf("%v", options))
 	return options
 }

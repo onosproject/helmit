@@ -14,6 +14,7 @@ import (
 	rbacv1 "github.com/onosproject/helmit/pkg/kubernetes/rbac/v1"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	helmkube "helm.sh/helm/v3/pkg/kube"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -101,7 +102,7 @@ func NewForRelease(release *helm.HelmRelease) (Client, error) {
 		namespace: release.Namespace(),
 		config:    kubernetesConfig,
 		client:    kubernetesClient,
-		filter:    newReleaseFilter(parentClient, release),
+		filter:    filterRelease(parentClient, release),
 	}, nil
 }
 
@@ -114,269 +115,211 @@ func NewForReleaseOrDie(release *helm.HelmRelease) Client {
 	return client
 }
 
-func newReleaseFilter(client resource.Client, release *helm.HelmRelease) resource.Filter {
+func filterRelease(client resource.Client, release *helm.HelmRelease) resource.Filter {
 	return func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
 		resources, err := release.GetResources()
 		if err != nil {
 			return false, err
 		}
-		for _, resource := range resources {
-			resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
-			if resourceKind.Group == kind.Group &&
-				resourceKind.Version == kind.Version &&
-				resourceKind.Kind == kind.Kind &&
-				resource.Namespace == meta.Namespace &&
-				resource.Name == meta.Name {
-				return true, nil
-			}
-		}
-		return filterOwnerReferences(client, resources, kind, meta)
+		return filterResources(client, resources, kind, meta)
 	}
 }
 
-func filterOwnerReferences(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+func filterResources(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+	for _, resource := range resources {
+		resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
+		if resourceKind.Group == kind.Group &&
+			resourceKind.Version == kind.Version &&
+			resourceKind.Kind == kind.Kind &&
+			resource.Namespace == meta.Namespace &&
+			resource.Name == meta.Name {
+			return true, nil
+		}
+	}
+	return filterOwners(client, resources, kind, meta)
+}
+
+func filterOwners(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
 	for _, owner := range meta.OwnerReferences {
-		for _, resource := range resources {
-			resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
-			if resourceKind.Kind == owner.Kind &&
-				resourceKind.GroupVersion().String() == owner.APIVersion &&
-				resource.Name == owner.Name {
-				return true, nil
+		ok, err := filterOwner(client, resources, kind, meta, owner)
+		if ok {
+			return true, nil
+		} else if err != nil {
+			return false, err
+		}
+	}
+	if isSameKind(kind, corev1.PodKind) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+			daemonSetClient := appsv1.NewDaemonSetsReader(client, resource.NoFilter)
+			daemonSet, err := daemonSetClient.Get(instance)
+			if err != nil && !errors.IsNotFound(err) {
+				return false, err
+			} else if err == nil {
+				groupVersionKind := metav1.GroupVersionKind{
+					Group:   appsv1.DaemonSetKind.Group,
+					Version: appsv1.DaemonSetKind.Version,
+					Kind:    appsv1.DaemonSetKind.Kind,
+				}
+				return filterResources(client, resources, groupVersionKind, daemonSet.Object.ObjectMeta)
 			}
 		}
-		if owner.APIVersion == "apps.v1" {
-			filter := appsv1.NewDaemonSetFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
+	}
+	if isSameKind(kind, appsv1.ReplicaSetKind) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+			deploymentClient := appsv1.NewDeploymentsReader(client, resource.NoFilter)
+			deployment, err := deploymentClient.Get(instance)
+			if err != nil && !errors.IsNotFound(err) {
 				return false, err
+			} else if err == nil {
+				groupVersionKind := metav1.GroupVersionKind{
+					Group:   appsv1.DeploymentKind.Group,
+					Version: appsv1.DeploymentKind.Version,
+					Kind:    appsv1.DeploymentKind.Kind,
+				}
+				return filterResources(client, resources, groupVersionKind, deployment.Object.ObjectMeta)
 			}
 		}
-		if owner.APIVersion == "apps.v1" {
-			filter := appsv1.NewDeploymentFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
+	}
+	if isSameKind(kind, corev1.PodKind) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+			replicaSetClient := appsv1.NewReplicaSetsReader(client, resource.NoFilter)
+			replicaSet, err := replicaSetClient.Get(instance)
+			if err != nil && !errors.IsNotFound(err) {
 				return false, err
+			} else if err == nil {
+				groupVersionKind := metav1.GroupVersionKind{
+					Group:   appsv1.ReplicaSetKind.Group,
+					Version: appsv1.ReplicaSetKind.Version,
+					Kind:    appsv1.ReplicaSetKind.Kind,
+				}
+				return filterResources(client, resources, groupVersionKind, replicaSet.Object.ObjectMeta)
 			}
 		}
-		if owner.APIVersion == "apps.v1" {
-			filter := appsv1.NewReplicaSetFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
+	}
+	if isSameKind(kind, corev1.PodKind) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+			statefulSetClient := appsv1.NewStatefulSetsReader(client, resource.NoFilter)
+			statefulSet, err := statefulSetClient.Get(instance)
+			if err != nil && !errors.IsNotFound(err) {
 				return false, err
+			} else if err == nil {
+				groupVersionKind := metav1.GroupVersionKind{
+					Group:   appsv1.StatefulSetKind.Group,
+					Version: appsv1.StatefulSetKind.Version,
+					Kind:    appsv1.StatefulSetKind.Kind,
+				}
+				return filterResources(client, resources, groupVersionKind, statefulSet.Object.ObjectMeta)
 			}
 		}
-		if owner.APIVersion == "apps.v1" {
-			filter := appsv1.NewStatefulSetFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
+	}
+	if isSameKind(kind, appsv1.ReplicaSetKind) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+			deploymentClient := appsv1beta1.NewDeploymentsReader(client, resource.NoFilter)
+			deployment, err := deploymentClient.Get(instance)
+			if err != nil && !errors.IsNotFound(err) {
 				return false, err
+			} else if err == nil {
+				groupVersionKind := metav1.GroupVersionKind{
+					Group:   appsv1beta1.DeploymentKind.Group,
+					Version: appsv1beta1.DeploymentKind.Version,
+					Kind:    appsv1beta1.DeploymentKind.Kind,
+				}
+				return filterResources(client, resources, groupVersionKind, deployment.Object.ObjectMeta)
 			}
 		}
-		if owner.APIVersion == "apps.v1beta1" {
-			filter := appsv1beta1.NewDeploymentFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
+	}
+	if isSameKind(kind, corev1.PodKind) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+			deploymentClient := appsv1beta1.NewDeploymentsReader(client, resource.NoFilter)
+			deployment, err := deploymentClient.Get(instance)
+			if err != nil && !errors.IsNotFound(err) {
 				return false, err
+			} else if err == nil {
+				groupVersionKind := metav1.GroupVersionKind{
+					Group:   appsv1beta1.DeploymentKind.Group,
+					Version: appsv1beta1.DeploymentKind.Version,
+					Kind:    appsv1beta1.DeploymentKind.Kind,
+				}
+				return filterResources(client, resources, groupVersionKind, deployment.Object.ObjectMeta)
 			}
 		}
-		if owner.APIVersion == "apps.v1beta1" {
-			filter := appsv1beta1.NewStatefulSetFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
+	}
+	if isSameKind(kind, appsv1.ReplicaSetKind) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+			statefulSetClient := appsv1beta1.NewStatefulSetsReader(client, resource.NoFilter)
+			statefulSet, err := statefulSetClient.Get(instance)
+			if err != nil && !errors.IsNotFound(err) {
 				return false, err
+			} else if err == nil {
+				groupVersionKind := metav1.GroupVersionKind{
+					Group:   appsv1beta1.StatefulSetKind.Group,
+					Version: appsv1beta1.StatefulSetKind.Version,
+					Kind:    appsv1beta1.StatefulSetKind.Kind,
+				}
+				return filterResources(client, resources, groupVersionKind, statefulSet.Object.ObjectMeta)
 			}
 		}
-		if owner.APIVersion == "batch.v1" {
-			filter := batchv1.NewJobFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
+	}
+	if isSameKind(kind, corev1.PodKind) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+			statefulSetClient := appsv1beta1.NewStatefulSetsReader(client, resource.NoFilter)
+			statefulSet, err := statefulSetClient.Get(instance)
+			if err != nil && !errors.IsNotFound(err) {
 				return false, err
+			} else if err == nil {
+				groupVersionKind := metav1.GroupVersionKind{
+					Group:   appsv1beta1.StatefulSetKind.Group,
+					Version: appsv1beta1.StatefulSetKind.Version,
+					Kind:    appsv1beta1.StatefulSetKind.Kind,
+				}
+				return filterResources(client, resources, groupVersionKind, statefulSet.Object.ObjectMeta)
 			}
 		}
-		if owner.APIVersion == "batch.v1beta1" {
-			filter := batchv1beta1.NewCronJobFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
+	}
+	if isSameKind(kind, corev1.EndpointsKind) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+			serviceClient := corev1.NewServicesReader(client, resource.NoFilter)
+			service, err := serviceClient.Get(instance)
+			if err != nil && !errors.IsNotFound(err) {
 				return false, err
-			}
-		}
-		if owner.APIVersion == "batch.v2alpha1" {
-			filter := batchv2alpha1.NewCronJobFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "core.v1" {
-			filter := corev1.NewConfigMapFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "core.v1" {
-			filter := corev1.NewEndpointsFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "core.v1" {
-			filter := corev1.NewNodeFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "core.v1" {
-			filter := corev1.NewPodFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "core.v1" {
-			filter := corev1.NewSecretFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "core.v1" {
-			filter := corev1.NewServiceFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "extensions.v1beta1" {
-			filter := extensionsv1beta1.NewIngressFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "networking.v1beta1" {
-			filter := networkingv1beta1.NewIngressFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "rbac.authorization.k8s.io.v1" {
-			filter := rbacv1.NewClusterRoleFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "rbac.authorization.k8s.io.v1" {
-			filter := rbacv1.NewClusterRoleBindingFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "rbac.authorization.k8s.io.v1" {
-			filter := rbacv1.NewRoleFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
-			}
-		}
-		if owner.APIVersion == "rbac.authorization.k8s.io.v1" {
-			filter := rbacv1.NewRoleBindingFilter(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-				return filterOwnerReferences(client, resources, kind, meta)
-			})
-			ok, err := filter(kind, meta)
-			if ok {
-				return true, nil
-			} else if err != nil {
-				return false, err
+			} else if err == nil {
+				groupVersionKind := metav1.GroupVersionKind{
+					Group:   corev1.ServiceKind.Group,
+					Version: corev1.ServiceKind.Version,
+					Kind:    corev1.ServiceKind.Kind,
+				}
+				return filterResources(client, resources, groupVersionKind, service.Object.ObjectMeta)
 			}
 		}
 	}
 	return false, nil
+}
+
+func filterOwner(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta, owner metav1.OwnerReference) (bool, error) {
+	for _, resource := range resources {
+		resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
+		if resourceKind.Kind == owner.Kind &&
+			resourceKind.GroupVersion().String() == owner.APIVersion &&
+			resource.Name == owner.Name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func isSameKind(groupVersionKind metav1.GroupVersionKind, kind resource.Kind) bool {
+	return groupVersionKind.Group == kind.Group &&
+		groupVersionKind.Version == kind.Version &&
+		groupVersionKind.Kind == kind.Kind
 }
 
 type client struct {

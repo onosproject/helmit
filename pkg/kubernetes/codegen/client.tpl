@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/kubernetes"
 	helmkube "helm.sh/helm/v3/pkg/kube"
+	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 // New returns a new Kubernetes client for the current namespace
@@ -90,7 +91,7 @@ func NewForRelease(release *helm.HelmRelease) ({{ .Types.Interface }}, error) {
         namespace: release.Namespace(),
         config:    kubernetesConfig,
         client:    kubernetesClient,
-        filter:    newReleaseFilter(parentClient, release),
+        filter:    filterRelease(parentClient, release),
     }, nil
 }
 
@@ -103,54 +104,83 @@ func NewForReleaseOrDie(release *helm.HelmRelease) {{ .Types.Interface }} {
     return client
 }
 
-func newReleaseFilter(client resource.Client, release *helm.HelmRelease) resource.Filter {
-    return func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-        resources, err := release.GetResources()
-        if err != nil {
-            return false, err
-        }
-        for _, resource := range resources {
-            resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
-            if resourceKind.Group == kind.Group &&
-                resourceKind.Version == kind.Version &&
-                resourceKind.Kind == kind.Kind &&
-                resource.Namespace == meta.Namespace &&
-                resource.Name == meta.Name {
-                return true, nil
-            }
-        }
-        return filterOwnerReferences(client, resources, kind, meta)
-    }
+func filterRelease(client resource.Client, release *helm.HelmRelease) resource.Filter {
+	return func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+		resources, err := release.GetResources()
+		if err != nil {
+			return false, err
+		}
+		return filterResources(client, resources, kind, meta)
+	}
 }
 
-func filterOwnerReferences(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-    for _, owner := range meta.OwnerReferences {
-        for _, resource := range resources {
-            resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
-            if resourceKind.Kind == owner.Kind &&
-                resourceKind.GroupVersion().String() == owner.APIVersion &&
-                resource.Name == owner.Name {
-                return true, nil
-            }
-        }
+func filterResources(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+	for _, resource := range resources {
+		resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
+		if resourceKind.Group == kind.Group &&
+			resourceKind.Version == kind.Version &&
+			resourceKind.Kind == kind.Kind &&
+			resource.Namespace == meta.Namespace &&
+			resource.Name == meta.Name {
+			return true, nil
+		}
+	}
+	return filterOwners(client, resources, kind, meta)
+}
 
-        {{- range $groupName, $group := .Groups }}
-        {{- range $resourceName, $resource := $group.Resources }}
-        if owner.APIVersion == {{ (printf "%s.%s" $resource.Group.Group $resource.Group.Version) | quote }} {
-            filter := {{ $resource.Resource.Package.Alias }}.{{ $resource.Filter.Types.Func }}(client, func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-                return filterOwnerReferences(client, resources, kind, meta)
-            })
-            ok, err := filter(kind, meta)
-            if ok {
-                return true, nil
-            } else if err != nil {
-                return false, err
-            }
-        }
-        {{- end }}
-        {{- end }}
+func filterOwners(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
+	for _, owner := range meta.OwnerReferences {
+		ok, err := filterOwner(client, resources, kind, meta, owner)
+		if ok {
+			return true, nil
+		} else if err != nil {
+			return false, err
+		}
+	}
+
+    {{- range $groupName, $group := .Groups }}
+    {{- range $resourceName, $resource := $group.Resources }}
+    {{- range $referenceName, $reference := $resource.Resource.References }}
+    {{- $name := ($resource.Resource.Names.Singular | toLowerCamel) }}
+    if isSameKind(kind, {{ $reference.Resource.Package.Alias }}.{{ $reference.Resource.Types.Kind }}) {
+		instance, ok := meta.Labels["app.kubernetes.io/instance"]
+		if ok {
+		    {{ $name }}Client := {{ $resource.Resource.Kind.Package.Alias }}.New{{ $resource.Reader.Types.Interface }}(client, resource.NoFilter)
+		    {{ $name }}, err := {{ $name }}Client.Get(instance)
+		    if err != nil && !errors.IsNotFound(err) {
+		        return false, err
+		    } else if err == nil {
+                groupVersionKind := metav1.GroupVersionKind{
+                    Group:   {{ $resource.Resource.Kind.Package.Alias }}.{{ $resource.Resource.Types.Kind }}.Group,
+                    Version: {{ $resource.Resource.Kind.Package.Alias }}.{{ $resource.Resource.Types.Kind }}.Version,
+                    Kind:    {{ $resource.Resource.Kind.Package.Alias }}.{{ $resource.Resource.Types.Kind }}.Kind,
+                }
+                return filterResources(client, resources, groupVersionKind, {{ $name }}.Object.ObjectMeta)
+		    }
+		}
     }
-    return false, nil
+    {{- end }}
+    {{- end }}
+    {{- end }}
+	return false, nil
+}
+
+func filterOwner(client resource.Client, resources helmkube.ResourceList, kind metav1.GroupVersionKind, meta metav1.ObjectMeta, owner metav1.OwnerReference) (bool, error) {
+	for _, resource := range resources {
+		resourceKind := resource.Object.GetObjectKind().GroupVersionKind()
+		if resourceKind.Kind == owner.Kind &&
+			resourceKind.GroupVersion().String() == owner.APIVersion &&
+			resource.Name == owner.Name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func isSameKind(groupVersionKind metav1.GroupVersionKind, kind resource.Kind) bool {
+	return groupVersionKind.Group == kind.Group &&
+		groupVersionKind.Version == kind.Version &&
+		groupVersionKind.Kind == kind.Kind
 }
 
 type {{ .Types.Struct }} struct {
