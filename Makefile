@@ -19,12 +19,12 @@ generate:
 	go run github.com/onosproject/helmit/cmd/helmit-generate ./build/helmit-generate/generate.yaml ./pkg/kubernetes
 
 test: # @HELP run the unit tests and source code validation
-test: license_check build deps linters
+test: license_check build deps 
 	go test github.com/onosproject/helmit/pkg/...
 	go test github.com/onosproject/helmit/cmd/...
 
 coverage: # @HELP generate unit test coverage data
-coverage: build deps linters license_check
+coverage: build deps license_check
 	#./build/bin/coveralls-coverage
 
 
