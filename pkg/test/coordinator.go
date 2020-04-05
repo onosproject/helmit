@@ -22,7 +22,6 @@ import (
 	"sync"
 
 	"github.com/onosproject/helmit/pkg/job"
-	"github.com/onosproject/helmit/pkg/kubernetes"
 	"github.com/onosproject/helmit/pkg/registry"
 	"google.golang.org/grpc"
 )
@@ -36,7 +35,6 @@ func newCoordinator(config *Config) (*Coordinator, error) {
 
 // Coordinator coordinates workers for suites of tests
 type Coordinator struct {
-	client kubernetes.Client
 	config *Config
 }
 

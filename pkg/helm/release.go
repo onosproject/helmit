@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// nolint
 package helm
 
 import (
@@ -37,8 +38,8 @@ import (
 
 var settings = cli.New()
 
-// ReleaseClient is a Helm release client
-type ReleaseClient interface {
+// HelmReleaseClient is a Helm release client
+type HelmReleaseClient interface {
 	// Releases returns a list of releases in the namespace
 	Releases() []*HelmRelease
 

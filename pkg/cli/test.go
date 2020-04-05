@@ -15,9 +15,7 @@
 package cli
 
 import (
-	"bytes"
 	"errors"
-	"github.com/onosproject/helmit/pkg/job"
 	"go/build"
 	"math/rand"
 	"os"
@@ -25,6 +23,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/onosproject/helmit/pkg/job"
 
 	"github.com/onosproject/helmit/pkg/util/logging"
 
@@ -167,28 +167,6 @@ func buildBinary(pkgPath, binPath string) error {
 	env = append(env, "GOOS=linux", "CGO_ENABLED=0")
 	build.Env = env
 	return build.Run()
-}
-
-func isKindCluster() (bool, error) {
-	kubeConfig := os.Getenv("KUBECONFIG")
-	if kubeConfig == "" {
-		return false, nil
-	}
-
-	buffer := bytes.NewBuffer(nil)
-	cmd := exec.Command("kind", "get", "kubeconfig-path")
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = buffer
-	if err := cmd.Run(); err != nil {
-		return false, nil
-	}
-	kubeConfigPaths := strings.Split(strings.TrimSuffix(buffer.String(), "\n"), "\n")
-	for _, path := range kubeConfigPaths {
-		if kubeConfig == path {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func parseFiles(files []string) (map[string][]string, error) {

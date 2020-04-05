@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// nolint
 package helm
 
 import (
@@ -19,8 +20,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// ChartClient is a Helm chart client
-type ChartClient interface {
+// HelmChartClient is a Helm chart client
+type HelmChartClient interface {
 	// Charts returns a list of charts in the namespace
 	Charts() []*HelmChart
 
@@ -55,7 +56,7 @@ func newChart(name string, repo []string, namespace string, client *kubernetes.C
 
 // HelmChart is a Helm chart
 type HelmChart struct {
-	ReleaseClient
+	HelmReleaseClient
 	namespace  string
 	client     *kubernetes.Clientset
 	config     *action.Configuration

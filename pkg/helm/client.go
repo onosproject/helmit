@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// nolint
 package helm
 
 import (
@@ -64,8 +65,8 @@ func getConfig(namespace string) (*action.Configuration, error) {
 
 // HelmClient is a Helm client
 type HelmClient interface {
-	ChartClient
-	ReleaseClient
+	HelmChartClient
+	HelmReleaseClient
 
 	// Namespace returns the client for the given namespace
 	Namespace(namespace string) HelmClient
