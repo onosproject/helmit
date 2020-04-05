@@ -2,6 +2,11 @@
 
 ### Safety first!
 
+[![Build Status](https://travis-ci.org/onosproject/helmit.svg?branch=master)](https://travis-ci.org/onosproject/helmit)
+[![Go Report Card](https://goreportcard.com/badge/github.com/onosproject/helmit)](https://goreportcard.com/report/github.com/onosproject/helmit)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/gojp/goreportcard/blob/master/LICENSE)
+[![GoDoc](https://godoc.org/github.com/onosproject/helmit?status.svg)](https://godoc.org/github.com/onosproject/helmit)
+
 Helmit is a [Golang] framework and tool for end-to-end testing of [Kubernetes] and [Helm] applications.
 Helmit supports testing, benchmarking, and simulation inside Kubernetes clusters.
 
@@ -146,6 +151,29 @@ pods, err := dep.CoreV1().Pods().List()
 assert.NoError(t, err)
 assert.Len(t, pods, 1)
 assert.NotEqual(t, pod.Name, pods[0].Name)
+```
+
+### Code Generation
+
+Like other Kubernetes clients, the Helmit Kubernetes client is generated from a set of templates and Kubernetes
+resource metadata using the `helmit-generate` tool.
+
+```bash
+go run github.com/onosproject/helmit/cmd/helmit-generate ...
+```
+
+Given a [YAML file](./build/helmit-generate/generate.yaml) defining the client's resources, the `helmit-generate` tool 
+generates the scoped client code. To generate the base Helmit Kubernetes client, run `make generate`:
+
+```bash
+make generate
+```
+
+To generate a client with additional resources that are not supported by the base client, define your own
+[client configuration](./build/helmit-generate/generate.yaml) and run the tool:
+
+```go
+go run github.com/onosproject/helmit/cmd/helmit-generate ./my-client.yaml ./path/to/my/package
 ```
 
 ## Command-Line Tools
