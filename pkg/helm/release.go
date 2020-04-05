@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// nolint
 package helm
 
 import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
+	"os"
+	"reflect"
+	"strings"
+
 	"github.com/iancoleman/strcase"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
@@ -29,9 +34,6 @@ import (
 	helm "helm.sh/helm/v3/pkg/kube"
 	"helm.sh/helm/v3/pkg/release"
 	"k8s.io/client-go/kubernetes"
-	"os"
-	"reflect"
-	"strings"
 )
 
 var settings = cli.New()

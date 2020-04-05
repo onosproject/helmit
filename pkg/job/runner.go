@@ -18,6 +18,9 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"path"
+	"time"
+
 	"github.com/onosproject/helmit/pkg/kubernetes"
 	"github.com/onosproject/helmit/pkg/util/files"
 	"github.com/onosproject/helmit/pkg/util/logging"
@@ -28,8 +31,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
-	"path"
-	"time"
 )
 
 const clusterRole = "kube-test-cluster"
@@ -53,7 +54,7 @@ type Runner struct {
 	server bool
 }
 
-// Run runs the given job
+// RunJob runs the given job
 func (n *Runner) RunJob(job *Job) (int, error) {
 	if err := n.StartJob(job); err != nil {
 		return 0, err

@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// nolint
 package helm
 
 import (
+	"log"
+
 	"github.com/onosproject/helmit/pkg/kubernetes/config"
 	"helm.sh/helm/v3/pkg/action"
 	"k8s.io/client-go/kubernetes"
-	"log"
 )
 
 var clients = make(map[string]HelmClient)

@@ -17,13 +17,13 @@ package test
 import (
 	"context"
 	"fmt"
-	"github.com/onosproject/helmit/pkg/job"
-	"github.com/onosproject/helmit/pkg/kubernetes"
-	"github.com/onosproject/helmit/pkg/registry"
-	"google.golang.org/grpc"
 	"os"
 	"strconv"
 	"sync"
+
+	"github.com/onosproject/helmit/pkg/job"
+	"github.com/onosproject/helmit/pkg/registry"
+	"google.golang.org/grpc"
 )
 
 // newCoordinator returns a new test coordinator
@@ -35,7 +35,6 @@ func newCoordinator(config *Config) (*Coordinator, error) {
 
 // Coordinator coordinates workers for suites of tests
 type Coordinator struct {
-	client kubernetes.Client
 	config *Config
 }
 
@@ -162,6 +161,10 @@ func (t *WorkerTask) Run() (int, error) {
 		Suite: t.config.Suites[0],
 		Tests: t.config.Tests,
 	})
+
+	if err != nil {
+		return 0, err
+	}
 
 	status, err := t.runner.WaitForExit(job)
 	if err != nil {

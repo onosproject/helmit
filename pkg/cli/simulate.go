@@ -16,13 +16,14 @@ package cli
 
 import (
 	"errors"
-	"github.com/onosproject/helmit/pkg/job"
-	"github.com/onosproject/helmit/pkg/simulation"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/onosproject/helmit/pkg/job"
+	"github.com/onosproject/helmit/pkg/simulation"
 
 	"github.com/onosproject/helmit/pkg/util/random"
 	"github.com/spf13/cobra"
@@ -156,7 +157,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 		Config: &job.Config{
 			ID:              simID,
 			Image:           image,
-			ImagePullPolicy: corev1.PullPolicy(pullPolicy),
+			ImagePullPolicy: pullPolicy,
 			Executable:      executable,
 			Context:         context,
 			ValueFiles:      valueFiles,
