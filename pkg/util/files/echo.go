@@ -61,7 +61,7 @@ func (o *EchoOptions) To(filename string) *EchoOptions {
 	return o
 }
 
-// On To configures the copy destination pod
+// On configures the copy destination pod
 func (o *EchoOptions) On(pod string, container ...string) *EchoOptions {
 	o.pod = pod
 	if len(container) > 0 {
