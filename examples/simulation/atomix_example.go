@@ -21,6 +21,7 @@ import (
 	"github.com/onosproject/helmit/pkg/benchmark"
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/input"
+	"github.com/onosproject/helmit/pkg/kubernetes"
 	"github.com/onosproject/helmit/pkg/simulation"
 	"github.com/onosproject/helmit/pkg/test"
 	"time"
@@ -67,8 +68,12 @@ func (s *AtomixSimulationSuite) SetupSimulation(c *simulation.Simulator) error {
 
 // SetupSimulator creates an instance of the map on each simulator pod
 func (s *AtomixSimulationSuite) SetupSimulator(c *benchmark.Context) error {
+	address, err := getControllerAddress()
+	if err != nil {
+		return err
+	}
 	client, err := atomix.New(
-		"atomix-controller:5679",
+		address,
 		atomix.WithNamespace(helm.Namespace()),
 		atomix.WithScope(c.Name))
 	if err != nil {
@@ -110,4 +115,20 @@ func (s *AtomixSimulationSuite) SimulateMapRemove(c *simulation.Simulator) error
 	defer cancel()
 	_, err := s.m.Remove(ctx, keys.Next().String())
 	return err
+}
+
+// getControllerAddress returns the Atomix controller address
+func getControllerAddress() (string, error) {
+	release := helm.Chart("atomix-controller").Release("atomix-controller")
+	client, err := kubernetes.NewForRelease(release)
+	if err != nil {
+		return "", err
+	}
+	services, err := client.CoreV1().Services().List()
+	if err != nil || len(services) == 0 {
+		return "", err
+	}
+	service := services[0]
+	port := service.Ports()[0]
+	return port.Address(false), nil
 }

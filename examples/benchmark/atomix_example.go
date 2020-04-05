@@ -21,6 +21,7 @@ import (
 	"github.com/onosproject/helmit/pkg/benchmark"
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/input"
+	"github.com/onosproject/helmit/pkg/kubernetes"
 	"time"
 )
 
@@ -58,8 +59,12 @@ func (s *AtomixBenchmarkSuite) SetupSuite(c *benchmark.Context) error {
 
 // SetupBenchmarkWorker creates an instance of the map on each worker node
 func (s *AtomixBenchmarkSuite) SetupWorker(c *benchmark.Context) error {
+	address, err := getControllerAddress()
+	if err != nil {
+		return err
+	}
 	client, err := atomix.New(
-		"atomix-controller:5679",
+		address,
 		atomix.WithNamespace(helm.Namespace()),
 		atomix.WithScope(c.Name))
 	if err != nil {
@@ -101,4 +106,20 @@ func (s *AtomixBenchmarkSuite) BenchmarkMapRemove(b *benchmark.Benchmark) error 
 	defer cancel()
 	_, err := s.m.Remove(ctx, keys.Next().String())
 	return err
+}
+
+// getControllerAddress returns the Atomix controller address
+func getControllerAddress() (string, error) {
+	release := helm.Chart("atomix-controller").Release("atomix-controller")
+	client, err := kubernetes.NewForRelease(release)
+	if err != nil {
+		return "", err
+	}
+	services, err := client.CoreV1().Services().List()
+	if err != nil || len(services) == 0 {
+		return "", err
+	}
+	service := services[0]
+	port := service.Ports()[0]
+	return port.Address(false), nil
 }
