@@ -10,7 +10,7 @@ import (
 )
 
 var NodeKind = resource.Kind{
-	Group:   "core",
+	Group:   "",
 	Version: "v1",
 	Kind:    "Node",
 	Scoped:  true,

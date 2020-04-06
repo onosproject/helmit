@@ -10,7 +10,7 @@ import (
 )
 
 var SecretKind = resource.Kind{
-	Group:   "core",
+	Group:   "",
 	Version: "v1",
 	Kind:    "Secret",
 	Scoped:  true,
