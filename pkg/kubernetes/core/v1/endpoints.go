@@ -10,7 +10,7 @@ import (
 )
 
 var EndpointsKind = resource.Kind{
-	Group:   "core",
+	Group:   "",
 	Version: "v1",
 	Kind:    "Endpoints",
 	Scoped:  true,

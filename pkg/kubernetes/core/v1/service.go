@@ -10,7 +10,7 @@ import (
 )
 
 var ServiceKind = resource.Kind{
-	Group:   "core",
+	Group:   "",
 	Version: "v1",
 	Kind:    "Service",
 	Scoped:  true,

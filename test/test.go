@@ -21,6 +21,7 @@ import (
 	"github.com/onosproject/helmit/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 // ChartTestSuite is a test for chart deployment
@@ -56,6 +57,21 @@ func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
 	pods, err = deployment.Pods().List()
 	assert.NoError(t, err)
 	assert.Len(t, pods, 1)
+	pod := pods[0]
+	err = pod.Delete()
+	assert.NoError(t, err)
+
+	err = deployment.Wait(1 * time.Minute)
+	assert.NoError(t, err)
+
+	pods, err = deployment.Pods().List()
+	assert.NoError(t, err)
+	assert.Len(t, pods, 1)
+	assert.NotEqual(t, pod.Name, pods[0].Name)
+
+	services, err := client.CoreV1().Services().List()
+	assert.NoError(t, err)
+	assert.Len(t, services, 1)
 }
 
 // TestRemoteInstall tests a remote chart installation

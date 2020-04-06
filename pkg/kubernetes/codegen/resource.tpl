@@ -19,7 +19,11 @@ import (
 )
 
 var {{ $resource.Types.Kind }} = resource.Kind{
+    {{- if eq $resource.Kind.Group "core" }}
+	Group:   "",
+    {{- else }}
 	Group:   {{ $resource.Kind.Group | quote }},
+	{{- end }}
 	Version: {{ $resource.Kind.Version | quote }},
 	Kind:    {{ $resource.Kind.Kind | quote }},
 	{{- if $resource.Kind.Scoped }}

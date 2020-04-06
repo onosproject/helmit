@@ -10,7 +10,7 @@ import (
 )
 
 var PodKind = resource.Kind{
-	Group:   "core",
+	Group:   "",
 	Version: "v1",
 	Kind:    "Pod",
 	Scoped:  true,
