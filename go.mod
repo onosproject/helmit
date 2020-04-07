@@ -7,6 +7,7 @@ require (
 	github.com/dustinkirkland/golang-petname v0.0.0-20190613200456-11339a705ed2
 	github.com/fatih/color v1.7.0
 	github.com/gogo/protobuf v1.3.1
+	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/iancoleman/strcase v0.0.0-20191112232945-16388991a334
 	github.com/joncalhoun/pipe v0.0.0-20170510025636-72505674a733
 	github.com/spf13/cobra v0.0.6

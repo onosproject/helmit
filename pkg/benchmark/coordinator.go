@@ -17,12 +17,14 @@ package benchmark
 import (
 	"context"
 	"fmt"
+	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/kubernetes/config"
 	"github.com/onosproject/helmit/pkg/registry"
 	"github.com/onosproject/helmit/pkg/util/async"
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"math"
 	"os"
 	"sync"
@@ -234,7 +236,14 @@ func (t *WorkerTask) getWorkers() ([]WorkerServiceClient, error) {
 
 	workers := make([]WorkerServiceClient, t.config.Workers)
 	for i := 0; i < t.config.Workers; i++ {
-		worker, err := grpc.Dial(t.getWorkerAddress(i), grpc.WithInsecure())
+		worker, err := grpc.Dial(
+			t.getWorkerAddress(i),
+			grpc.WithInsecure(),
+			grpc.WithUnaryInterceptor(
+				grpc_retry.UnaryClientInterceptor(
+					grpc_retry.WithCodes(codes.Unavailable),
+					grpc_retry.WithBackoff(grpc_retry.BackoffExponential(1*time.Second)),
+					grpc_retry.WithMax(10))))
 		if err != nil {
 			return nil, err
 		}
