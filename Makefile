@@ -73,7 +73,10 @@ kind: images
 
 all: build images tests
 
+publish: # @HELP publish version on github and dockerhub
+	./../build-tools/publish-version ${VERSION} onosproject/helmit-runner onosproject/helmit-tests
 
+all: t
 clean: # @HELP remove all the build artifacts
 	rm -rf ./build/_output ./vendor
 
