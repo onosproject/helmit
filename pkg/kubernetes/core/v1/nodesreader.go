@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -30,8 +31,11 @@ type nodesReader struct {
 
 func (c *nodesReader) Get(name string) (*Node, error) {
 	node := &corev1.Node{}
-	err := c.Clientset().
-		CoreV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.CoreV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), NodeKind.Scoped).
@@ -63,8 +67,11 @@ func (c *nodesReader) Get(name string) (*Node, error) {
 
 func (c *nodesReader) List() ([]*Node, error) {
 	list := &corev1.NodeList{}
-	err := c.Clientset().
-		CoreV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.CoreV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), NodeKind.Scoped).

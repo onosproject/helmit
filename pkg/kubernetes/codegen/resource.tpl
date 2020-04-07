@@ -9,6 +9,7 @@ package {{ $resource.Package.Name }}
 import (
     "github.com/onosproject/helmit/pkg/kubernetes/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	{{ .Resource.Client.Package.Alias }} {{ .Resource.Client.Package.Path | quote }}
 	{{ .Resource.Kind.Package.Alias }} {{ .Resource.Kind.Package.Path | quote }}
     {{- range $ref := $resource.References }}
     {{- if not (eq $ref.Reference.Package.Path $resource.Package.Path) }}
@@ -19,11 +20,7 @@ import (
 )
 
 var {{ $resource.Types.Kind }} = resource.Kind{
-    {{- if eq $resource.Kind.Group "core" }}
-	Group:   "",
-    {{- else }}
 	Group:   {{ $resource.Kind.Group | quote }},
-	{{- end }}
 	Version: {{ $resource.Kind.Version | quote }},
 	Kind:    {{ $resource.Kind.Kind | quote }},
 	{{- if $resource.Kind.Scoped }}
@@ -65,8 +62,11 @@ type {{ $resource.Types.Struct }} struct {
 }
 
 func (r *{{ $resource.Types.Struct }}) Delete() error {
-	return r.Clientset().
-        {{ .Group.Names.Proper }}().
+    client, err := {{ .Resource.Client.Package.Alias }}.NewForConfig(r.Config())
+    if err != nil {
+        return err
+    }
+	return client.{{ .Group.Names.Proper }}().
         RESTClient().
 	    Delete().
 	    NamespaceIfScoped(r.Namespace, {{ .Resource.Types.Kind }}.Scoped).

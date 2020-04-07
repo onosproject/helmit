@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -30,8 +31,11 @@ type secretsReader struct {
 
 func (c *secretsReader) Get(name string) (*Secret, error) {
 	secret := &corev1.Secret{}
-	err := c.Clientset().
-		CoreV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.CoreV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), SecretKind.Scoped).
@@ -63,8 +67,11 @@ func (c *secretsReader) Get(name string) (*Secret, error) {
 
 func (c *secretsReader) List() ([]*Secret, error) {
 	list := &corev1.SecretList{}
-	err := c.Clientset().
-		CoreV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.CoreV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), SecretKind.Scoped).

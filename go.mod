@@ -17,6 +17,7 @@ require (
 	gopkg.in/yaml.v2 v2.2.8
 	helm.sh/helm/v3 v3.1.1
 	k8s.io/api v0.17.3
+	k8s.io/apiextensions-apiserver v0.17.3
 	k8s.io/apimachinery v0.17.3
 	k8s.io/client-go v0.17.3
 	rsc.io/letsencrypt v0.0.3 // indirect

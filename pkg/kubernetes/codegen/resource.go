@@ -29,6 +29,7 @@ type ResourceOptions struct {
 type ResourceObjectOptions struct {
 	Location   Location
 	Package    Package
+	Client     ResourceClientKind
 	Kind       ResourceObjectKind
 	Types      ResourceObjectTypes
 	Names      ResourceObjectNames
@@ -43,6 +44,11 @@ type ResourceObjectKind struct {
 	Kind     string
 	ListKind string
 	Scoped   bool
+}
+
+// ResourceClientKind contains information about a resource client
+type ResourceClientKind struct {
+	Package Package
 }
 
 // ResourceObjectTypes contains types for generating a resource object

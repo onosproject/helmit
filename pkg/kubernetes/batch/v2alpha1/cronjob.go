@@ -6,6 +6,7 @@ import (
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	batchv2alpha1 "k8s.io/api/batch/v2alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -34,8 +35,11 @@ type CronJob struct {
 }
 
 func (r *CronJob) Delete() error {
-	return r.Clientset().
-		BatchV2alpha1().
+	client, err := kubernetes.NewForConfig(r.Config())
+	if err != nil {
+		return err
+	}
+	return client.BatchV2alpha1().
 		RESTClient().
 		Delete().
 		NamespaceIfScoped(r.Namespace, CronJobKind.Scoped).

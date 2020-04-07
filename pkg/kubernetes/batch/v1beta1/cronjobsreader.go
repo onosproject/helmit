@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -30,8 +31,11 @@ type cronJobsReader struct {
 
 func (c *cronJobsReader) Get(name string) (*CronJob, error) {
 	cronJob := &batchv1beta1.CronJob{}
-	err := c.Clientset().
-		BatchV1beta1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.BatchV1beta1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), CronJobKind.Scoped).
@@ -63,8 +67,11 @@ func (c *cronJobsReader) Get(name string) (*CronJob, error) {
 
 func (c *cronJobsReader) List() ([]*CronJob, error) {
 	list := &batchv1beta1.CronJobList{}
-	err := c.Clientset().
-		BatchV1beta1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.BatchV1beta1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), CronJobKind.Scoped).

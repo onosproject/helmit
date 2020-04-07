@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -30,8 +31,11 @@ type ingressesReader struct {
 
 func (c *ingressesReader) Get(name string) (*Ingress, error) {
 	ingress := &networkingv1beta1.Ingress{}
-	err := c.Clientset().
-		NetworkingV1beta1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.NetworkingV1beta1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), IngressKind.Scoped).
@@ -63,8 +67,11 @@ func (c *ingressesReader) Get(name string) (*Ingress, error) {
 
 func (c *ingressesReader) List() ([]*Ingress, error) {
 	list := &networkingv1beta1.IngressList{}
-	err := c.Clientset().
-		NetworkingV1beta1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.NetworkingV1beta1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), IngressKind.Scoped).
