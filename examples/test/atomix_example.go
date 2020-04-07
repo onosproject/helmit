@@ -20,6 +20,7 @@ import (
 	atomix "github.com/atomix/go-client/pkg/client"
 	"github.com/atomix/go-client/pkg/client/map"
 	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/kubernetes"
 	"github.com/onosproject/helmit/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -53,10 +54,28 @@ func (s *AtomixTestSuite) SetupTestSuite() error {
 	return nil
 }
 
+// getControllerAddress returns the Atomix controller address
+func getControllerAddress() (string, error) {
+	release := helm.Chart("atomix-controller").Release("atomix-controller")
+	client, err := kubernetes.NewForRelease(release)
+	if err != nil {
+		return "", err
+	}
+	services, err := client.CoreV1().Services().List()
+	if err != nil || len(services) == 0 {
+		return "", err
+	}
+	service := services[0]
+	port := service.Ports()[0]
+	return port.Address(false), nil
+}
+
 // TestMap tests Atomix map operations
 func (s *AtomixTestSuite) TestMap(t *testing.T) {
+	address, err := getControllerAddress()
+	assert.NoError(t, err)
 	client, err := atomix.New(
-		"atomix-controller:5679",
+		address,
 		atomix.WithNamespace(helm.Namespace()),
 		atomix.WithScope("test"))
 	assert.NoError(t, err)
