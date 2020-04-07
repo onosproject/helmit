@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -30,8 +31,11 @@ type roleBindingsReader struct {
 
 func (c *roleBindingsReader) Get(name string) (*RoleBinding, error) {
 	roleBinding := &rbacv1.RoleBinding{}
-	err := c.Clientset().
-		RbacV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.RbacV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), RoleBindingKind.Scoped).
@@ -63,8 +67,11 @@ func (c *roleBindingsReader) Get(name string) (*RoleBinding, error) {
 
 func (c *roleBindingsReader) List() ([]*RoleBinding, error) {
 	list := &rbacv1.RoleBindingList{}
-	err := c.Clientset().
-		RbacV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.RbacV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), RoleBindingKind.Scoped).

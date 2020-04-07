@@ -6,6 +6,7 @@ import (
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -34,8 +35,11 @@ type Ingress struct {
 }
 
 func (r *Ingress) Delete() error {
-	return r.Clientset().
-		ExtensionsV1beta1().
+	client, err := kubernetes.NewForConfig(r.Config())
+	if err != nil {
+		return err
+	}
+	return client.ExtensionsV1beta1().
 		RESTClient().
 		Delete().
 		NamespaceIfScoped(r.Namespace, IngressKind.Scoped).

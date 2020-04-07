@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -30,8 +31,11 @@ type deploymentsReader struct {
 
 func (c *deploymentsReader) Get(name string) (*Deployment, error) {
 	deployment := &appsv1beta1.Deployment{}
-	err := c.Clientset().
-		AppsV1beta1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.AppsV1beta1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), DeploymentKind.Scoped).
@@ -63,8 +67,11 @@ func (c *deploymentsReader) Get(name string) (*Deployment, error) {
 
 func (c *deploymentsReader) List() ([]*Deployment, error) {
 	list := &appsv1beta1.DeploymentList{}
-	err := c.Clientset().
-		AppsV1beta1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.AppsV1beta1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), DeploymentKind.Scoped).

@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -30,8 +31,11 @@ type daemonSetsReader struct {
 
 func (c *daemonSetsReader) Get(name string) (*DaemonSet, error) {
 	daemonSet := &appsv1.DaemonSet{}
-	err := c.Clientset().
-		AppsV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.AppsV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), DaemonSetKind.Scoped).
@@ -63,8 +67,11 @@ func (c *daemonSetsReader) Get(name string) (*DaemonSet, error) {
 
 func (c *daemonSetsReader) List() ([]*DaemonSet, error) {
 	list := &appsv1.DaemonSetList{}
-	err := c.Clientset().
-		AppsV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.AppsV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), DaemonSetKind.Scoped).

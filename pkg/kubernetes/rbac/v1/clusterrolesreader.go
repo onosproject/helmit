@@ -8,6 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -30,8 +31,11 @@ type clusterRolesReader struct {
 
 func (c *clusterRolesReader) Get(name string) (*ClusterRole, error) {
 	clusterRole := &rbacv1.ClusterRole{}
-	err := c.Clientset().
-		RbacV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.RbacV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), ClusterRoleKind.Scoped).
@@ -63,8 +67,11 @@ func (c *clusterRolesReader) Get(name string) (*ClusterRole, error) {
 
 func (c *clusterRolesReader) List() ([]*ClusterRole, error) {
 	list := &rbacv1.ClusterRoleList{}
-	err := c.Clientset().
-		RbacV1().
+	client, err := kubernetes.NewForConfig(c.Config())
+	if err != nil {
+		return nil, err
+	}
+	err = client.RbacV1().
 		RESTClient().
 		Get().
 		NamespaceIfScoped(c.Namespace(), ClusterRoleKind.Scoped).

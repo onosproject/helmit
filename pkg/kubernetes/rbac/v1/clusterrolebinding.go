@@ -6,6 +6,7 @@ import (
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -34,8 +35,11 @@ type ClusterRoleBinding struct {
 }
 
 func (r *ClusterRoleBinding) Delete() error {
-	return r.Clientset().
-		RbacV1().
+	client, err := kubernetes.NewForConfig(r.Config())
+	if err != nil {
+		return err
+	}
+	return client.RbacV1().
 		RESTClient().
 		Delete().
 		NamespaceIfScoped(r.Namespace, ClusterRoleBindingKind.Scoped).

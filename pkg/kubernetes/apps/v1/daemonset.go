@@ -7,6 +7,7 @@ import (
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubernetes "k8s.io/client-go/kubernetes"
 	"time"
 )
 
@@ -37,8 +38,11 @@ type DaemonSet struct {
 }
 
 func (r *DaemonSet) Delete() error {
-	return r.Clientset().
-		AppsV1().
+	client, err := kubernetes.NewForConfig(r.Config())
+	if err != nil {
+		return err
+	}
+	return client.AppsV1().
 		RESTClient().
 		Delete().
 		NamespaceIfScoped(r.Namespace, DaemonSetKind.Scoped).

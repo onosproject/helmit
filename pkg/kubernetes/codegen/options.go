@@ -53,6 +53,9 @@ func getOptionsFromConfig(config Config) ClientOptions {
 
 	for _, resource := range config.Resources {
 		group := resource.Group
+		if group == "" {
+			group = "core"
+		}
 		index := strings.Index(group, ".")
 		if index != -1 {
 			group = group[:index]
@@ -86,10 +89,17 @@ func getOptionsFromConfig(config Config) ClientOptions {
 
 		_, ok = versionOpts.Resources[resource.Kind]
 		if !ok {
-			pkg := resource.Package
-			if pkg == "" {
-				pkg = fmt.Sprintf("k8s.io/api/%s/%s", group, resource.Version)
+			api := resource.API
+			if api == "" {
+				api = "k8s.io/api"
 			}
+			pkg := fmt.Sprintf("%s/%s/%s", api, group, resource.Version)
+
+			client := resource.Client
+			if client == "" {
+				client = "k8s.io/client-go/kubernetes"
+			}
+
 			resourceOpts := &ResourceOptions{
 				Client: &ResourceClientOptions{
 					Location: Location{
@@ -131,6 +141,13 @@ func getOptionsFromConfig(config Config) ClientOptions {
 						Path:  fmt.Sprintf("%s/%s/%s", config.Package, group, resource.Version),
 						Alias: fmt.Sprintf("%s%s", group, resource.Version),
 					},
+					Client: ResourceClientKind{
+						Package: Package{
+							Name:  path.Base(client),
+							Path:  client,
+							Alias: path.Base(client),
+						},
+					},
 					Kind: ResourceObjectKind{
 						Package: Package{
 							Name:  path.Base(pkg),
@@ -165,32 +182,40 @@ func getOptionsFromConfig(config Config) ClientOptions {
 		}
 		references := make([]*ResourceOptions, 0, len(resource.SubResources))
 		for _, ref := range resource.SubResources {
-			group, ok := options.Groups[fmt.Sprintf("%s%s", ref.Group, ref.Version)]
+			groupOpts, ok := options.Groups[fmt.Sprintf("%s%s", ref.Group, ref.Version)]
 			if !ok {
 				continue
 			}
-			resource, ok := group.Resources[ref.Kind]
+			resourceOpts, ok := groupOpts.Resources[ref.Kind]
 			if !ok {
 				continue
 			}
-			if resource.Reference == nil {
-				resource.Reference = &ResourceReferenceOptions{
+			group := resourceOpts.Resource.Kind.Group
+			if group == "" {
+				group = "core"
+			}
+			index := strings.Index(group, ".")
+			if index != -1 {
+				group = group[:index]
+			}
+			if resourceOpts.Reference == nil {
+				resourceOpts.Reference = &ResourceReferenceOptions{
 					Location: Location{
-						Path: resource.Resource.Location.Path,
-						File: fmt.Sprintf("%sreference.go", toLowerCase(resource.Resource.Names.Plural)),
+						Path: resourceOpts.Resource.Location.Path,
+						File: fmt.Sprintf("%sreference.go", toLowerCase(resourceOpts.Resource.Names.Plural)),
 					},
 					Package: Package{
-						Name:  resource.Resource.Kind.Version,
-						Path:  fmt.Sprintf("%s/%s/%s", config.Package, resource.Resource.Kind.Group, resource.Resource.Kind.Version),
-						Alias: fmt.Sprintf("%s%s", resource.Resource.Kind.Group, resource.Resource.Kind.Version),
+						Name:  resourceOpts.Resource.Kind.Version,
+						Path:  fmt.Sprintf("%s/%s/%s", config.Package, group, resourceOpts.Resource.Kind.Version),
+						Alias: fmt.Sprintf("%s%s", group, resourceOpts.Resource.Kind.Version),
 					},
 					Types: ResourceReaderTypes{
-						Interface: fmt.Sprintf("%sReference", resource.Resource.Names.Plural),
-						Struct:    toLowerCamelCase(fmt.Sprintf("%sReference", resource.Resource.Names.Plural)),
+						Interface: fmt.Sprintf("%sReference", resourceOpts.Resource.Names.Plural),
+						Struct:    toLowerCamelCase(fmt.Sprintf("%sReference", resourceOpts.Resource.Names.Plural)),
 					},
 				}
 			}
-			references = append(references, resource)
+			references = append(references, resourceOpts)
 		}
 		resourceOpts := options.Groups[fmt.Sprintf("%s%s", resource.Group, resource.Version)].Resources[resource.Kind]
 		resourceOpts.Resource.References = references
