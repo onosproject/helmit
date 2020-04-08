@@ -49,6 +49,7 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().DurationP("max-latency", "m", 0, "maximum latency allowed")
 	cmd.Flags().DurationP("duration", "d", 0, "the duration for which to run the test")
 	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named benchmark arguments")
+	cmd.Flags().Duration("timeout", 10*time.Minute, "benchmark timeout")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following tests")
 	return cmd
 }
