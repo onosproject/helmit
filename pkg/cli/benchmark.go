@@ -28,11 +28,35 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const benchExamples = `
+	# Run benchmarks referencing a Docker image
+	helmit bench --image atomix/kubernetes-benchmarks:latest --duration 1m
+
+	# Run benchmarks referencing a Go command and context
+	helmit bench ./cmd/benchmarks --context ./charts --iterations 1000
+
+	# Run a benchmark suite by name
+	helmit bench ./cmd/benchmarks -c ./charts --suite atomix --duration 5m
+
+	# Run a single benchmark function by name
+	helmit bench ./cmd/benchmarks -c ./charts --suite atomix --benchmark BenchmarkGet --duration 5m
+
+	# Parallelize benchmark clients across goroutines
+	helmit bench ./cmd/benchmarks -c ./charts --suite atomix --parallel 10 --duration 1m
+
+	# Parallelize benchmark clients across worker pods
+	helmit bench ./cmd/benchmarks -c ./charts --suite atomix --workers 4 --duration 1m
+
+	# Override Helm chart values
+	helmit bench ./cmd/benchmarks -c ./charts --set atomix-controller.image=atomix/atomix-controller:latest --set atomix-raft.replicas=3 --suite atomix --iterations 1000
+`
+
 func getBenchCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "benchmark",
 		Aliases: []string{"benchmarks", "bench"},
 		Short:   "Run benchmarks on Kubernetes",
+		Example: benchExamples,
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    runBenchCommand,
 	}
