@@ -72,7 +72,7 @@ func (c *Coordinator) Run() error {
 			Benchmark:   c.config.Benchmark,
 			Workers:     c.config.Workers,
 			Parallelism: c.config.Parallelism,
-			Requests:    c.config.Requests,
+			Iterations:  c.config.Iterations,
 			Duration:    c.config.Duration,
 			MaxLatency:  c.config.MaxLatency,
 			Args:        c.config.Args,
@@ -218,7 +218,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 			Benchmark:   t.config.Benchmark,
 			Workers:     t.config.Workers,
 			Parallelism: t.config.Parallelism,
-			Requests:    t.config.Requests,
+			Iterations:  t.config.Iterations,
 			Duration:    t.config.Duration,
 			MaxLatency:  t.config.MaxLatency,
 			Args:        t.config.Args,
@@ -429,7 +429,7 @@ func (t *WorkerTask) runBenchmark(benchmark string) (result, error) {
 				resultCh <- result
 			}
 			wg.Done()
-		}(worker, t.config.Requests/len(workers), t.config.Duration)
+		}(worker, t.config.Iterations/len(workers), t.config.Duration)
 	}
 
 	wg.Wait()

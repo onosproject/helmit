@@ -65,7 +65,7 @@ func Run(config *Config) error {
 			Benchmark:   config.Benchmark,
 			Workers:     config.Workers,
 			Parallelism: config.Parallelism,
-			Requests:    config.Requests,
+			Iterations:  config.Iterations,
 			Duration:    config.Duration,
 			Args:        config.Args,
 			MaxLatency:  config.MaxLatency,

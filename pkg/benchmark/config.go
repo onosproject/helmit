@@ -43,7 +43,7 @@ type Config struct {
 	Benchmark   string            `json:"benchmark,omitempty"`
 	Workers     int               `json:"workers,omitempty"`
 	Parallelism int               `json:"parallelism,omitempty"`
-	Requests    int               `json:"requests,omitempty"`
+	Iterations  int               `json:"iterations,omitempty"`
 	Duration    *time.Duration    `json:"duration,omitempty"`
 	Args        map[string]string `json:"args,omitempty"`
 	MaxLatency  *time.Duration    `json:"maxLatency,omitempty"`
