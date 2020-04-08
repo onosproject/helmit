@@ -45,7 +45,7 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().StringP("benchmark", "b", "", "the name of the benchmark to run")
 	cmd.Flags().IntP("workers", "w", 1, "the number of workers to run")
 	cmd.Flags().Int("parallel", 1, "the number of concurrent goroutines per client")
-	cmd.Flags().IntP("requests", "n", 0, "the number of requests to run")
+	cmd.Flags().IntP("iterations", "n", 0, "the number of iterations to run")
 	cmd.Flags().DurationP("max-latency", "m", 0, "maximum latency allowed")
 	cmd.Flags().DurationP("duration", "d", 0, "the duration for which to run the test")
 	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named benchmark arguments")
@@ -68,13 +68,19 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	benchmarkName, _ := cmd.Flags().GetString("benchmark")
 	workers, _ := cmd.Flags().GetInt("workers")
 	parallelism, _ := cmd.Flags().GetInt("parallel")
-	requests, _ := cmd.Flags().GetInt("requests")
+	iterations, _ := cmd.Flags().GetInt("iterations")
+	duration, _ := cmd.Flags().GetDuration("duration")
 	files, _ := cmd.Flags().GetStringArray("values")
 	sets, _ := cmd.Flags().GetStringArray("set")
 	benchArgs, _ := cmd.Flags().GetStringToString("args")
 	timeout, _ := cmd.Flags().GetDuration("timeout")
 	imagePullPolicy, _ := cmd.Flags().GetString("image-pull-policy")
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
+
+	// Either --iterations or --duration must be specified
+	if iterations == 0 && duration == 0 {
+		return errors.New("either --iterations or --duration must be specified")
+	}
 
 	// Either a command package or image must be specified
 	if pkgPath == "" && image == "" {
@@ -108,15 +114,6 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		context = path
 	}
 
-	var duration *time.Duration
-	if cmd.Flags().Changed("duration") {
-		d, _ := cmd.Flags().GetDuration("duration")
-		duration = &d
-		if timeout <= d {
-			timeout = d * 2
-		}
-	}
-
 	var maxLatency *time.Duration
 	if cmd.Flags().Changed("max-latency") {
 		d, _ := cmd.Flags().GetDuration("max-latency")
@@ -131,6 +128,11 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	values, err := parseOverrides(sets)
 	if err != nil {
 		return err
+	}
+
+	var d *time.Duration
+	if duration != 0 {
+		d = &duration
 	}
 
 	config := &benchmark.Config{
@@ -148,8 +150,8 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		Benchmark:   benchmarkName,
 		Workers:     workers,
 		Parallelism: parallelism,
-		Requests:    requests,
-		Duration:    duration,
+		Iterations:  iterations,
+		Duration:    d,
 		Args:        benchArgs,
 		MaxLatency:  maxLatency,
 	}
