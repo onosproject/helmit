@@ -29,26 +29,32 @@ import (
 )
 
 const benchExamples = `
-	# Run benchmarks referencing a Docker image
-	helmit bench --image atomix/kubernetes-benchmarks:latest --duration 1m
+  # Run benchmarks packaged in a Docker image.
+  helmit bench --image atomix/kubernetes-benchmarks:latest --duration 1m
 
-	# Run benchmarks referencing a Go command and context
-	helmit bench ./cmd/benchmarks --context ./charts --iterations 1000
+  # Run benchmarks by referencing a command package and providing a context.
+  # The specified context will be loaded into the benchmark pods as the current working directory.
+  helmit bench ./cmd/benchmarks --context ./charts --iterations 1000
 
-	# Run a benchmark suite by name
-	helmit bench ./cmd/benchmarks -c ./charts --suite atomix --duration 5m
+  # Run a benchmark suite by name.
+  helmit bench ./cmd/benchmarks -c ./charts --suite atomix --duration 5m
 
-	# Run a single benchmark function by name
-	helmit bench ./cmd/benchmarks -c ./charts --suite atomix --benchmark BenchmarkGet --duration 5m
+  # Run a single benchmark function by name.
+  helmit bench ./cmd/benchmarks -c ./charts --suite atomix --benchmark BenchmarkGet --duration 5m
 
-	# Parallelize benchmark clients across goroutines
-	helmit bench ./cmd/benchmarks -c ./charts --suite atomix --parallel 10 --duration 1m
+  # Parallelize benchmark clients across goroutines.
+  helmit bench ./cmd/benchmarks -c ./charts --suite atomix --parallel 10 --duration 1m
 
-	# Parallelize benchmark clients across worker pods
-	helmit bench ./cmd/benchmarks -c ./charts --suite atomix --workers 4 --duration 1m
+  # Parallelize benchmark clients across worker pods.
+  helmit bench ./cmd/benchmarks -c ./charts --suite atomix --workers 4 --duration 1m
 
-	# Override Helm chart values
-	helmit bench ./cmd/benchmarks -c ./charts --set atomix-controller.image=atomix/atomix-controller:latest --set atomix-raft.replicas=3 --suite atomix --iterations 1000
+  # Override Helm chart values with flags.
+  # Value overrids must be namespaced with the name of the release to which to apply the value.
+  helmit bench ./cmd/benchmarks -c ./charts --set atomix-controller.image=atomix/atomix-controller:latest --set atomix-raft.replicas=3 --suite atomix --iterations 1000
+
+  # Override Helm chart values with values files.
+  # Values files must be key/value pairs where the key is the Helm release name and the value the path to the file.
+  helmit bench ./cmd/benchmarks -c ./charts -f atomix-controller=./atomix-controller.yaml --suite atomix --duration 1m
 `
 
 func getBenchCommand() *cobra.Command {
