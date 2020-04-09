@@ -38,11 +38,35 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+const testExamples = `
+  # Run tests packaged in a Docker image.
+  helmit test --image atomix/kubernetes-tests:latest
+
+  # Run tests by referencing a command package and providing a context.
+  # The specified context will be loaded into the test pod as the current working directory.
+  helmit test ./cmd/tests --context ./charts
+
+  # Run a test suite by name.
+  helmit test ./cmd/tests -c ./charts --suite atomix
+
+  # Run a single test by name.
+  helmit test ./cmd/tests -c ./charts --suite atomix --test TestMap
+
+  # Override Helm chart values with flags.
+  # Value overrids must be namespaced with the name of the release to which to apply the value.
+  helmit test ./cmd/tests -c ./charts --set atomix-controller.image=atomix/atomix-controller:latest --set atomix-raft.replicas=3 --suite atomix
+
+  # Override Helm chart values with values files.
+  # Values files must be key/value pairs where the key is the Helm release name and the value the path to the file.
+  helmit test ./cmd/tests -c ./charts -f atomix-controller=./atomix-controller.yaml --suite atomix
+`
+
 func getTestCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "test",
 		Aliases: []string{"tests"},
 		Short:   "Run tests on Kubernetes",
+		Example: testExamples,
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    runTestCommand,
 	}
