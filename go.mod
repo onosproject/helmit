@@ -1,6 +1,6 @@
 module github.com/onosproject/helmit
 
-go 1.13
+go 1.14
 
 require (
 	github.com/atomix/go-client v0.0.0-20200218200323-6fd69e684d05
