@@ -3,7 +3,7 @@ module github.com/onosproject/helmit
 go 1.14
 
 require (
-	github.com/atomix/go-client v0.0.0-20200218200323-6fd69e684d05
+	github.com/atomix/go-client v0.1.0
 	github.com/dustinkirkland/golang-petname v0.0.0-20190613200456-11339a705ed2
 	github.com/fatih/color v1.7.0
 	github.com/gogo/protobuf v1.3.1
