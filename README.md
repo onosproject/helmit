@@ -21,8 +21,7 @@ Helmit can be used to:
 
 ## User Guide
 
-* [Installation](./docs/installation.md)
-* [The `helmit` tool](./docs/cli.md)
+* [Working with `helmit`](./docs/cli.md)
 * [Writing tests](./docs/testing.md)
 * [Writing benchmarks](./docs/benchmarking.md)
 * [Writing simulations](./docs/simulation.md)

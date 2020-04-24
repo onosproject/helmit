@@ -1,11 +1,15 @@
 ## Command-Line Tools
 
-The `helmit` command-line tool is used to run tests, benchmarks, and simulations inside a Kubernetes cluster. To
-install the `helmit` CLI, use `go get` with Go modules enabled:
+The `helmit` command-line tool is used to run tests, benchmarks, and simulations inside a Kubernetes cluster.
+To install the `helmit` CLI use `go get`. Helmit uses [Go modules](https://github.com/golang/go/wiki/Modules) 
+for dependency management. When installing the `helmit` command, ensure Go modules are enabled:
 
 ```bash
 GO111MODULE=on go get github.com/onosproject/helmit/cmd/helmit
 ```
+
+*Helmit uses [Go modules](https://github.com/golang/go/wiki/Modules) for dependency management. 
+Go modules must be enabled when installing the binary.*
 
 To use the Helmit CLI, you must have [kubectl](https://kubernetes.io/docs/reference/kubectl/overview/) installed and
 configured. Helmit will use the Kubernetes configuration to connect to the cluster to deploy and run tests.
