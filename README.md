@@ -21,11 +21,11 @@ Helmit can be used to:
 
 ## User Guide
 
-* [Working with `helmit`](./docs/cli.md)
-* [Writing tests](./docs/testing.md)
-* [Writing benchmarks](./docs/benchmarking.md)
-* [Writing simulations](./docs/simulation.md)
-* [Working with test utilities](./docs/api.md)
+* [The `helmit` Tool](./docs/cli.md)
+* [Testing](./docs/testing.md)
+* [Benchmarking](./docs/benchmarking.md)
+* [Randomized Simulations](./docs/simulation.md)
+* [Kubernetes/Helm API](./docs/api.md)
 
 ## Examples
 
