@@ -216,6 +216,7 @@ func (n *Runner) createClusterRole() error {
 				},
 				Resources: []string{
 					"poddisruptionbudgets",
+					"podsecuritypolicies",
 				},
 				Verbs: []string{
 					"*",
@@ -227,6 +228,17 @@ func (n *Runner) createClusterRole() error {
 				},
 				Resources: []string{
 					"jobs",
+				},
+				Verbs: []string{
+					"*",
+				},
+			},
+			{
+				APIGroups: []string{
+					"extensions",
+				},
+				Resources: []string{
+					"ingresses",
 				},
 				Verbs: []string{
 					"*",
