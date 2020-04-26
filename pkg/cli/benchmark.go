@@ -36,6 +36,9 @@ const benchExamples = `
   # The specified context will be loaded into the benchmark pods as the current working directory.
   helmit bench ./cmd/benchmarks --context ./charts --iterations 1000
 
+  # Run benchmarks in a specific namespace.
+  helmit bench ./cmd/benchmarks -n bench --suite atomix --duration 5m
+
   # Run a benchmark suite by name.
   helmit bench ./cmd/benchmarks -c ./charts --suite atomix --duration 5m
 
@@ -66,6 +69,7 @@ func getBenchCommand() *cobra.Command {
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    runBenchCommand,
 	}
+	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the benchmarks")
 	cmd.Flags().StringP("context", "c", "", "the benchmark context")
 	cmd.Flags().StringP("image", "i", "", "the benchmark image to run")
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
@@ -92,6 +96,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		pkgPath = args[0]
 	}
 
+	namespace, _ := cmd.Flags().GetString("namespace")
 	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	suite, _ := cmd.Flags().GetString("suite")
@@ -169,6 +174,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	config := &benchmark.Config{
 		Config: &job.Config{
 			ID:              benchID,
+			Namespace:       namespace,
 			Executable:      executable,
 			Image:           image,
 			ImagePullPolicy: pullPolicy,

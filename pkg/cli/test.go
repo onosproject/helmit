@@ -46,6 +46,9 @@ const testExamples = `
   # The specified context will be loaded into the test pod as the current working directory.
   helmit test ./cmd/tests --context ./charts
 
+  # Run tests in a specific namespace.
+  helmit test ./cmd/tests -n integration-tests
+
   # Run a test suite by name.
   helmit test ./cmd/tests -c ./charts --suite atomix
 
@@ -70,6 +73,7 @@ func getTestCommand() *cobra.Command {
 		Args:    cobra.MaximumNArgs(1),
 		RunE:    runTestCommand,
 	}
+	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the tests")
 	cmd.Flags().StringP("context", "c", "", "the test context")
 	cmd.Flags().StringP("image", "i", "", "the test image to run")
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
@@ -92,6 +96,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		pkgPath = args[0]
 	}
 
+	namespace, _ := cmd.Flags().GetString("namespace")
 	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	files, _ := cmd.Flags().GetStringArray("values")
@@ -153,6 +158,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	config := &test.Config{
 		Config: &job.Config{
 			ID:              testID,
+			Namespace:       namespace,
 			Image:           image,
 			ImagePullPolicy: corev1.PullPolicy(pullPolicy),
 			Executable:      executable,

@@ -52,6 +52,7 @@ func Run(config *Config) error {
 		JobConfig: &Config{
 			Config: &jobs.Config{
 				ID:              config.ID,
+				Namespace:       config.Namespace,
 				Image:           config.Image,
 				ImagePullPolicy: config.ImagePullPolicy,
 				Executable:      configExecutable,

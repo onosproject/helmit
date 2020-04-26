@@ -27,12 +27,14 @@ import (
 func newCoordinator(config *Config) (*Coordinator, error) {
 	return &Coordinator{
 		config: config,
+		runner: job.NewNamespace(config.Namespace),
 	}, nil
 }
 
 // Coordinator coordinates workers for suites of tests
 type Coordinator struct {
 	config *Config
+	runner *job.Runner
 }
 
 // Run runs the tests
@@ -54,6 +56,7 @@ func (c *Coordinator) Run() (int, error) {
 			config := &Config{
 				Config: &job.Config{
 					ID:              jobID,
+					Namespace:       c.config.Config.Namespace,
 					Image:           c.config.Config.Image,
 					ImagePullPolicy: c.config.Config.ImagePullPolicy,
 					Executable:      c.config.Config.Executable,
@@ -69,7 +72,7 @@ func (c *Coordinator) Run() (int, error) {
 				Iterations: c.config.Iterations,
 			}
 			task := &WorkerTask{
-				runner: job.NewNamespace(c.config.ID),
+				runner: c.runner,
 				config: config,
 			}
 			status, err := task.Run()

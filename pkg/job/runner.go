@@ -111,35 +111,6 @@ func (n *Runner) WaitForExit(job *Job) (int, error) {
 	return status, nil
 }
 
-// CreateNamespace creates the namespace
-func (n *Runner) CreateNamespace() error {
-	return n.setupNamespace()
-}
-
-// DeleteNamespace deletes the namespace
-func (n *Runner) DeleteNamespace() error {
-	return n.teardownNamespace()
-}
-
-// setupNamespace sets up the test namespace
-func (n *Runner) setupNamespace() error {
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: n.Namespace(),
-			Labels: map[string]string{
-				"test": n.Namespace(),
-			},
-		},
-	}
-	step := logging.NewStep(n.Namespace(), "Setup namespace")
-	step.Start()
-	_, err := n.Clientset().CoreV1().Namespaces().Create(ns)
-	if err != nil && !k8serrors.IsAlreadyExists(err) {
-		return err
-	}
-	return n.setupRBAC()
-}
-
 // setupRBAC sets up role based access controls for the cluster
 func (n *Runner) setupRBAC() error {
 	step := logging.NewStep(n.Namespace(), "Set up RBAC")
