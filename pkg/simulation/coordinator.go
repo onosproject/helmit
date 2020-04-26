@@ -136,21 +136,11 @@ type WorkerTask struct {
 func (t *WorkerTask) Run() (int, error) {
 	// Start the job
 	err := t.run()
-	if err != nil {
-		_ = t.tearDown()
-		return 0, err
-	}
-
-	// Tear down the cluster if necessary
-	_ = t.tearDown()
-	return 0, nil
+	return 0, err
 }
 
 // start starts the test job
 func (t *WorkerTask) run() error {
-	if err := t.runner.CreateNamespace(); err != nil {
-		return err
-	}
 	if err := t.createWorkers(); err != nil {
 		return err
 	}
@@ -390,9 +380,4 @@ func (t *WorkerTask) stopSimulator(simulator int, client SimulatorServiceClient)
 	}
 	_, err := client.StopSimulator(context.Background(), request)
 	return err
-}
-
-// tearDown tears down the job
-func (t *WorkerTask) tearDown() error {
-	return t.runner.DeleteNamespace()
 }

@@ -16,23 +16,17 @@ package job
 
 import "os"
 
-const namespace = "kube-test"
-
 // Run runs the job
 func Run(job *Job) error {
-	coordinator := NewCoordinator()
+	coordinator := newRunner(job.ID, false)
 	if err := coordinator.CreateNamespace(); err != nil {
 		return err
 	}
 	status, err := coordinator.RunJob(job)
+	_ = coordinator.DeleteNamespace()
 	if err != nil {
 		return err
 	}
 	os.Exit(status)
 	return nil
-}
-
-// NewCoordinator returns a new test job coordinator
-func NewCoordinator() *Runner {
-	return newRunner(namespace, false)
 }
