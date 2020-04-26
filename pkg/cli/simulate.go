@@ -56,6 +56,7 @@ func getSimulateCommand() *cobra.Command {
 		RunE:    runSimulateCommand,
 	}
 	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the simulation")
+	cmd.Flags().String("service-account", "", "the name of the service account to use to run worker pods")
 	cmd.Flags().StringP("context", "c", "", "the simulation context")
 	cmd.Flags().StringP("image", "i", "", "the simulation image to run")
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
@@ -78,6 +79,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	namespace, _ := cmd.Flags().GetString("namespace")
+	serviceAccount, _ := cmd.Flags().GetString("service-account")
 	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	sim, _ := cmd.Flags().GetString("simulation")
@@ -161,6 +163,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 		Config: &job.Config{
 			ID:              simID,
 			Namespace:       namespace,
+			ServiceAccount:  serviceAccount,
 			Image:           image,
 			ImagePullPolicy: pullPolicy,
 			Executable:      executable,

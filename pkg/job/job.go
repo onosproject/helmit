@@ -31,6 +31,7 @@ const readyFile = "/tmp/job-ready"
 type Config struct {
 	ID              string
 	Namespace       string
+	ServiceAccount  string
 	Image           string
 	ImagePullPolicy corev1.PullPolicy
 	Executable      string

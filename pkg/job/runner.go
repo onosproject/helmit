@@ -32,7 +32,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-const clusterRole = "kube-test-cluster"
+const kubeSystemNamespace = "kube-system"
+const defaultServiceAccountName = "cluster-test"
+const defaultRoleBindingName = "cluster-test"
+const defaultRoleName = "cluster-admin"
 
 // NewNamespace returns a new job namespace
 func NewNamespace(namespace string) *Runner {
@@ -105,6 +108,7 @@ func (n *Runner) streamLogs(job *Job) {
 // WaitForExit waits for the job to exit
 func (n *Runner) WaitForExit(job *Job) (int, error) {
 	_, status, err := n.getStatus(job)
+	_ = n.finishJob(job)
 	if err != nil {
 		return 0, err
 	}
@@ -112,152 +116,50 @@ func (n *Runner) WaitForExit(job *Job) (int, error) {
 }
 
 // setupRBAC sets up role based access controls for the cluster
-func (n *Runner) setupRBAC() error {
-	step := logging.NewStep(n.Namespace(), "Set up RBAC")
-	step.Start()
-	if err := n.createClusterRole(); err != nil {
-		step.Fail(err)
-		return err
+func (n *Runner) setupRBAC(job *Job) error {
+	if job.ServiceAccount == "" {
+		step := logging.NewStep(n.Namespace(), "No ServiceAccount configured! Configuring RBAC using %s role", defaultRoleName)
+		step.Start()
+		if err := n.createServiceAccount(); err != nil {
+			step.Fail(err)
+			return err
+		}
+		if err := n.createClusterRoleBinding(); err != nil {
+			step.Fail(err)
+			return err
+		}
+		step.Complete()
 	}
-	if err := n.createClusterRoleBinding(); err != nil {
-		step.Fail(err)
-		return err
-	}
-	if err := n.createServiceAccount(); err != nil {
-		step.Fail(err)
-		return err
-	}
-	step.Complete()
 	return nil
 }
 
-// createClusterRole creates the ClusterRole required by the Atomix controller and tests if not yet created
-func (n *Runner) createClusterRole() error {
-	role := &rbacv1.ClusterRole{
+// createServiceAccount creates a ServiceAccount used by the test manager
+func (n *Runner) createServiceAccount(job *Job) error {
+	jobObj, err := n.Clientset().BatchV1().Jobs(n.Namespace()).Get(job.ID, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	serviceAccountName := job.ServiceAccount
+	if serviceAccountName == "" {
+		serviceAccountName = defaultServiceAccountName
+	}
+
+	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: clusterRole,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{
-					"",
-				},
-				Resources: []string{
-					"pods",
-					"pods/log",
-					"pods/exec",
-					"services",
-					"endpoints",
-					"persistentvolumeclaims",
-					"events",
-					"configmaps",
-					"secrets",
-					"serviceaccounts",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"",
-				},
-				Resources: []string{
-					"namespaces",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"apps",
-				},
-				Resources: []string{
-					"deployments",
-					"daemonsets",
-					"replicasets",
-					"statefulsets",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"policy",
-				},
-				Resources: []string{
-					"poddisruptionbudgets",
-					"podsecuritypolicies",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"batch",
-				},
-				Resources: []string{
-					"jobs",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"extensions",
-				},
-				Resources: []string{
-					"ingresses",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"rbac.authorization.k8s.io",
-				},
-				Resources: []string{
-					"roles",
-					"rolebindings",
-					"clusterroles",
-					"clusterrolebindings",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"apiextensions.k8s.io",
-				},
-				Resources: []string{
-					"customresourcedefinitions",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"storage.cloud.atomix.io",
-					"cloud.atomix.io",
-					"k8s.atomix.io",
-				},
-				Resources: []string{
-					"*",
-				},
-				Verbs: []string{
-					"*",
+			Name:      serviceAccountName,
+			Namespace: n.Namespace(),
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name:       jobObj.Name,
+					UID:        jobObj.UID,
+					Kind:       "Job",
+					APIVersion: "batch/v1",
 				},
 			},
 		},
 	}
-	_, err := n.Clientset().RbacV1().ClusterRoles().Create(role)
+	_, err = n.Clientset().CoreV1().ServiceAccounts(n.Namespace()).Create(serviceAccount)
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return err
 	}
@@ -266,25 +168,25 @@ func (n *Runner) createClusterRole() error {
 
 // createClusterRoleBinding creates the ClusterRoleBinding required by the test manager
 func (n *Runner) createClusterRoleBinding() error {
-	roleBinding, err := n.Clientset().RbacV1().ClusterRoleBindings().Get(clusterRole, metav1.GetOptions{})
+	roleBinding, err := n.Clientset().RbacV1().ClusterRoleBindings().Get(defaultRoleBindingName, metav1.GetOptions{})
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
 			return err
 		}
 		roleBinding = &rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterRole,
+				Name: defaultRoleBindingName,
 			},
 			Subjects: []rbacv1.Subject{
 				{
 					Kind:      "ServiceAccount",
-					Name:      n.Namespace(),
-					Namespace: n.Namespace(),
+					Name:      defaultServiceAccountName,
+					Namespace: kubeSystemNamespace,
 				},
 			},
 			RoleRef: rbacv1.RoleRef{
 				Kind:     "ClusterRole",
-				Name:     clusterRole,
+				Name:     defaultRoleName,
 				APIGroup: "rbac.authorization.k8s.io",
 			},
 		}
@@ -307,20 +209,7 @@ func (n *Runner) createClusterRoleBinding() error {
 	return err
 }
 
-// createServiceAccount creates a ServiceAccount used by the test manager
-func (n *Runner) createServiceAccount() error {
-	serviceAccount := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      n.Namespace(),
-			Namespace: n.Namespace(),
-		},
-	}
-	_, err := n.Clientset().CoreV1().ServiceAccounts(n.Namespace()).Create(serviceAccount)
-	if err != nil && !k8serrors.IsAlreadyExists(err) {
-		return err
-	}
-	return nil
-}
+
 
 // teardownNamespace tears down the cluster namespace
 func (n *Runner) teardownNamespace() error {
@@ -335,6 +224,8 @@ func (n *Runner) teardownNamespace() error {
 		return err
 	}
 	step.Complete()
+=======
+>>>>>>> Configure RBAC using cluster-admin role if no --service-account flag is provided
 	return nil
 }
 
@@ -526,6 +417,11 @@ func (n *Runner) createJob(job *Job) error {
 		}
 	}
 
+	serviceAccount := job.ServiceAccount
+	if serviceAccount == "" {
+		serviceAccount = defaultServiceAccountName
+	}
+
 	zero := int32(0)
 	one := int32(1)
 	batchJob := &batchv1.Job{
@@ -549,7 +445,7 @@ func (n *Runner) createJob(job *Job) error {
 					},
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: n.Namespace(),
+					ServiceAccountName: serviceAccount,
 					RestartPolicy:      corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
@@ -799,4 +695,25 @@ func (n *Runner) getPod(job *Job, predicate func(pod corev1.Pod) bool) (*corev1.
 		}
 	}
 	return nil, nil
+}
+
+// stopJob stops a job
+func (n *Runner) finishJob(job *Job) error {
+	step := logging.NewStep(job.ID, "Finishing job")
+	step.Start()
+	if err := n.deleteJob(job); err != nil {
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+	return nil
+}
+
+// deleteJob deletes a job
+func (n *Runner) deleteJob(job *Job) error {
+	err := n.Clientset().BatchV1().Jobs(n.Namespace()).Delete(job.ID, &metav1.DeleteOptions{})
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return err
+	}
+	return nil
 }
