@@ -15,6 +15,7 @@
 package benchmark
 
 import (
+	"fmt"
 	jobs "github.com/onosproject/helmit/pkg/job"
 	"os"
 	"path"
@@ -107,7 +108,12 @@ func runCoordinator(config *Config) error {
 	if err != nil {
 		return err
 	}
-	return coordinator.Run()
+	status, err := coordinator.Run()
+	if err != nil {
+		fmt.Println(err)
+	}
+	os.Exit(status)
+	return nil
 }
 
 // runWorker runs a test image in the worker context

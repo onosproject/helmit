@@ -17,13 +17,10 @@ package test
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
-	"sync"
-
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/registry"
 	"google.golang.org/grpc"
+	"strconv"
 )
 
 // newCoordinator returns a new test coordinator
@@ -39,14 +36,15 @@ type Coordinator struct {
 }
 
 // Run runs the tests
-func (c *Coordinator) Run() error {
+func (c *Coordinator) Run() (int, error) {
+	var returnCode int
 	for iteration := 1; iteration <= c.config.Iterations || c.config.Iterations < 0; iteration++ {
 		suites := c.config.Suites
 		if len(suites) == 0 || suites[0] == "" {
 			suites = registry.GetTestSuites()
 		}
-		workers := make([]*WorkerTask, len(suites))
-		for i, suite := range suites {
+		returnCode = 0
+		for _, suite := range suites {
 			jobID := newJobID(c.config.ID+"-"+strconv.Itoa(iteration), suite)
 			env := c.config.Env
 			if env == nil {
@@ -69,58 +67,22 @@ func (c *Coordinator) Run() error {
 				Tests:      c.config.Tests,
 				Iterations: c.config.Iterations,
 			}
-			worker := &WorkerTask{
-				runner: job.NewNamespace(config.ID),
+			task := &WorkerTask{
+				runner: job.NewNamespace(c.config.ID),
 				config: config,
 			}
-			workers[i] = worker
-		}
-		err := runWorkers(workers)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// runWorkers runs the given test workers
-func runWorkers(tasks []*WorkerTask) error {
-	// Start jobs in separate goroutines
-	wg := &sync.WaitGroup{}
-	errChan := make(chan error, len(tasks))
-	codeChan := make(chan int, len(tasks))
-	for _, task := range tasks {
-		wg.Add(1)
-		go func(task *WorkerTask) {
 			status, err := task.Run()
 			if err != nil {
-				errChan <- err
-			} else {
-				codeChan <- status
+				return status, err
+			} else if returnCode == 0 {
+				returnCode = status
 			}
-			wg.Done()
-		}(task)
-	}
-
-	// Wait for all jobs to start before proceeding
-	go func() {
-		wg.Wait()
-		close(errChan)
-		close(codeChan)
-	}()
-
-	// If any job returned an error, return it
-	for err := range errChan {
-		return err
-	}
-
-	// If any job returned a non-zero exit code, exit with it
-	for code := range codeChan {
-		if code != 0 {
-			os.Exit(code)
+		}
+		if returnCode == 0 {
+			return 0, nil
 		}
 	}
-	return nil
+	return returnCode, nil
 }
 
 // newJobID returns a new unique test job ID
