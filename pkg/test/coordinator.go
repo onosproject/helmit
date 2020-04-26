@@ -137,10 +137,6 @@ type WorkerTask struct {
 
 // Run runs the worker job
 func (t *WorkerTask) Run() (int, error) {
-	if err := t.runner.CreateNamespace(); err != nil {
-		return 0, err
-	}
-
 	job := &job.Job{
 		Config:    t.config.Config,
 		JobConfig: t.config,
@@ -171,6 +167,5 @@ func (t *WorkerTask) Run() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	_ = t.runner.DeleteNamespace()
 	return status, err
 }

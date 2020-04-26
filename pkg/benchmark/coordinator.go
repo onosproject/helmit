@@ -156,9 +156,6 @@ func (t *WorkerTask) Run() (int, error) {
 
 // start starts the test job
 func (t *WorkerTask) run() error {
-	if err := t.runner.CreateNamespace(); err != nil {
-		return err
-	}
 	if err := t.createWorkers(); err != nil {
 		return err
 	}
