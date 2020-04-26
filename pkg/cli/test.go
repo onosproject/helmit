@@ -74,6 +74,7 @@ func getTestCommand() *cobra.Command {
 		RunE:    runTestCommand,
 	}
 	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the tests")
+	cmd.Flags().String("service-account", "", "the name of the service account to use to run test pods")
 	cmd.Flags().StringP("context", "c", "", "the test context")
 	cmd.Flags().StringP("image", "i", "", "the test image to run")
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
@@ -97,6 +98,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	namespace, _ := cmd.Flags().GetString("namespace")
+	serviceAccount, _ := cmd.Flags().GetString("service-account")
 	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	files, _ := cmd.Flags().GetStringArray("values")
@@ -157,6 +159,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	config := &test.Config{
 		Config: &job.Config{
 			ID:              testID,
+			ServiceAccount:  serviceAccount,
 			Namespace:       namespace,
 			Image:           image,
 			ImagePullPolicy: corev1.PullPolicy(pullPolicy),

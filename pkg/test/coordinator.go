@@ -57,6 +57,7 @@ func (c *Coordinator) Run() (int, error) {
 				Config: &job.Config{
 					ID:              jobID,
 					Namespace:       c.config.Config.Namespace,
+					ServiceAccount:  c.config.Config.ServiceAccount,
 					Image:           c.config.Config.Image,
 					ImagePullPolicy: c.config.Config.ImagePullPolicy,
 					Executable:      c.config.Config.Executable,
