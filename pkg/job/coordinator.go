@@ -18,12 +18,8 @@ import "os"
 
 // Run runs the job
 func Run(job *Job) error {
-	coordinator := newRunner(job.ID, false)
-	if err := coordinator.CreateNamespace(); err != nil {
-		return err
-	}
+	coordinator := newRunner(job.Namespace, false)
 	status, err := coordinator.RunJob(job)
-	_ = coordinator.DeleteNamespace()
 	if err != nil {
 		return err
 	}

@@ -30,20 +30,22 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-var (
-	simulateExample = `
-		# Simulate operations on an Atomix map
-		helmit simulate --image atomix/kubernetes-simulations --simulation map --duration 1m
+const simulateExample = `
+  # Simulate operations on an Atomix map
+  helmit sim --image atomix/kubernetes-simulations --simulation map --duration 1m
 
-		# Configure the simulated Atomix cluster
-		helmit simulate --image atomix/kubernetes-simulations --simulation map --duration 1m --set raft.clusters=3 --set raft.partitions=3
+  # Run a simulation by referencing a command package and providing a context.
+  # The specified context will be loaded into the worker pods as the current working directory.
+  helmit sim ./cmd/simulations --simulation map --context ./charts --iterations 1000
 
-		# Configure scheduled operations on an Atomix map
-		helmit simulate --image atomix/kubernetes-simulations --simulation map --schedule put=2s --schedule get=1s,.5 --schedule remove=5s --duration 5m
+  # Run a simulation in a specific namespace.
+  helmit sim ./cmd/simulations -n simulation --simulation map --duration 5m
 
-		# Verify an Atomix map simulation against a TLA+ model
-		helmit simulate --image atomix/kubernetes-simulations --simulation map --duration 5m --verify --model models/MapCacheTrace.tla --module models/MapHistory.tla --spec Spec --invariant StateInvariant`
-)
+  # Configure the simulated Atomix cluster
+  helmit sim --image atomix/kubernetes-simulations --simulation map --duration 1m --set raft.clusters=3 --set raft.partitions=3
+
+  # Configure scheduled operations on an Atomix map
+  helmit sim --image atomix/kubernetes-simulations --simulation map --schedule put=2s --schedule get=1s,.5 --schedule remove=5s --duration 5m`
 
 func getSimulateCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -53,6 +55,7 @@ func getSimulateCommand() *cobra.Command {
 		Example: simulateExample,
 		RunE:    runSimulateCommand,
 	}
+	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the simulation")
 	cmd.Flags().StringP("context", "c", "", "the simulation context")
 	cmd.Flags().StringP("image", "i", "", "the simulation image to run")
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
@@ -74,6 +77,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 		pkgPath = args[0]
 	}
 
+	namespace, _ := cmd.Flags().GetString("namespace")
 	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	sim, _ := cmd.Flags().GetString("simulation")
@@ -156,6 +160,7 @@ func runSimulateCommand(cmd *cobra.Command, args []string) error {
 	config := &simulation.Config{
 		Config: &job.Config{
 			ID:              simID,
+			Namespace:       namespace,
 			Image:           image,
 			ImagePullPolicy: pullPolicy,
 			Executable:      executable,

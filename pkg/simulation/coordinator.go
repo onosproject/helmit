@@ -31,7 +31,7 @@ import (
 func newCoordinator(config *Config) (*Coordinator, error) {
 	return &Coordinator{
 		config: config,
-		runner: job.NewNamespace(config.ID),
+		runner: job.NewNamespace(config.Namespace),
 	}, nil
 }
 
@@ -56,6 +56,7 @@ func (c *Coordinator) Run() (int, error) {
 		config := &Config{
 			Config: &job.Config{
 				ID:              jobID,
+				Namespace:       c.config.Config.Namespace,
 				Image:           c.config.Config.Image,
 				ImagePullPolicy: c.config.Config.ImagePullPolicy,
 				Executable:      c.config.Config.Executable,
@@ -164,6 +165,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 	job := &job.Job{
 		Config: &job.Config{
 			ID:              jobID,
+			Namespace:       t.config.Config.Namespace,
 			Image:           t.config.Config.Image,
 			ImagePullPolicy: t.config.Config.ImagePullPolicy,
 			Executable:      t.config.Config.Executable,
@@ -176,6 +178,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 		JobConfig: &Config{
 			Config: &job.Config{
 				ID:              jobID,
+				Namespace:       t.config.Config.Namespace,
 				Image:           t.config.Config.Image,
 				ImagePullPolicy: t.config.Config.ImagePullPolicy,
 				Executable:      t.config.Config.Executable,

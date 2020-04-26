@@ -36,7 +36,7 @@ import (
 func newCoordinator(config *Config) (*Coordinator, error) {
 	return &Coordinator{
 		config: config,
-		runner: job.NewNamespace(config.ID),
+		runner: job.NewNamespace(config.Namespace),
 	}, nil
 }
 
@@ -61,6 +61,7 @@ func (c *Coordinator) Run() (int, error) {
 		config := &Config{
 			Config: &job.Config{
 				ID:              jobID,
+				Namespace:       c.config.Config.Namespace,
 				Image:           c.config.Config.Image,
 				ImagePullPolicy: c.config.Config.ImagePullPolicy,
 				Executable:      c.config.Config.Executable,
@@ -123,14 +124,7 @@ type WorkerTask struct {
 func (t *WorkerTask) Run() (int, error) {
 	// Start the job
 	err := t.run()
-	if err != nil {
-		_ = t.tearDown()
-		return 0, err
-	}
-
-	// Tear down the cluster if necessary
-	_ = t.tearDown()
-	return 0, nil
+	return 0, err
 }
 
 // start starts the test job
@@ -171,6 +165,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 	job := &job.Job{
 		Config: &job.Config{
 			ID:              jobID,
+			Namespace:       t.config.Config.Namespace,
 			Image:           t.config.Config.Image,
 			ImagePullPolicy: t.config.Config.ImagePullPolicy,
 			Executable:      t.config.Config.Executable,
@@ -183,6 +178,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 		JobConfig: &Config{
 			Config: &job.Config{
 				ID:              jobID,
+				Namespace:       t.config.Config.Namespace,
 				Image:           t.config.Config.Image,
 				ImagePullPolicy: t.config.Config.ImagePullPolicy,
 				Executable:      t.config.Config.Executable,
@@ -460,9 +456,4 @@ type result struct {
 	throughput         float64
 	meanLatency        time.Duration
 	latencyPercentiles map[float32]time.Duration
-}
-
-// tearDown tears down the job
-func (t *WorkerTask) tearDown() error {
-	return t.runner.DeleteNamespace()
 }

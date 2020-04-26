@@ -30,6 +30,7 @@ const readyFile = "/tmp/job-ready"
 // Config is a job configuration
 type Config struct {
 	ID              string
+	Namespace       string
 	Image           string
 	ImagePullPolicy corev1.PullPolicy
 	Executable      string
