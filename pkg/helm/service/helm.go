@@ -16,6 +16,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/onosproject/helmit/api/helm"
 	helmapi "github.com/onosproject/helmit/pkg/helm"
@@ -41,24 +43,41 @@ func (s Service) Register(r *grpc.Server) {
 		releases: make(map[string]*helmapi.HelmRelease),
 	}
 	helm.RegisterHelmServer(r, server)
-
 }
 
 type Server struct {
 	releases map[string]*helmapi.HelmRelease
 }
 
+// Uninstall uninstall a helm chart
 func (s *Server) Uninstall(ctx context.Context, uninstalReq *helm.HelmUninstallRequest) (*helm.HelmUninstallResponse, error) {
-	err := s.releases[uninstalReq.Name].Uninstall()
-	if err != nil {
-		return &helm.HelmUninstallResponse{}, err
+	if _, ok := s.releases[uninstalReq.Name]; ok {
+		err := s.releases[uninstalReq.Name].Uninstall()
+		if err != nil {
+			return &helm.HelmUninstallResponse{
+				Status: helm.Status_FAILED,
+			}, err
+		}
+		return &helm.HelmUninstallResponse{
+			Status: helm.Status_SUCCEED,
+		}, nil
 	}
-	return &helm.HelmUninstallResponse{}, nil
+
+	return &helm.HelmUninstallResponse{
+		Status: helm.Status_FAILED,
+	}, fmt.Errorf("helm chart %s has not been installed", uninstalReq.Name)
 
 }
 
+// Install install a helm chart
 func (s *Server) Install(ctx context.Context, releaseReq *helm.HelmReleaseRequest) (*helm.HelmReleaseResponse, error) {
-	// TODO error handling should be done to make sure values are set
+
+	if releaseReq.Name == "" || releaseReq.Chart.Name == "" || releaseReq.Chart.Repository == "" {
+		return &helm.HelmReleaseResponse{
+			Status: helm.Status_FAILED,
+		}, errors.New("release name, chart name, and chart repository cannot be empty")
+	}
+
 	chart := helmapi.Chart(releaseReq.Chart.Name, releaseReq.Chart.Repository)
 	release := chart.Release(releaseReq.Name)
 	release.SetSkipCRDs(releaseReq.SkipCRDs)
