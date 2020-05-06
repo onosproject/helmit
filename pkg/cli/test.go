@@ -91,7 +91,6 @@ func getTestCommand() *cobra.Command {
 
 func runTestCommand(cmd *cobra.Command, args []string) error {
 	setupCommand(cmd)
-
 	pkgPath := ""
 	if len(args) > 0 {
 		pkgPath = args[0]
