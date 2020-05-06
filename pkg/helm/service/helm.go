@@ -71,7 +71,6 @@ func (s *Server) Uninstall(ctx context.Context, uninstalReq *helm.HelmUninstallR
 
 // Install install a helm chart
 func (s *Server) Install(ctx context.Context, releaseReq *helm.HelmReleaseRequest) (*helm.HelmReleaseResponse, error) {
-
 	if releaseReq.Name == "" || releaseReq.Chart.Name == "" || releaseReq.Chart.Repository == "" {
 		return &helm.HelmReleaseResponse{
 			Status: helm.Status_FAILED,
