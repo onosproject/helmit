@@ -80,7 +80,7 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().StringP("benchmark", "b", "", "the name of the benchmark to run")
 	cmd.Flags().IntP("workers", "w", 1, "the number of workers to run")
 	cmd.Flags().Int("parallel", 1, "the number of concurrent goroutines per client")
-	cmd.Flags().IntP("iterations", "n", 0, "the number of iterations to run")
+	cmd.Flags().IntP("iterations", "", 0, "the number of iterations to run")
 	cmd.Flags().DurationP("max-latency", "m", 0, "maximum latency allowed")
 	cmd.Flags().DurationP("duration", "d", 0, "the duration for which to run the test")
 	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named benchmark arguments")
