@@ -17,7 +17,14 @@ package benchmark
 import (
 	"context"
 	"fmt"
-	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	"math"
+	"os"
+	"sync"
+	"text/tabwriter"
+	"time"
+
+	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
+
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/kubernetes/config"
 	"github.com/onosproject/helmit/pkg/registry"
@@ -25,11 +32,6 @@ import (
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"math"
-	"os"
-	"sync"
-	"text/tabwriter"
-	"time"
 )
 
 // newCoordinator returns a new benchmark coordinator

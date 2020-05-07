@@ -17,14 +17,15 @@ package simulation
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/kubernetes/config"
 	"github.com/onosproject/helmit/pkg/registry"
 	"github.com/onosproject/helmit/pkg/util/async"
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
-	"sync"
-	"time"
 )
 
 // newCoordinator returns a new simulation coordinator
@@ -143,7 +144,7 @@ func getSimulatorName(worker int) string {
 }
 
 func (t *WorkerTask) getWorkerAddress(worker int) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local:5000", getSimulatorName(worker), t.config.ID)
+	return fmt.Sprintf("%s:5000", getSimulatorName(worker))
 }
 
 // createWorkers creates the simulation workers

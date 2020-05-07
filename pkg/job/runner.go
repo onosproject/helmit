@@ -658,6 +658,7 @@ func (n *Runner) runJob(job *Job) error {
 		To(readyFile).
 		On(pod.Name).
 		Do()
+
 	if err != nil {
 		step.Fail(err)
 		return err
