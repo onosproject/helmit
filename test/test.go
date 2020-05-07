@@ -16,12 +16,14 @@ package test
 
 import (
 	"fmt"
-	"github.com/onosproject/helmit/pkg/helm"
-	"github.com/onosproject/helmit/pkg/kubernetes"
-	"github.com/onosproject/helmit/pkg/test"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/onosproject/helmit/pkg/kubernetes"
+
+	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/test"
+	"github.com/stretchr/testify/assert"
 )
 
 // ChartTestSuite is a test for chart deployment

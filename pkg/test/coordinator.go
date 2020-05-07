@@ -17,10 +17,11 @@ package test
 import (
 	"context"
 	"fmt"
+	"strconv"
+
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/registry"
 	"google.golang.org/grpc"
-	"strconv"
 )
 
 // newCoordinator returns a new test coordinator
@@ -114,7 +115,7 @@ func (t *WorkerTask) Run() (int, error) {
 		return 0, err
 	}
 
-	address := fmt.Sprintf("%s.%s.svc.cluster.local:5000", job.ID, job.ID)
+	address := fmt.Sprintf("%s:5000", job.ID)
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		return 0, err
