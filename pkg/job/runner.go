@@ -336,7 +336,9 @@ func (n *Runner) createJob(job *Job) error {
 				Ports: servicePorts,
 			},
 		}
+
 		if _, err := n.Clientset().CoreV1().Services(n.Namespace()).Create(svc); err != nil {
+
 			return err
 		}
 	}
@@ -448,6 +450,7 @@ func (n *Runner) createJob(job *Job) error {
 						"type": job.Type,
 					},
 				},
+
 				Spec: corev1.PodSpec{
 					ServiceAccountName: serviceAccount,
 					RestartPolicy:      corev1.RestartPolicyNever,

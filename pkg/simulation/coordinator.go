@@ -139,12 +139,12 @@ func (t *WorkerTask) run() error {
 	return nil
 }
 
-func getSimulatorName(worker int) string {
-	return fmt.Sprintf("simulator-%d", worker)
+func getSimulatorName(worker int, jobID string) string {
+	return fmt.Sprintf("%s-simulator-%d", jobID, worker)
 }
 
-func (t *WorkerTask) getWorkerAddress(worker int) string {
-	return fmt.Sprintf("%s:5000", getSimulatorName(worker))
+func (t *WorkerTask) getWorkerAddress(worker int, jobID string) string {
+	return fmt.Sprintf("%s:5000", getSimulatorName(worker, jobID))
 }
 
 // createWorkers creates the simulation workers
@@ -163,7 +163,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 	env[simulationWorkerEnv] = fmt.Sprintf("%d", worker)
 	env[simulationJobEnv] = t.config.ID
 
-	jobID := getSimulatorName(worker)
+	jobID := getSimulatorName(worker, t.config.ID)
 	job := &job.Job{
 		Config: &job.Config{
 			ID:              jobID,
@@ -212,7 +212,7 @@ func (t *WorkerTask) getSimulators() ([]SimulatorServiceClient, error) {
 
 	workers := make([]SimulatorServiceClient, t.config.Simulators)
 	for i := 0; i < t.config.Simulators; i++ {
-		worker, err := grpc.Dial(t.getWorkerAddress(i), grpc.WithInsecure())
+		worker, err := grpc.Dial(t.getWorkerAddress(i, t.config.ID), grpc.WithInsecure())
 		if err != nil {
 			return nil, err
 		}
