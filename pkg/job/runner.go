@@ -181,7 +181,7 @@ func (n *Runner) createClusterRoleBinding() error {
 				{
 					Kind:      "ServiceAccount",
 					Name:      defaultServiceAccountName,
-					Namespace: kubeSystemNamespace,
+					Namespace: n.Namespace(),
 				},
 			},
 			RoleRef: rbacv1.RoleRef{
@@ -233,6 +233,10 @@ func (n *Runner) teardownNamespace() error {
 func (n *Runner) startJob(job *Job) error {
 	step := logging.NewStep(job.ID, "Starting job")
 	step.Start()
+	if err := n.setupRBAC(job); err != nil {
+		step.Fail(err)
+		return err
+	}
 	if err := n.createJob(job); err != nil {
 		step.Fail(err)
 		return err
