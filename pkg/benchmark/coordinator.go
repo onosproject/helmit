@@ -99,20 +99,6 @@ func (c *Coordinator) Run() (int, error) {
 	return returnCode, nil
 }
 
-// runWorkers runs the given test jobs
-func runWorkers(tasks []*WorkerTask) (int, error) {
-	var returnCode int
-	for _, task := range tasks {
-		status, err := task.Run()
-		if err != nil {
-			return status, err
-		} else if returnCode == 0 {
-			returnCode = status
-		}
-	}
-	return returnCode, nil
-}
-
 // newJobID returns a new unique test job ID
 func newJobID(testID, suite string) string {
 	return fmt.Sprintf("%s-%s", testID, suite)
@@ -143,12 +129,12 @@ func (t *WorkerTask) run() error {
 	return nil
 }
 
-func getWorkerName(worker int) string {
-	return fmt.Sprintf("worker-%d", worker)
+func getWorkerName(worker int, jobID string) string {
+	return fmt.Sprintf("%s-worker-%d", jobID, worker)
 }
 
 func (t *WorkerTask) getWorkerAddress(worker int) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local:5000", getWorkerName(worker), t.config.ID)
+	return fmt.Sprintf("%s:5000", getWorkerName(worker, t.config.ID))
 }
 
 // createWorkers creates the benchmark workers
@@ -158,7 +144,7 @@ func (t *WorkerTask) createWorkers() error {
 
 // createWorker creates the given worker
 func (t *WorkerTask) createWorker(worker int) error {
-	jobID := getWorkerName(worker)
+	jobID := getWorkerName(worker, t.config.ID)
 	env := t.config.Env
 	if env == nil {
 		env = make(map[string]string)
