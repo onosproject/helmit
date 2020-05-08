@@ -176,7 +176,11 @@ func (n *Runner) createServiceAccount(job *Job) error {
 }
 
 // createClusterRoleBinding creates the ClusterRoleBinding required by the test manager
-func (n *Runner) createClusterRoleBinding() error {
+func (n *Runner) createClusterRoleBinding(job *Job) error {
+	serviceAccountName := job.ServiceAccount
+	if serviceAccountName == "" {
+		serviceAccountName = defaultServiceAccountName
+	}
 	roleBinding, err := n.Clientset().RbacV1().ClusterRoleBindings().Get(defaultRoleBindingName, metav1.GetOptions{})
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
@@ -189,7 +193,7 @@ func (n *Runner) createClusterRoleBinding() error {
 			Subjects: []rbacv1.Subject{
 				{
 					Kind:      "ServiceAccount",
-					Name:      defaultServiceAccountName,
+					Name:      serviceAccountName,
 					Namespace: n.Namespace(),
 				},
 			},
@@ -199,43 +203,18 @@ func (n *Runner) createClusterRoleBinding() error {
 				APIGroup: "rbac.authorization.k8s.io",
 			},
 		}
-		_, err := n.Clientset().RbacV1().ClusterRoleBindings().Create(roleBinding)
-		if err != nil && k8serrors.IsAlreadyExists(err) {
-			return n.createClusterRoleBinding()
-		}
-		return err
-	}
 
+	}
 	roleBinding.Subjects = append(roleBinding.Subjects, rbacv1.Subject{
 		Kind:      "ServiceAccount",
-		Name:      n.Namespace(),
+		Name:      serviceAccountName,
 		Namespace: n.Namespace(),
 	})
 	_, err = n.Clientset().RbacV1().ClusterRoleBindings().Update(roleBinding)
 	if err != nil && k8serrors.IsConflict(err) {
-		return n.createClusterRoleBinding()
+		return n.createClusterRoleBinding(job)
 	}
 	return err
-}
-
-
-
-// teardownNamespace tears down the cluster namespace
-func (n *Runner) teardownNamespace() error {
-	if n.noTeardown {
-		return nil
-	}
-	step := logging.NewStep(n.Namespace(), "Delete namespace %s", n.Namespace())
-	step.Start()
-	err := n.Clientset().CoreV1().Namespaces().Delete(n.Namespace(), &metav1.DeleteOptions{})
-	if err != nil {
-		step.Fail(err)
-		return err
-	}
-	step.Complete()
-=======
->>>>>>> Configure RBAC using cluster-admin role if no --service-account flag is provided
-	return nil
 }
 
 // startJob starts running a test job
@@ -243,15 +222,16 @@ func (n *Runner) startJob(job *Job) error {
 	step := logging.NewStep(job.ID, "Starting job")
 	step.Start()
 
+	if err := n.setupRBAC(job); err != nil {
+		step.Fail(err)
+		return err
+	}
+
 	if err := n.createJob(job); err != nil {
 		step.Fail(err)
 		return err
 	}
 
-	if err := n.setupRBAC(job); err != nil {
-		step.Fail(err)
-		return err
-	}
 	if err := n.awaitJobRunning(job); err != nil {
 		step.Fail(err)
 		return err
@@ -736,11 +716,6 @@ func (n *Runner) deleteJob(job *Job) error {
 	if err != nil && !k8serrors.IsNotFound(err) {
 		step.Fail(err)
 		return err
-	}
-
-	err = n.Clientset().RbacV1().ClusterRoleBindings().Delete(defaultRoleBindingName, &metav1.DeleteOptions{})
-	if err != nil {
-		step.Fail(err)
 	}
 
 	step.Complete()
