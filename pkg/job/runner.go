@@ -66,14 +66,6 @@ func (n *Runner) RunJob(job *Job) (int, error) {
 	return n.WaitForExit(job)
 }
 
-func (n *Runner) getJobObject(job *Job) *batchv1.Job {
-	jobObj, err := n.Clientset().BatchV1().Jobs(n.Namespace()).Get(job.ID, metav1.GetOptions{})
-	if err != nil {
-		return jobObj
-	}
-	return nil
-}
-
 // StartJob starts the given job
 func (n *Runner) StartJob(job *Job) error {
 	n.noTeardown = job.NoTeardown
