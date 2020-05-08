@@ -305,55 +305,9 @@ func (n *Runner) createJob(job *Job) error {
 		},
 	})
 
-	if n.server {
-		servicePorts := []corev1.ServicePort{
-			{
-				Name: "management",
-				Port: 5000,
-			},
-		}
-		svc := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: job.ID,
-				Labels: map[string]string{
-					"job":  job.ID,
-					"type": job.Type,
-				},
-			},
-			Spec: corev1.ServiceSpec{
-				Selector: map[string]string{
-					"job": job.ID,
-				},
-				Ports: servicePorts,
-			},
-		}
-
-		if _, err := n.Clientset().CoreV1().Services(n.Namespace()).Create(svc); err != nil {
-
-			return err
-		}
-	}
-
 	json, err := json.Marshal(job.JobConfig)
 	if err != nil {
 		step.Fail(err)
-		return err
-	}
-
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      job.ID,
-			Namespace: n.Namespace(),
-			Annotations: map[string]string{
-				"job":  job.ID,
-				"type": job.Type,
-			},
-		},
-		Data: map[string]string{
-			configFile: string(json),
-		},
-	}
-	if _, err := n.Clientset().CoreV1().ConfigMaps(n.Namespace()).Create(cm); err != nil {
 		return err
 	}
 
@@ -473,6 +427,76 @@ func (n *Runner) createJob(job *Job) error {
 		step.Fail(err)
 		return err
 	}
+
+	jobObj, err := n.Clientset().BatchV1().Jobs(n.Namespace()).Get(job.ID, metav1.GetOptions{})
+	if err != nil {
+		step.Fail(err)
+		return err
+	}
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      job.ID,
+			Namespace: n.Namespace(),
+			Annotations: map[string]string{
+				"job":  job.ID,
+				"type": job.Type,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name:       jobObj.Name,
+					UID:        jobObj.UID,
+					Kind:       "Job",
+					APIVersion: "batch/v1",
+				},
+			},
+		},
+		Data: map[string]string{
+			configFile: string(json),
+		},
+	}
+	if _, err := n.Clientset().CoreV1().ConfigMaps(n.Namespace()).Create(cm); err != nil {
+		step.Fail(err)
+		return err
+	}
+
+	if n.server {
+		servicePorts := []corev1.ServicePort{
+			{
+				Name: "management",
+				Port: 5000,
+			},
+		}
+		svc := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: job.ID,
+				Labels: map[string]string{
+					"job":  job.ID,
+					"type": job.Type,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       jobObj.Name,
+						UID:        jobObj.UID,
+						Kind:       "Job",
+						APIVersion: "batch/v1",
+					},
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"job": job.ID,
+				},
+				Ports: servicePorts,
+			},
+		}
+
+		if _, err := n.Clientset().CoreV1().Services(n.Namespace()).Create(svc); err != nil {
+			step.Fail(err)
+			return err
+		}
+	}
+
 	step.Complete()
 	return nil
 }
