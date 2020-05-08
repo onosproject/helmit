@@ -66,6 +66,14 @@ func (n *Runner) RunJob(job *Job) (int, error) {
 	return n.WaitForExit(job)
 }
 
+func (n *Runner) getJobObject(job *Job) *batchv1.Job {
+	jobObj, err := n.Clientset().BatchV1().Jobs(n.Namespace()).Get(job.ID, metav1.GetOptions{})
+	if err != nil {
+		return jobObj
+	}
+	return nil
+}
+
 // StartJob starts the given job
 func (n *Runner) StartJob(job *Job) error {
 	n.noTeardown = job.NoTeardown
@@ -120,6 +128,7 @@ func (n *Runner) setupRBAC(job *Job) error {
 	if job.ServiceAccount == "" {
 		step := logging.NewStep(n.Namespace(), "No ServiceAccount configured! Configuring RBAC using %s role", defaultRoleName)
 		step.Start()
+
 		if err := n.createServiceAccount(); err != nil {
 			step.Fail(err)
 			return err
@@ -233,11 +242,13 @@ func (n *Runner) teardownNamespace() error {
 func (n *Runner) startJob(job *Job) error {
 	step := logging.NewStep(job.ID, "Starting job")
 	step.Start()
-	if err := n.setupRBAC(job); err != nil {
+
+	if err := n.createJob(job); err != nil {
 		step.Fail(err)
 		return err
 	}
-	if err := n.createJob(job); err != nil {
+
+	if err := n.setupRBAC(job); err != nil {
 		step.Fail(err)
 		return err
 	}
@@ -719,9 +730,19 @@ func (n *Runner) finishJob(job *Job) error {
 
 // deleteJob deletes a job
 func (n *Runner) deleteJob(job *Job) error {
+	step := logging.NewStep(job.ID, "Deleting job")
+	step.Start()
 	err := n.Clientset().BatchV1().Jobs(n.Namespace()).Delete(job.ID, &metav1.DeleteOptions{})
 	if err != nil && !k8serrors.IsNotFound(err) {
+		step.Fail(err)
 		return err
 	}
+
+	err = n.Clientset().RbacV1().ClusterRoleBindings().Delete(defaultRoleBindingName, &metav1.DeleteOptions{})
+	if err != nil {
+		step.Fail(err)
+	}
+
+	step.Complete()
 	return nil
 }

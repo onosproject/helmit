@@ -89,20 +89,6 @@ func (c *Coordinator) Run() (int, error) {
 	return returnCode, nil
 }
 
-// runWorkers runs the given test jobs
-func runWorkers(tasks []*WorkerTask) (int, error) {
-	var returnCode int
-	for _, task := range tasks {
-		status, err := task.Run()
-		if err != nil {
-			return status, err
-		} else if returnCode == 0 {
-			returnCode = status
-		}
-	}
-	return returnCode, nil
-}
-
 // newJobID returns a new unique test job ID
 func newJobID(testID, suite string) string {
 	return fmt.Sprintf("%s-%s", testID, suite)
