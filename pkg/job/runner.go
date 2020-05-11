@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-const kubeSystemNamespace = "kube-system"
 const defaultServiceAccountName = "cluster-test"
 const defaultRoleBindingName = "cluster-test"
 const defaultRoleName = "cluster-admin"
@@ -117,21 +116,21 @@ func (n *Runner) WaitForExit(job *Job) (int, error) {
 
 // setupRBAC sets up role based access controls for the cluster
 func (n *Runner) setupRBAC(job *Job) error {
-	if job.ServiceAccount == "" {
-		step := logging.NewStep(n.Namespace(), "No ServiceAccount configured! Configuring RBAC using %s role", defaultRoleName)
-		step.Start()
+	step := logging.NewStep(n.Namespace(), "Configuring Service Account and RBAC using %s role", defaultRoleName)
+	step.Start()
 
-		if err := n.createServiceAccount(); err != nil {
-			step.Fail(err)
-			return err
-		}
-		if err := n.createClusterRoleBinding(); err != nil {
-			step.Fail(err)
-			return err
-		}
-		step.Complete()
+	if err := n.createServiceAccount(job); err != nil {
+		step.Fail(err)
+		return err
 	}
+	if err := n.createClusterRoleBinding(job); err != nil {
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+
 	return nil
+
 }
 
 // createServiceAccount creates a ServiceAccount used by the test manager
@@ -214,12 +213,12 @@ func (n *Runner) startJob(job *Job) error {
 	step := logging.NewStep(job.ID, "Starting job")
 	step.Start()
 
-	if err := n.setupRBAC(job); err != nil {
+	if err := n.createJob(job); err != nil {
 		step.Fail(err)
 		return err
 	}
 
-	if err := n.createJob(job); err != nil {
+	if err := n.setupRBAC(job); err != nil {
 		step.Fail(err)
 		return err
 	}
