@@ -728,7 +728,12 @@ func (n *Runner) finishJob(job *Job) error {
 func (n *Runner) deleteJob(job *Job) error {
 	step := logging.NewStep(job.ID, "Deleting job")
 	step.Start()
-	err := n.Clientset().BatchV1().Jobs(n.Namespace()).Delete(job.ID, &metav1.DeleteOptions{})
+	deleteOptions := &metav1.DeleteOptions{}
+	deletePropagation := metav1.DeletePropagationBackground
+
+	deleteOptions.PropagationPolicy = &deletePropagation
+
+	err := n.Clientset().BatchV1().Jobs(n.Namespace()).Delete(job.ID, deleteOptions)
 	if err != nil && !k8serrors.IsNotFound(err) {
 		step.Fail(err)
 		return err
