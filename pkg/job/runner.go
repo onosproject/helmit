@@ -30,7 +30,6 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/watch"
 )
 
 const clusterRole = "kube-test-cluster"
@@ -353,24 +352,10 @@ func (n *Runner) createServiceAccount() error {
 func (n *Runner) teardownNamespace() error {
 	step := logging.NewStep(n.Namespace(), "Delete namespace %s", n.Namespace())
 	step.Start()
-
-	w, err := n.Clientset().CoreV1().Namespaces().Watch(metav1.ListOptions{
-		LabelSelector: "test=" + n.Namespace(),
-	})
+	err := n.Clientset().CoreV1().Namespaces().Delete(n.Namespace(), &metav1.DeleteOptions{})
 	if err != nil {
 		step.Fail(err)
-	}
-
-	err = n.Clientset().CoreV1().Namespaces().Delete(n.Namespace(), &metav1.DeleteOptions{})
-	if err != nil {
 		return err
-	}
-
-	for event := range w.ResultChan() {
-		switch event.Type {
-		case watch.Deleted:
-			w.Stop()
-		}
 	}
 	step.Complete()
 	return nil
