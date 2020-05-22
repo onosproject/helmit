@@ -102,6 +102,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	pullPolicy, _ := cmd.Flags().GetString("image-pull-policy")
 	iterations, _ := cmd.Flags().GetInt("iterations")
 	untilFailure, _ := cmd.Flags().GetBool("until-failure")
+	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
 
 	// Either a command package or image must be specified
 	if pkgPath == "" && image == "" {
@@ -159,11 +160,13 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 			ValueFiles:      valueFiles,
 			Values:          values,
 			Timeout:         timeout,
+			NoTeardown:      noTeardown,
 		},
 		Suites:     suites,
 		Tests:      testNames,
 		Iterations: iterations,
 		Verbose:    logging.GetVerbose(),
+		NoTeardown: noTeardown,
 	}
 	return test.Run(config)
 }
