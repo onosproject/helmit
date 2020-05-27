@@ -47,6 +47,7 @@ type Config struct {
 	Duration    *time.Duration    `json:"duration,omitempty"`
 	Args        map[string]string `json:"args,omitempty"`
 	MaxLatency  *time.Duration    `json:"maxLatency,omitempty"`
+	NoTeardown  bool              `json:"verbose,omitempty"`
 }
 
 // getBenchmarkType returns the current benchmark type

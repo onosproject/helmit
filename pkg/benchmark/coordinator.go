@@ -67,6 +67,7 @@ func (c *Coordinator) Run() error {
 				ValueFiles:      c.config.Config.ValueFiles,
 				Env:             c.config.Config.Env,
 				Timeout:         c.config.Config.Timeout,
+				NoTeardown:      c.config.Config.NoTeardown,
 			},
 			Suite:       suite,
 			Benchmark:   c.config.Benchmark,

@@ -60,6 +60,7 @@ func Run(config *Config) error {
 				Args:            config.Config.Args,
 				Env:             config.Env,
 				Timeout:         config.Timeout,
+				NoTeardown:      config.NoTeardown,
 			},
 			Suite:       config.Suite,
 			Benchmark:   config.Benchmark,

@@ -80,7 +80,7 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().DurationP("duration", "d", 0, "the duration for which to run the test")
 	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named benchmark arguments")
 	cmd.Flags().Duration("timeout", 10*time.Minute, "benchmark timeout")
-	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following tests")
+	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following benchmarks")
 	return cmd
 }
 
@@ -106,6 +106,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	timeout, _ := cmd.Flags().GetDuration("timeout")
 	imagePullPolicy, _ := cmd.Flags().GetString("image-pull-policy")
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
+	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
 
 	// Either --iterations or --duration must be specified
 	if iterations == 0 && duration == 0 {
@@ -175,6 +176,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 			ValueFiles:      valueFiles,
 			Values:          values,
 			Timeout:         timeout,
+			NoTeardown:      noTeardown,
 		},
 		Suite:       suite,
 		Benchmark:   benchmarkName,
@@ -184,6 +186,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		Duration:    d,
 		Args:        benchArgs,
 		MaxLatency:  maxLatency,
+		NoTeardown: noTeardown,
 	}
 	return benchmark.Run(config)
 }
