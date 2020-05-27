@@ -60,6 +60,7 @@ func Run(config *Config) error {
 				Args:            config.Config.Args,
 				Env:             config.Env,
 				Timeout:         config.Timeout,
+				NoTeardown:      config.NoTeardown,
 			},
 			Suite:       config.Suite,
 			Benchmark:   config.Benchmark,
@@ -69,6 +70,7 @@ func Run(config *Config) error {
 			Duration:    config.Duration,
 			Args:        config.Args,
 			MaxLatency:  config.MaxLatency,
+			NoTeardown:  config.NoTeardown,
 		},
 		Type: benchmarkJobType,
 	}

@@ -50,11 +50,13 @@ func newRunner(namespace string, server bool) *Runner {
 // Runner manages test jobs within a namespace
 type Runner struct {
 	kubernetes.Client
-	server bool
+	server     bool
+	noTeardown bool
 }
 
 // RunJob runs the given job
 func (n *Runner) RunJob(job *Job) (int, error) {
+	n.noTeardown = job.NoTeardown
 	if err := n.StartJob(job); err != nil {
 		return 0, err
 	}
@@ -63,6 +65,7 @@ func (n *Runner) RunJob(job *Job) (int, error) {
 
 // StartJob starts the given job
 func (n *Runner) StartJob(job *Job) error {
+	n.noTeardown = job.NoTeardown
 	if err := n.startJob(job); err != nil {
 		return err
 	}
@@ -350,6 +353,9 @@ func (n *Runner) createServiceAccount() error {
 
 // teardownNamespace tears down the cluster namespace
 func (n *Runner) teardownNamespace() error {
+	if n.noTeardown {
+		return nil
+	}
 	step := logging.NewStep(n.Namespace(), "Delete namespace %s", n.Namespace())
 	step.Start()
 	err := n.Clientset().CoreV1().Namespaces().Delete(n.Namespace(), &metav1.DeleteOptions{})
