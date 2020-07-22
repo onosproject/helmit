@@ -65,6 +65,7 @@ func (c *Coordinator) Run() error {
 					Env:             env,
 					Timeout:         c.config.Config.Timeout,
 					NoTeardown:      c.config.Config.NoTeardown,
+					Secrets:         c.config.Config.Secrets,
 				},
 				Suites:     []string{suite},
 				Tests:      c.config.Tests,

@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path"
 	"time"
 
@@ -447,6 +448,22 @@ func (n *Runner) createJob(job *Job) error {
 			},
 		},
 	})
+
+	secretData := make(map[string][]byte)
+
+	for k,v := range job.Secrets {
+		secretData[k] = []byte(v)
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "helmit-secrets",
+		},
+		Data: secretData,
+	}
+	if _, err := n.Clientset().CoreV1().Secrets(n.Namespace()).Create(secret); err != nil {
+		return err
+	}
 
 	if n.server {
 		servicePorts := []corev1.ServicePort{

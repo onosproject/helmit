@@ -92,6 +92,8 @@ type HelmRelease struct {
 	overrides map[string]interface{}
 	skipCRDs  bool
 	release   *release.Release
+	userName  string
+	password  string
 }
 
 // Namespace returns the release namespace
@@ -113,6 +115,18 @@ func (r *HelmRelease) Set(path string, value interface{}) *HelmRelease {
 // Get gets a value
 func (r *HelmRelease) Get(path string) interface{} {
 	return getValue(r.values, getPathNames(path))
+}
+
+// SetUsername sets the authentication user name
+func (r *HelmRelease) SetUsername(userName string) *HelmRelease {
+	r.userName = userName
+	return r
+}
+
+// SetPassword sets the authentication password
+func (r *HelmRelease) SetPassword(password string) *HelmRelease {
+	r.password = password
+	return r
 }
 
 // Values is the release's values
@@ -158,6 +172,8 @@ func (r *HelmRelease) Install(wait bool) error {
 
 	install := action.NewInstall(r.config)
 	install.Namespace = r.Namespace()
+	install.Username = r.userName
+	install.Password = r.password
 	install.SkipCRDs = r.SkipCRDs()
 	install.RepoURL = r.chart.Repository()
 	install.ReleaseName = r.Name()

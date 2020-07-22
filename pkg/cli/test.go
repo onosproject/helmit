@@ -81,6 +81,7 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().Int("iterations", 1, "number of iterations")
 	cmd.Flags().Bool("until-failure", false, "run until an error is detected")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following tests")
+	cmd.Flags().StringToString("secret", map[string]string{}, "usage")
 	return cmd
 }
 
@@ -103,6 +104,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	iterations, _ := cmd.Flags().GetInt("iterations")
 	untilFailure, _ := cmd.Flags().GetBool("until-failure")
 	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
+	secrets, _ := cmd.Flags().GetStringToString("secret")
 
 	// Either a command package or image must be specified
 	if pkgPath == "" && image == "" {
@@ -161,6 +163,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 			Values:          values,
 			Timeout:         timeout,
 			NoTeardown:      noTeardown,
+			Secrets:         secrets,
 		},
 		Suites:     suites,
 		Tests:      testNames,
