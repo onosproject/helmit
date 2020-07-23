@@ -173,5 +173,6 @@ func (t *WorkerTask) Run() (int, error) {
 		return 0, err
 	}
 	_ = t.runner.DeleteNamespace()
+	_ = t.runner.DeleteSecrets()
 	return status, err
 }

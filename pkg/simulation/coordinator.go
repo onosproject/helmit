@@ -394,5 +394,8 @@ func (t *WorkerTask) stopSimulator(simulator int, client SimulatorServiceClient)
 
 // tearDown tears down the job
 func (t *WorkerTask) tearDown() error {
+	if err := t.runner.DeleteSecrets(); err != nil {
+		return err
+	}
 	return t.runner.DeleteNamespace()
 }

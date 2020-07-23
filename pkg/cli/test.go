@@ -81,7 +81,7 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().Int("iterations", 1, "number of iterations")
 	cmd.Flags().Bool("until-failure", false, "run until an error is detected")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following tests")
-	cmd.Flags().StringToString("secret", map[string]string{}, "usage")
+	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
 	return cmd
 }
 
@@ -104,7 +104,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	iterations, _ := cmd.Flags().GetInt("iterations")
 	untilFailure, _ := cmd.Flags().GetBool("until-failure")
 	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
-	secrets, _ := cmd.Flags().GetStringToString("secret")
+	secretsArray, _ := cmd.Flags().GetStringSlice("secret")
 
 	// Either a command package or image must be specified
 	if pkgPath == "" && image == "" {
@@ -148,6 +148,11 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	values, err := parseOverrides(sets)
+	if err != nil {
+		return err
+	}
+
+	secrets, err := parseSecrets(secretsArray)
 	if err != nil {
 		return err
 	}
@@ -243,4 +248,21 @@ func parseOverrides(values []string) (map[string][]string, error) {
 		overrides[release] = append(override, value)
 	}
 	return overrides, nil
+}
+
+func parseSecrets(secrets []string) (map[string]string, error) {
+	if len(secrets) == 0 {
+		return map[string]string{}, nil
+	}
+
+	values := make(map[string]string)
+	for _, secret := range secrets {
+		index := strings.Index(secret, "=")
+		if index == -1 {
+			return nil, errors.New("secrets must be in the format {key}={value}")
+		}
+		key, value := secret[:index], secret[index+1:]
+		values[key] = value
+	}
+	return values, nil
 }

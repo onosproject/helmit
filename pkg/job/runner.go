@@ -33,6 +33,7 @@ import (
 )
 
 const clusterRole = "kube-test-cluster"
+const helmitSecretsName = "helmit-secrets"
 
 // NewNamespace returns a new job namespace
 func NewNamespace(namespace string) *Runner {
@@ -119,6 +120,11 @@ func (n *Runner) CreateNamespace() error {
 // DeleteNamespace deletes the namespace
 func (n *Runner) DeleteNamespace() error {
 	return n.teardownNamespace()
+}
+
+// DeleteSecrets deletes the secrets
+func (n *Runner) DeleteSecrets() error {
+	return n.teardownSecrets()
 }
 
 // setupNamespace sets up the test namespace
@@ -367,6 +373,22 @@ func (n *Runner) teardownNamespace() error {
 	return nil
 }
 
+// teardownSecrets tears down the cluster secrets
+func (n *Runner) teardownSecrets() error {
+	if n.noTeardown {
+		return nil
+	}
+	step := logging.NewStep(n.Namespace(), "Delete secrets")
+	step.Start()
+	err := n.Clientset().CoreV1().Secrets(n.Namespace()).Delete(helmitSecretsName, &metav1.DeleteOptions{})
+	if err != nil {
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+	return nil
+}
+
 // startJob starts running a test job
 func (n *Runner) startJob(job *Job) error {
 	step := logging.NewStep(job.ID, "Starting job")
@@ -456,7 +478,7 @@ func (n *Runner) createJob(job *Job) error {
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "helmit-secrets",
+			Name: helmitSecretsName,
 		},
 		Data: secretData,
 	}
