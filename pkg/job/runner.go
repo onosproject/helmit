@@ -380,7 +380,7 @@ func (n *Runner) teardownSecrets() error {
 	}
 	step := logging.NewStep(n.Namespace(), "Delete secrets")
 	step.Start()
-	err := n.Clientset().CoreV1().Secrets(n.Namespace()).Delete(helmitSecretsName, &metav1.DeleteOptions{})
+	err := n.Clientset().CoreV1().Secrets("kube-test").Delete(helmitSecretsName, &metav1.DeleteOptions{})
 	if err != nil {
 		step.Fail(err)
 		return err

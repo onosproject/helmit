@@ -68,6 +68,7 @@ func (c *Coordinator) Run() error {
 				Env:             c.config.Config.Env,
 				Timeout:         c.config.Config.Timeout,
 				NoTeardown:      c.config.Config.NoTeardown,
+				Secrets:         c.config.Config.Secrets,
 			},
 			Suite:       suite,
 			Benchmark:   c.config.Benchmark,
@@ -204,6 +205,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 			Env:             env,
 			Timeout:         t.config.Config.Timeout,
 			NoTeardown:      t.config.Config.NoTeardown,
+			Secrets:         t.config.Config.Secrets,
 		},
 		JobConfig: &Config{
 			Config: &job.Config{
@@ -217,6 +219,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 				Env:             env,
 				Timeout:         t.config.Config.Timeout,
 				NoTeardown:      t.config.Config.NoTeardown,
+				Secrets:         t.config.Config.Secrets,
 			},
 			Suite:       t.config.Suite,
 			Benchmark:   t.config.Benchmark,

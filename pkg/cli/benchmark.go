@@ -81,6 +81,7 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named benchmark arguments")
 	cmd.Flags().Duration("timeout", 10*time.Minute, "benchmark timeout")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following benchmarks")
+	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
 	return cmd
 }
 
@@ -107,6 +108,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	imagePullPolicy, _ := cmd.Flags().GetString("image-pull-policy")
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
 	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
+	secretsArray, _ := cmd.Flags().GetStringSlice("secret")
 
 	// Either --iterations or --duration must be specified
 	if iterations == 0 && duration == 0 {
@@ -166,6 +168,11 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		d = &duration
 	}
 
+	secrets, err := parseSecrets(secretsArray)
+	if err != nil {
+		return err
+	}
+
 	config := &benchmark.Config{
 		Config: &job.Config{
 			ID:              benchID,
@@ -177,6 +184,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 			Values:          values,
 			Timeout:         timeout,
 			NoTeardown:      noTeardown,
+			Secrets:         secrets,
 		},
 		Suite:       suite,
 		Benchmark:   benchmarkName,
