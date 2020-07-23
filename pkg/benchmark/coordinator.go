@@ -77,7 +77,7 @@ func (c *Coordinator) Run() error {
 			Duration:    c.config.Duration,
 			MaxLatency:  c.config.MaxLatency,
 			Args:        c.config.Args,
-			NoTeardown:      c.config.Config.NoTeardown,
+			NoTeardown:  c.config.Config.NoTeardown,
 		}
 		worker := &WorkerTask{
 			runner: job.NewNamespace(jobID),
@@ -226,7 +226,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 			Duration:    t.config.Duration,
 			MaxLatency:  t.config.MaxLatency,
 			Args:        t.config.Args,
-			NoTeardown:      t.config.Config.NoTeardown,
+			NoTeardown:  t.config.Config.NoTeardown,
 		},
 		Type: benchmarkJobType,
 	}

@@ -186,7 +186,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		Duration:    d,
 		Args:        benchArgs,
 		MaxLatency:  maxLatency,
-		NoTeardown: noTeardown,
+		NoTeardown:  noTeardown,
 	}
 	return benchmark.Run(config)
 }

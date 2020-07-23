@@ -18,7 +18,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path"
 	"time"
 
@@ -451,7 +450,7 @@ func (n *Runner) createJob(job *Job) error {
 
 	secretData := make(map[string][]byte)
 
-	for k,v := range job.Secrets {
+	for k, v := range job.Secrets {
 		secretData[k] = []byte(v)
 	}
 
