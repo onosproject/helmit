@@ -15,10 +15,11 @@
 package test
 
 import (
+	"time"
+
 	"github.com/onosproject/helmit/pkg/benchmark"
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/input"
-	"time"
 )
 
 // ChartBenchmarkSuite benchmarks a Helm chart
@@ -28,11 +29,22 @@ type ChartBenchmarkSuite struct {
 }
 
 // SetupBenchmark :: benchmark
-func (s *ChartBenchmarkSuite) SetupBenchmark(b *benchmark.Context) error {
-	return helm.Chart("atomix-controller").
+func (s *ChartBenchmarkSuite) SetupSuite(b *benchmark.Context) error {
+	atomix := helm.Chart("kubernetes-controller").
 		Release("atomix-controller").
-		Set("scope", "Namespace").
-		Install(true)
+		Set("scope", "Namespace")
+
+	err := atomix.Install(true)
+	if err != nil {
+		return err
+	}
+
+	err = atomix.Uninstall()
+	if err != nil {
+		return err
+	}
+	return nil
+
 }
 
 // SetupWorker :: benchmark

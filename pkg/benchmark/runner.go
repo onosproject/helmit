@@ -15,9 +15,11 @@
 package benchmark
 
 import (
-	jobs "github.com/onosproject/helmit/pkg/job"
+	"fmt"
 	"os"
 	"path"
+
+	jobs "github.com/onosproject/helmit/pkg/job"
 )
 
 // The executor is the entrypoint for benchmark images. It takes the input and environment and runs
@@ -51,6 +53,8 @@ func Run(config *Config) error {
 		JobConfig: &Config{
 			Config: &jobs.Config{
 				ID:              config.ID,
+				Namespace:       config.Namespace,
+				ServiceAccount:  config.ServiceAccount,
 				Image:           config.Image,
 				ImagePullPolicy: config.ImagePullPolicy,
 				Executable:      configExecutable,
@@ -109,7 +113,12 @@ func runCoordinator(config *Config) error {
 	if err != nil {
 		return err
 	}
-	return coordinator.Run()
+	status, err := coordinator.Run()
+	if err != nil {
+		fmt.Println(err)
+	}
+	os.Exit(status)
+	return nil
 }
 
 // runWorker runs a test image in the worker context

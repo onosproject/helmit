@@ -17,31 +17,33 @@ package simulation
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/kubernetes/config"
 	"github.com/onosproject/helmit/pkg/registry"
 	"github.com/onosproject/helmit/pkg/util/async"
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
-	"os"
-	"sync"
-	"time"
 )
 
 // newCoordinator returns a new simulation coordinator
 func newCoordinator(config *Config) (*Coordinator, error) {
 	return &Coordinator{
 		config: config,
+		runner: job.NewNamespace(config.Namespace),
 	}, nil
 }
 
 // Coordinator coordinates workers for suites of simulators
 type Coordinator struct {
 	config *Config
+	runner *job.Runner
 }
 
 // Run runs the simulations
-func (c *Coordinator) Run() error {
+func (c *Coordinator) Run() (int, error) {
 	var suites []string
 	if c.config.Simulation == "" {
 		suites = registry.GetSimulationSuites()
@@ -49,12 +51,14 @@ func (c *Coordinator) Run() error {
 		suites = []string{c.config.Simulation}
 	}
 
-	workers := make([]*WorkerTask, len(suites))
-	for i, suite := range suites {
+	var returnCode int
+	for _, suite := range suites {
 		jobID := newJobID(c.config.ID, suite)
 		config := &Config{
 			Config: &job.Config{
 				ID:              jobID,
+				Namespace:       c.config.Config.Namespace,
+				ServiceAccount:  c.config.Config.ServiceAccount,
 				Image:           c.config.Config.Image,
 				ImagePullPolicy: c.config.Config.ImagePullPolicy,
 				Executable:      c.config.Config.Executable,
@@ -71,53 +75,18 @@ func (c *Coordinator) Run() error {
 			Jitter:     c.config.Jitter,
 			Args:       c.config.Args,
 		}
-		worker := &WorkerTask{
-			runner: job.NewNamespace(jobID),
+		task := &WorkerTask{
+			runner: c.runner,
 			config: config,
 		}
-		workers[i] = worker
-	}
-	return runWorkers(workers)
-}
-
-// runWorkers runs the given test jobs
-func runWorkers(tasks []*WorkerTask) error {
-	// Start jobs in separate goroutines
-	wg := &sync.WaitGroup{}
-	errChan := make(chan error, len(tasks))
-	codeChan := make(chan int, len(tasks))
-	for _, task := range tasks {
-		wg.Add(1)
-		go func(task *WorkerTask) {
-			status, err := task.Run()
-			if err != nil {
-				errChan <- err
-			} else {
-				codeChan <- status
-			}
-			wg.Done()
-		}(task)
-	}
-
-	// Wait for all jobs to start before proceeding
-	go func() {
-		wg.Wait()
-		close(errChan)
-		close(codeChan)
-	}()
-
-	// If any job returned an error, return it
-	for err := range errChan {
-		return err
-	}
-
-	// If any job returned a non-zero exit code, exit with it
-	for code := range codeChan {
-		if code != 0 {
-			os.Exit(code)
+		status, err := task.Run()
+		if err != nil {
+			return status, err
+		} else if returnCode == 0 {
+			returnCode = status
 		}
 	}
-	return nil
+	return returnCode, nil
 }
 
 // newJobID returns a new unique test job ID
@@ -136,21 +105,11 @@ type WorkerTask struct {
 func (t *WorkerTask) Run() (int, error) {
 	// Start the job
 	err := t.run()
-	if err != nil {
-		_ = t.tearDown()
-		return 0, err
-	}
-
-	// Tear down the cluster if necessary
-	_ = t.tearDown()
-	return 0, nil
+	return 0, err
 }
 
 // start starts the test job
 func (t *WorkerTask) run() error {
-	if err := t.runner.CreateNamespace(); err != nil {
-		return err
-	}
 	if err := t.createWorkers(); err != nil {
 		return err
 	}
@@ -166,12 +125,12 @@ func (t *WorkerTask) run() error {
 	return nil
 }
 
-func getSimulatorName(worker int) string {
-	return fmt.Sprintf("simulator-%d", worker)
+func getSimulatorName(worker int, jobID string) string {
+	return fmt.Sprintf("%s-simulator-%d", jobID, worker)
 }
 
-func (t *WorkerTask) getWorkerAddress(worker int) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local:5000", getSimulatorName(worker), t.config.ID)
+func (t *WorkerTask) getWorkerAddress(worker int, jobID string) string {
+	return fmt.Sprintf("%s:5000", getSimulatorName(worker, jobID))
 }
 
 // createWorkers creates the simulation workers
@@ -190,10 +149,12 @@ func (t *WorkerTask) createWorker(worker int) error {
 	env[simulationWorkerEnv] = fmt.Sprintf("%d", worker)
 	env[simulationJobEnv] = t.config.ID
 
-	jobID := getSimulatorName(worker)
+	jobID := getSimulatorName(worker, t.config.ID)
 	job := &job.Job{
 		Config: &job.Config{
 			ID:              jobID,
+			Namespace:       t.config.Config.Namespace,
+			ServiceAccount:  t.config.Config.ServiceAccount,
 			Image:           t.config.Config.Image,
 			ImagePullPolicy: t.config.Config.ImagePullPolicy,
 			Executable:      t.config.Config.Executable,
@@ -206,6 +167,8 @@ func (t *WorkerTask) createWorker(worker int) error {
 		JobConfig: &Config{
 			Config: &job.Config{
 				ID:              jobID,
+				Namespace:       t.config.Config.Namespace,
+				ServiceAccount:  t.config.Config.ServiceAccount,
 				Image:           t.config.Config.Image,
 				ImagePullPolicy: t.config.Config.ImagePullPolicy,
 				Executable:      t.config.Config.Executable,
@@ -235,7 +198,7 @@ func (t *WorkerTask) getSimulators() ([]SimulatorServiceClient, error) {
 
 	workers := make([]SimulatorServiceClient, t.config.Simulators)
 	for i := 0; i < t.config.Simulators; i++ {
-		worker, err := grpc.Dial(t.getWorkerAddress(i), grpc.WithInsecure())
+		worker, err := grpc.Dial(t.getWorkerAddress(i, t.config.ID), grpc.WithInsecure())
 		if err != nil {
 			return nil, err
 		}
@@ -390,9 +353,4 @@ func (t *WorkerTask) stopSimulator(simulator int, client SimulatorServiceClient)
 	}
 	_, err := client.StopSimulator(context.Background(), request)
 	return err
-}
-
-// tearDown tears down the job
-func (t *WorkerTask) tearDown() error {
-	return t.runner.DeleteNamespace()
 }

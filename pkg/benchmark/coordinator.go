@@ -17,7 +17,14 @@ package benchmark
 import (
 	"context"
 	"fmt"
-	"github.com/grpc-ecosystem/go-grpc-middleware/retry"
+	"math"
+	"os"
+	"sync"
+	"text/tabwriter"
+	"time"
+
+	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
+
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/kubernetes/config"
 	"github.com/onosproject/helmit/pkg/registry"
@@ -25,27 +32,24 @@ import (
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"math"
-	"os"
-	"sync"
-	"text/tabwriter"
-	"time"
 )
 
 // newCoordinator returns a new benchmark coordinator
 func newCoordinator(config *Config) (*Coordinator, error) {
 	return &Coordinator{
 		config: config,
+		runner: job.NewNamespace(config.Namespace),
 	}, nil
 }
 
 // Coordinator coordinates workers for suites of benchmarks
 type Coordinator struct {
 	config *Config
+	runner *job.Runner
 }
 
 // Run runs the tests
-func (c *Coordinator) Run() error {
+func (c *Coordinator) Run() (int, error) {
 	var suites []string
 	if c.config.Suite == "" {
 		suites = registry.GetBenchmarkSuites()
@@ -53,12 +57,14 @@ func (c *Coordinator) Run() error {
 		suites = []string{c.config.Suite}
 	}
 
-	workers := make([]*WorkerTask, len(suites))
-	for i, suite := range suites {
+	var returnCode int
+	for _, suite := range suites {
 		jobID := newJobID(c.config.ID, suite)
 		config := &Config{
 			Config: &job.Config{
 				ID:              jobID,
+				Namespace:       c.config.Config.Namespace,
+				ServiceAccount:  c.config.Config.ServiceAccount,
 				Image:           c.config.Config.Image,
 				ImagePullPolicy: c.config.Config.ImagePullPolicy,
 				Executable:      c.config.Config.Executable,
@@ -79,53 +85,18 @@ func (c *Coordinator) Run() error {
 			Args:        c.config.Args,
 			NoTeardown:      c.config.Config.NoTeardown,
 		}
-		worker := &WorkerTask{
-			runner: job.NewNamespace(jobID),
+		task := &WorkerTask{
+			runner: c.runner,
 			config: config,
 		}
-		workers[i] = worker
-	}
-	return runWorkers(workers)
-}
-
-// runWorkers runs the given test jobs
-func runWorkers(tasks []*WorkerTask) error {
-	// Start jobs in separate goroutines
-	wg := &sync.WaitGroup{}
-	errChan := make(chan error, len(tasks))
-	codeChan := make(chan int, len(tasks))
-	for _, task := range tasks {
-		wg.Add(1)
-		go func(task *WorkerTask) {
-			status, err := task.Run()
-			if err != nil {
-				errChan <- err
-			} else {
-				codeChan <- status
-			}
-			wg.Done()
-		}(task)
-	}
-
-	// Wait for all jobs to start before proceeding
-	go func() {
-		wg.Wait()
-		close(errChan)
-		close(codeChan)
-	}()
-
-	// If any job returned an error, return it
-	for err := range errChan {
-		return err
-	}
-
-	// If any job returned a non-zero exit code, exit with it
-	for code := range codeChan {
-		if code != 0 {
-			os.Exit(code)
+		status, err := task.Run()
+		if err != nil {
+			return status, err
+		} else if returnCode == 0 {
+			returnCode = status
 		}
 	}
-	return nil
+	return returnCode, nil
 }
 
 // newJobID returns a new unique test job ID
@@ -144,21 +115,11 @@ type WorkerTask struct {
 func (t *WorkerTask) Run() (int, error) {
 	// Start the job
 	err := t.run()
-	if err != nil {
-		_ = t.tearDown()
-		return 0, err
-	}
-
-	// Tear down the cluster if necessary
-	_ = t.tearDown()
-	return 0, nil
+	return 0, err
 }
 
 // start starts the test job
 func (t *WorkerTask) run() error {
-	if err := t.runner.CreateNamespace(); err != nil {
-		return err
-	}
 	if err := t.createWorkers(); err != nil {
 		return err
 	}
@@ -168,12 +129,12 @@ func (t *WorkerTask) run() error {
 	return nil
 }
 
-func getWorkerName(worker int) string {
-	return fmt.Sprintf("worker-%d", worker)
+func getWorkerName(worker int, jobID string) string {
+	return fmt.Sprintf("%s-worker-%d", jobID, worker)
 }
 
 func (t *WorkerTask) getWorkerAddress(worker int) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local:5000", getWorkerName(worker), t.config.ID)
+	return fmt.Sprintf("%s:5000", getWorkerName(worker, t.config.ID))
 }
 
 // createWorkers creates the benchmark workers
@@ -183,7 +144,7 @@ func (t *WorkerTask) createWorkers() error {
 
 // createWorker creates the given worker
 func (t *WorkerTask) createWorker(worker int) error {
-	jobID := getWorkerName(worker)
+	jobID := getWorkerName(worker, t.config.ID)
 	env := t.config.Env
 	if env == nil {
 		env = make(map[string]string)
@@ -195,6 +156,8 @@ func (t *WorkerTask) createWorker(worker int) error {
 	job := &job.Job{
 		Config: &job.Config{
 			ID:              jobID,
+			Namespace:       t.config.Config.Namespace,
+			ServiceAccount:  t.config.Config.ServiceAccount,
 			Image:           t.config.Config.Image,
 			ImagePullPolicy: t.config.Config.ImagePullPolicy,
 			Executable:      t.config.Config.Executable,
@@ -208,6 +171,8 @@ func (t *WorkerTask) createWorker(worker int) error {
 		JobConfig: &Config{
 			Config: &job.Config{
 				ID:              jobID,
+				Namespace:       t.config.Config.Namespace,
+				ServiceAccount:  t.config.Config.ServiceAccount,
 				Image:           t.config.Config.Image,
 				ImagePullPolicy: t.config.Config.ImagePullPolicy,
 				Executable:      t.config.Config.Executable,
@@ -487,9 +452,4 @@ type result struct {
 	throughput         float64
 	meanLatency        time.Duration
 	latencyPercentiles map[float32]time.Duration
-}
-
-// tearDown tears down the job
-func (t *WorkerTask) tearDown() error {
-	return t.runner.DeleteNamespace()
 }

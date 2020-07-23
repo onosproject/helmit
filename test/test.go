@@ -16,12 +16,14 @@ package test
 
 import (
 	"fmt"
-	"github.com/onosproject/helmit/pkg/helm"
-	"github.com/onosproject/helmit/pkg/kubernetes"
-	"github.com/onosproject/helmit/pkg/test"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/onosproject/helmit/pkg/kubernetes"
+
+	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/test"
+	"github.com/stretchr/testify/assert"
 )
 
 // ChartTestSuite is a test for chart deployment
@@ -31,15 +33,22 @@ type ChartTestSuite struct {
 
 // TestLocalInstall tests a local chart installation
 func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
-	atomix := helm.Chart("atomix-controller").
+	atomix := helm.Chart("kubernetes-controller").
 		Release("atomix-controller").
 		Set("scope", "Namespace")
 	err := atomix.Install(true)
 	assert.NoError(t, err)
 
+	raft := helm.Chart("raft-storage-controller").
+		Release("raft-storage-controller").
+		Set("scope", "Namespace")
+
+	err = raft.Install(true)
+	assert.NoError(t, err)
+
 	topo := helm.Chart("onos-topo").
 		Release("onos-topo").
-		Set("store.controller", fmt.Sprintf("atomix-controller.%s.svc.cluster.local:5679", helm.Namespace()))
+		Set("store.controller", fmt.Sprintf("atomix-controller-kubernetes-controller:5679"))
 	err = topo.Install(true)
 	assert.NoError(t, err)
 
@@ -47,7 +56,7 @@ func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
 
 	pods, err := client.CoreV1().Pods().List()
 	assert.NoError(t, err)
-	assert.Len(t, pods, 1)
+	assert.Len(t, pods, 2)
 
 	deployment, err := client.AppsV1().
 		Deployments().
@@ -71,7 +80,16 @@ func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
 
 	services, err := client.CoreV1().Services().List()
 	assert.NoError(t, err)
-	assert.Len(t, services, 1)
+	assert.Len(t, services, 2)
+
+	err = atomix.Uninstall()
+	assert.NoError(t, err)
+
+	err = raft.Uninstall()
+	assert.NoError(t, err)
+
+	err = topo.Uninstall()
+	assert.NoError(t, err)
 }
 
 // TestRemoteInstall tests a remote chart installation
@@ -81,5 +99,8 @@ func (s *ChartTestSuite) TestRemoteInstall(t *testing.T) {
 		Set("replicas", 1).
 		Set("zookeeper.replicaCount", 1)
 	err := kafka.Install(true)
+	assert.NoError(t, err)
+
+	err = kafka.Uninstall()
 	assert.NoError(t, err)
 }

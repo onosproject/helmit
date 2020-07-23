@@ -32,7 +32,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-const clusterRole = "kube-test-cluster"
+const defaultServiceAccountName = "cluster-test"
+const defaultRoleBindingName = "cluster-test"
+const defaultRoleName = "cluster-admin"
 
 // NewNamespace returns a new job namespace
 func NewNamespace(namespace string) *Runner {
@@ -105,188 +107,59 @@ func (n *Runner) streamLogs(job *Job) {
 // WaitForExit waits for the job to exit
 func (n *Runner) WaitForExit(job *Job) (int, error) {
 	_, status, err := n.getStatus(job)
+	_ = n.finishJob(job)
 	if err != nil {
 		return 0, err
 	}
 	return status, nil
 }
 
-// CreateNamespace creates the namespace
-func (n *Runner) CreateNamespace() error {
-	return n.setupNamespace()
-}
-
-// DeleteNamespace deletes the namespace
-func (n *Runner) DeleteNamespace() error {
-	return n.teardownNamespace()
-}
-
-// setupNamespace sets up the test namespace
-func (n *Runner) setupNamespace() error {
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: n.Namespace(),
-			Labels: map[string]string{
-				"test": n.Namespace(),
-			},
-		},
-	}
-	step := logging.NewStep(n.Namespace(), "Setup namespace")
-	step.Start()
-	_, err := n.Clientset().CoreV1().Namespaces().Create(ns)
-	if err != nil && !k8serrors.IsAlreadyExists(err) {
-		return err
-	}
-	return n.setupRBAC()
-}
-
 // setupRBAC sets up role based access controls for the cluster
-func (n *Runner) setupRBAC() error {
-	step := logging.NewStep(n.Namespace(), "Set up RBAC")
+func (n *Runner) setupRBAC(job *Job) error {
+	step := logging.NewStep(n.Namespace(), "Configuring Service Account and RBAC using %s role", defaultRoleName)
 	step.Start()
-	if err := n.createClusterRole(); err != nil {
+
+	if err := n.createServiceAccount(job); err != nil {
 		step.Fail(err)
 		return err
 	}
-	if err := n.createClusterRoleBinding(); err != nil {
-		step.Fail(err)
-		return err
-	}
-	if err := n.createServiceAccount(); err != nil {
+	if err := n.createClusterRoleBinding(job); err != nil {
 		step.Fail(err)
 		return err
 	}
 	step.Complete()
+
 	return nil
+
 }
 
-// createClusterRole creates the ClusterRole required by the Atomix controller and tests if not yet created
-func (n *Runner) createClusterRole() error {
-	role := &rbacv1.ClusterRole{
+// createServiceAccount creates a ServiceAccount used by the test manager
+func (n *Runner) createServiceAccount(job *Job) error {
+	jobObj, err := n.Clientset().BatchV1().Jobs(n.Namespace()).Get(job.ID, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	serviceAccountName := job.ServiceAccount
+	if serviceAccountName == "" {
+		serviceAccountName = defaultServiceAccountName
+	}
+
+	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: clusterRole,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{
-					"",
-				},
-				Resources: []string{
-					"pods",
-					"pods/log",
-					"pods/exec",
-					"services",
-					"endpoints",
-					"persistentvolumeclaims",
-					"events",
-					"configmaps",
-					"secrets",
-					"serviceaccounts",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"",
-				},
-				Resources: []string{
-					"namespaces",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"apps",
-				},
-				Resources: []string{
-					"deployments",
-					"daemonsets",
-					"replicasets",
-					"statefulsets",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"policy",
-				},
-				Resources: []string{
-					"poddisruptionbudgets",
-					"podsecuritypolicies",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"batch",
-				},
-				Resources: []string{
-					"jobs",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"extensions",
-				},
-				Resources: []string{
-					"ingresses",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"rbac.authorization.k8s.io",
-				},
-				Resources: []string{
-					"roles",
-					"rolebindings",
-					"clusterroles",
-					"clusterrolebindings",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"apiextensions.k8s.io",
-				},
-				Resources: []string{
-					"customresourcedefinitions",
-				},
-				Verbs: []string{
-					"*",
-				},
-			},
-			{
-				APIGroups: []string{
-					"storage.cloud.atomix.io",
-					"cloud.atomix.io",
-					"k8s.atomix.io",
-				},
-				Resources: []string{
-					"*",
-				},
-				Verbs: []string{
-					"*",
+			Name:      serviceAccountName,
+			Namespace: n.Namespace(),
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name:       jobObj.Name,
+					UID:        jobObj.UID,
+					Kind:       "Job",
+					APIVersion: "batch/v1",
 				},
 			},
 		},
 	}
-	_, err := n.Clientset().RbacV1().ClusterRoles().Create(role)
+	_, err = n.Clientset().CoreV1().ServiceAccounts(n.Namespace()).Create(serviceAccount)
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return err
 	}
@@ -294,87 +167,62 @@ func (n *Runner) createClusterRole() error {
 }
 
 // createClusterRoleBinding creates the ClusterRoleBinding required by the test manager
-func (n *Runner) createClusterRoleBinding() error {
-	roleBinding, err := n.Clientset().RbacV1().ClusterRoleBindings().Get(clusterRole, metav1.GetOptions{})
+func (n *Runner) createClusterRoleBinding(job *Job) error {
+	serviceAccountName := job.ServiceAccount
+	if serviceAccountName == "" {
+		serviceAccountName = defaultServiceAccountName
+	}
+	roleBinding, err := n.Clientset().RbacV1().ClusterRoleBindings().Get(defaultRoleBindingName, metav1.GetOptions{})
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
 			return err
 		}
 		roleBinding = &rbacv1.ClusterRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: clusterRole,
+				Name: defaultRoleBindingName,
 			},
 			Subjects: []rbacv1.Subject{
 				{
 					Kind:      "ServiceAccount",
-					Name:      n.Namespace(),
+					Name:      serviceAccountName,
 					Namespace: n.Namespace(),
 				},
 			},
 			RoleRef: rbacv1.RoleRef{
 				Kind:     "ClusterRole",
-				Name:     clusterRole,
+				Name:     defaultRoleName,
 				APIGroup: "rbac.authorization.k8s.io",
 			},
 		}
-		_, err := n.Clientset().RbacV1().ClusterRoleBindings().Create(roleBinding)
-		if err != nil && k8serrors.IsAlreadyExists(err) {
-			return n.createClusterRoleBinding()
-		}
-		return err
-	}
 
+	}
 	roleBinding.Subjects = append(roleBinding.Subjects, rbacv1.Subject{
 		Kind:      "ServiceAccount",
-		Name:      n.Namespace(),
+		Name:      serviceAccountName,
 		Namespace: n.Namespace(),
 	})
 	_, err = n.Clientset().RbacV1().ClusterRoleBindings().Update(roleBinding)
 	if err != nil && k8serrors.IsConflict(err) {
-		return n.createClusterRoleBinding()
+		return n.createClusterRoleBinding(job)
 	}
 	return err
-}
-
-// createServiceAccount creates a ServiceAccount used by the test manager
-func (n *Runner) createServiceAccount() error {
-	serviceAccount := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      n.Namespace(),
-			Namespace: n.Namespace(),
-		},
-	}
-	_, err := n.Clientset().CoreV1().ServiceAccounts(n.Namespace()).Create(serviceAccount)
-	if err != nil && !k8serrors.IsAlreadyExists(err) {
-		return err
-	}
-	return nil
-}
-
-// teardownNamespace tears down the cluster namespace
-func (n *Runner) teardownNamespace() error {
-	if n.noTeardown {
-		return nil
-	}
-	step := logging.NewStep(n.Namespace(), "Delete namespace %s", n.Namespace())
-	step.Start()
-	err := n.Clientset().CoreV1().Namespaces().Delete(n.Namespace(), &metav1.DeleteOptions{})
-	if err != nil {
-		step.Fail(err)
-		return err
-	}
-	step.Complete()
-	return nil
 }
 
 // startJob starts running a test job
 func (n *Runner) startJob(job *Job) error {
 	step := logging.NewStep(job.ID, "Starting job")
 	step.Start()
+
 	if err := n.createJob(job); err != nil {
 		step.Fail(err)
 		return err
 	}
+
+	if err := n.setupRBAC(job); err != nil {
+		step.Fail(err)
+		return err
+	}
+
 	if err := n.awaitJobRunning(job); err != nil {
 		step.Fail(err)
 		return err
@@ -448,53 +296,9 @@ func (n *Runner) createJob(job *Job) error {
 		},
 	})
 
-	if n.server {
-		servicePorts := []corev1.ServicePort{
-			{
-				Name: "management",
-				Port: 5000,
-			},
-		}
-		svc := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: job.ID,
-				Labels: map[string]string{
-					"job":  job.ID,
-					"type": job.Type,
-				},
-			},
-			Spec: corev1.ServiceSpec{
-				Selector: map[string]string{
-					"job": job.ID,
-				},
-				Ports: servicePorts,
-			},
-		}
-		if _, err := n.Clientset().CoreV1().Services(n.Namespace()).Create(svc); err != nil {
-			return err
-		}
-	}
-
 	json, err := json.Marshal(job.JobConfig)
 	if err != nil {
 		step.Fail(err)
-		return err
-	}
-
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      job.ID,
-			Namespace: n.Namespace(),
-			Annotations: map[string]string{
-				"job":  job.ID,
-				"type": job.Type,
-			},
-		},
-		Data: map[string]string{
-			configFile: string(json),
-		},
-	}
-	if _, err := n.Clientset().CoreV1().ConfigMaps(n.Namespace()).Create(cm); err != nil {
 		return err
 	}
 
@@ -555,6 +359,11 @@ func (n *Runner) createJob(job *Job) error {
 		}
 	}
 
+	serviceAccount := job.ServiceAccount
+	if serviceAccount == "" {
+		serviceAccount = defaultServiceAccountName
+	}
+
 	zero := int32(0)
 	one := int32(1)
 	batchJob := &batchv1.Job{
@@ -577,8 +386,9 @@ func (n *Runner) createJob(job *Job) error {
 						"type": job.Type,
 					},
 				},
+
 				Spec: corev1.PodSpec{
-					ServiceAccountName: n.Namespace(),
+					ServiceAccountName: serviceAccount,
 					RestartPolicy:      corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
@@ -608,6 +418,76 @@ func (n *Runner) createJob(job *Job) error {
 		step.Fail(err)
 		return err
 	}
+
+	jobObj, err := n.Clientset().BatchV1().Jobs(n.Namespace()).Get(job.ID, metav1.GetOptions{})
+	if err != nil {
+		step.Fail(err)
+		return err
+	}
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      job.ID,
+			Namespace: n.Namespace(),
+			Annotations: map[string]string{
+				"job":  job.ID,
+				"type": job.Type,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name:       jobObj.Name,
+					UID:        jobObj.UID,
+					Kind:       "Job",
+					APIVersion: "batch/v1",
+				},
+			},
+		},
+		Data: map[string]string{
+			configFile: string(json),
+		},
+	}
+	if _, err := n.Clientset().CoreV1().ConfigMaps(n.Namespace()).Create(cm); err != nil {
+		step.Fail(err)
+		return err
+	}
+
+	if n.server {
+		servicePorts := []corev1.ServicePort{
+			{
+				Name: "management",
+				Port: 5000,
+			},
+		}
+		svc := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: job.ID,
+				Labels: map[string]string{
+					"job":  job.ID,
+					"type": job.Type,
+				},
+				OwnerReferences: []metav1.OwnerReference{
+					{
+						Name:       jobObj.Name,
+						UID:        jobObj.UID,
+						Kind:       "Job",
+						APIVersion: "batch/v1",
+					},
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"job": job.ID,
+				},
+				Ports: servicePorts,
+			},
+		}
+
+		if _, err := n.Clientset().CoreV1().Services(n.Namespace()).Create(svc); err != nil {
+			step.Fail(err)
+			return err
+		}
+	}
+
 	step.Complete()
 	return nil
 }
@@ -787,6 +667,7 @@ func (n *Runner) runJob(job *Job) error {
 		To(readyFile).
 		On(pod.Name).
 		Do()
+
 	if err != nil {
 		step.Fail(err)
 		return err
@@ -828,4 +709,35 @@ func (n *Runner) getPod(job *Job, predicate func(pod corev1.Pod) bool) (*corev1.
 		}
 	}
 	return nil, nil
+}
+
+// stopJob stops a job
+func (n *Runner) finishJob(job *Job) error {
+	step := logging.NewStep(job.ID, "Finishing job")
+	step.Start()
+	if err := n.deleteJob(job); err != nil {
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+	return nil
+}
+
+// deleteJob deletes a job
+func (n *Runner) deleteJob(job *Job) error {
+	step := logging.NewStep(job.ID, "Deleting job")
+	step.Start()
+	deleteOptions := &metav1.DeleteOptions{}
+	deletePropagation := metav1.DeletePropagationBackground
+
+	deleteOptions.PropagationPolicy = &deletePropagation
+
+	err := n.Clientset().BatchV1().Jobs(n.Namespace()).Delete(job.ID, deleteOptions)
+	if err != nil && !k8serrors.IsNotFound(err) {
+		step.Fail(err)
+		return err
+	}
+
+	step.Complete()
+	return nil
 }

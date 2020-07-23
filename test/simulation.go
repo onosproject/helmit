@@ -15,9 +15,10 @@
 package test
 
 import (
+	"time"
+
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/simulation"
-	"time"
 )
 
 // ChartSimulationSuite :: simulation
@@ -27,10 +28,20 @@ type ChartSimulationSuite struct {
 
 // SetupSimulation :: simulation
 func (s *ChartSimulationSuite) SetupSimulation(sim *simulation.Simulator) error {
-	return helm.Chart("atomix-controller").
+	atomix := helm.Chart("kubernetes-controller").
 		Release("atomix-controller").
-		Set("scope", "Namespace").
-		Install(true)
+		Set("scope", "Namespace")
+
+	err := atomix.Install(true)
+	if err != nil {
+		return err
+	}
+
+	err = atomix.Uninstall()
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // ScheduleSimulator :: simulation

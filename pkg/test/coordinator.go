@@ -17,9 +17,7 @@ package test
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
-	"sync"
 
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/registry"
@@ -30,23 +28,26 @@ import (
 func newCoordinator(config *Config) (*Coordinator, error) {
 	return &Coordinator{
 		config: config,
+		runner: job.NewNamespace(config.Namespace),
 	}, nil
 }
 
 // Coordinator coordinates workers for suites of tests
 type Coordinator struct {
 	config *Config
+	runner *job.Runner
 }
 
 // Run runs the tests
-func (c *Coordinator) Run() error {
+func (c *Coordinator) Run() (int, error) {
+	var returnCode int
 	for iteration := 1; iteration <= c.config.Iterations || c.config.Iterations < 0; iteration++ {
 		suites := c.config.Suites
 		if len(suites) == 0 || suites[0] == "" {
 			suites = registry.GetTestSuites()
 		}
-		workers := make([]*WorkerTask, len(suites))
-		for i, suite := range suites {
+		returnCode = 0
+		for _, suite := range suites {
 			jobID := newJobID(c.config.ID+"-"+strconv.Itoa(iteration), suite)
 			env := c.config.Env
 			if env == nil {
@@ -56,6 +57,8 @@ func (c *Coordinator) Run() error {
 			config := &Config{
 				Config: &job.Config{
 					ID:              jobID,
+					Namespace:       c.config.Config.Namespace,
+					ServiceAccount:  c.config.Config.ServiceAccount,
 					Image:           c.config.Config.Image,
 					ImagePullPolicy: c.config.Config.ImagePullPolicy,
 					Executable:      c.config.Config.Executable,
@@ -70,58 +73,22 @@ func (c *Coordinator) Run() error {
 				Tests:      c.config.Tests,
 				Iterations: c.config.Iterations,
 			}
-			worker := &WorkerTask{
-				runner: job.NewNamespace(config.ID),
+			task := &WorkerTask{
+				runner: c.runner,
 				config: config,
 			}
-			workers[i] = worker
-		}
-		err := runWorkers(workers)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// runWorkers runs the given test workers
-func runWorkers(tasks []*WorkerTask) error {
-	// Start jobs in separate goroutines
-	wg := &sync.WaitGroup{}
-	errChan := make(chan error, len(tasks))
-	codeChan := make(chan int, len(tasks))
-	for _, task := range tasks {
-		wg.Add(1)
-		go func(task *WorkerTask) {
 			status, err := task.Run()
 			if err != nil {
-				errChan <- err
-			} else {
-				codeChan <- status
+				return status, err
+			} else if returnCode == 0 {
+				returnCode = status
 			}
-			wg.Done()
-		}(task)
-	}
-
-	// Wait for all jobs to start before proceeding
-	go func() {
-		wg.Wait()
-		close(errChan)
-		close(codeChan)
-	}()
-
-	// If any job returned an error, return it
-	for err := range errChan {
-		return err
-	}
-
-	// If any job returned a non-zero exit code, exit with it
-	for code := range codeChan {
-		if code != 0 {
-			os.Exit(code)
+		}
+		if returnCode == 0 {
+			return 0, nil
 		}
 	}
-	return nil
+	return returnCode, nil
 }
 
 // newJobID returns a new unique test job ID
@@ -137,10 +104,6 @@ type WorkerTask struct {
 
 // Run runs the worker job
 func (t *WorkerTask) Run() (int, error) {
-	if err := t.runner.CreateNamespace(); err != nil {
-		return 0, err
-	}
-
 	job := &job.Job{
 		Config:    t.config.Config,
 		JobConfig: t.config,
@@ -152,7 +115,7 @@ func (t *WorkerTask) Run() (int, error) {
 		return 0, err
 	}
 
-	address := fmt.Sprintf("%s.%s.svc.cluster.local:5000", job.ID, job.ID)
+	address := fmt.Sprintf("%s:5000", job.ID)
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		return 0, err
@@ -171,6 +134,5 @@ func (t *WorkerTask) Run() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	_ = t.runner.DeleteNamespace()
 	return status, err
 }
