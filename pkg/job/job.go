@@ -42,6 +42,7 @@ type Config struct {
 	Env             map[string]string
 	Timeout         time.Duration
 	NoTeardown      bool
+	Secrets         map[string]string
 }
 
 // Job is a job configuration
