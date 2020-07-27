@@ -35,6 +35,7 @@ import (
 const defaultServiceAccountName = "cluster-test"
 const defaultRoleBindingName = "cluster-test"
 const defaultRoleName = "cluster-admin"
+const helmitSecretsName = "helmit-secrets"
 
 // NewNamespace returns a new job namespace
 func NewNamespace(namespace string) *Runner {
@@ -240,6 +241,10 @@ func (n *Runner) startJob(job *Job) error {
 		return err
 	}
 	if err := n.copyContext(job); err != nil {
+		step.Fail(err)
+		return err
+	}
+	if err := n.createSecrets(job); err != nil {
 		step.Fail(err)
 		return err
 	}
@@ -647,6 +652,41 @@ func (n *Runner) copyContext(job *Job) error {
 		return err
 	}
 	step.Complete()
+	return nil
+}
+
+// createSecrets copies over the CLI secrets into the pod
+func (n *Runner) createSecrets(job *Job) error {
+	jobObj, err := n.Clientset().BatchV1().Jobs(n.Namespace()).Get(job.ID, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	secretData := make(map[string][]byte)
+
+	for k, v := range job.Secrets {
+		secretData[k] = []byte(v)
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: helmitSecretsName,
+			Labels: map[string]string{
+				"job":  job.ID,
+				"type": job.Type,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					Name:       jobObj.Name,
+					UID:        jobObj.UID,
+					Kind:       "Job",
+					APIVersion: "batch/v1",
+				},
+			},
+		},
+		Data: secretData,
+	}
+	n.Clientset().CoreV1().Secrets(n.Namespace()).Create(secret)
+
 	return nil
 }
 

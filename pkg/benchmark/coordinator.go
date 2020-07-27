@@ -74,6 +74,7 @@ func (c *Coordinator) Run() (int, error) {
 				Env:             c.config.Config.Env,
 				Timeout:         c.config.Config.Timeout,
 				NoTeardown:      c.config.Config.NoTeardown,
+				Secrets:         c.config.Config.Secrets,
 			},
 			Suite:       suite,
 			Benchmark:   c.config.Benchmark,
@@ -83,7 +84,7 @@ func (c *Coordinator) Run() (int, error) {
 			Duration:    c.config.Duration,
 			MaxLatency:  c.config.MaxLatency,
 			Args:        c.config.Args,
-			NoTeardown:      c.config.Config.NoTeardown,
+			NoTeardown:  c.config.Config.NoTeardown,
 		}
 		task := &WorkerTask{
 			runner: c.runner,
@@ -167,6 +168,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 			Env:             env,
 			Timeout:         t.config.Config.Timeout,
 			NoTeardown:      t.config.Config.NoTeardown,
+			Secrets:         t.config.Config.Secrets,
 		},
 		JobConfig: &Config{
 			Config: &job.Config{
@@ -182,6 +184,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 				Env:             env,
 				Timeout:         t.config.Config.Timeout,
 				NoTeardown:      t.config.Config.NoTeardown,
+				Secrets:         t.config.Config.Secrets,
 			},
 			Suite:       t.config.Suite,
 			Benchmark:   t.config.Benchmark,
@@ -191,7 +194,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 			Duration:    t.config.Duration,
 			MaxLatency:  t.config.MaxLatency,
 			Args:        t.config.Args,
-			NoTeardown:      t.config.Config.NoTeardown,
+			NoTeardown:  t.config.Config.NoTeardown,
 		},
 		Type: benchmarkJobType,
 	}

@@ -65,6 +65,7 @@ func Run(config *Config) error {
 				Env:             config.Env,
 				Timeout:         config.Timeout,
 				NoTeardown:      config.NoTeardown,
+				Secrets:         config.Config.Secrets,
 			},
 			Suite:       config.Suite,
 			Benchmark:   config.Benchmark,
