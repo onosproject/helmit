@@ -656,7 +656,7 @@ func (n *Runner) copyContext(job *Job) error {
 }
 
 // createSecrets copies over the CLI secrets into the pod
-func (n *Runner) createSecrets (job *Job) error {
+func (n *Runner) createSecrets(job *Job) error {
 	jobObj, err := n.Clientset().BatchV1().Jobs(n.Namespace()).Get(job.ID, metav1.GetOptions{})
 	if err != nil {
 		return err

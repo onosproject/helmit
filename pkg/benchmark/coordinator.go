@@ -194,7 +194,7 @@ func (t *WorkerTask) createWorker(worker int) error {
 			Duration:    t.config.Duration,
 			MaxLatency:  t.config.MaxLatency,
 			Args:        t.config.Args,
-			NoTeardown:      t.config.Config.NoTeardown,
+			NoTeardown:  t.config.Config.NoTeardown,
 		},
 		Type: benchmarkJobType,
 	}
