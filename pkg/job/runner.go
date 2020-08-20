@@ -21,6 +21,10 @@ import (
 	"path"
 	"time"
 
+	"google.golang.org/grpc/codes"
+
+	"google.golang.org/grpc/status"
+
 	"github.com/onosproject/helmit/pkg/kubernetes"
 	"github.com/onosproject/helmit/pkg/util/files"
 	"github.com/onosproject/helmit/pkg/util/logging"
@@ -773,7 +777,8 @@ func (n *Runner) deleteJob(job *Job) error {
 	deleteOptions.PropagationPolicy = &deletePropagation
 
 	err := n.Clientset().BatchV1().Jobs(n.Namespace()).Delete(job.ID, deleteOptions)
-	if err != nil && !k8serrors.IsNotFound(err) {
+	stat, ok := status.FromError(err)
+	if err != nil && !k8serrors.IsNotFound(err) && ok && stat.Code() != codes.Unavailable {
 		step.Fail(err)
 		return err
 	}
