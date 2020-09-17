@@ -3,7 +3,7 @@ sudo: false
 language: go
 
 go:
-  - '1.13.x'
+  - '1.14.x'
 
 services:
   - docker
@@ -24,7 +24,7 @@ before_script:
   - pushd .. && git clone https://github.com/onosproject/build-tools.git && popd
 
 before_install:
-  - 'if [[ $TRAVIS_PULL_REQUEST == "false" && $TRAVIS_BRANCH == "master" ]] ; then
+  - 'if [[ $TRAVIS_PULL_REQUEST == "false" && $TRAVIS_BRANCH == "master" && $TRAVIS_SECURE_ENV_VARS == "true" ]] ; then
        openssl aes-256-cbc -K $encrypted_f217180e22ee_key -iv $encrypted_f217180e22ee_iv -in .ssh/id_rsa.enc -out ~/.ssh/id_rsa -d &&
        chmod 600 ~/.ssh/id_rsa;
      fi'
@@ -32,12 +32,12 @@ before_install:
 jobs:
   include:
     - stage: tests
-      script: make coverage
-
-    - stage: push images
-      if: type != pull_request
+      if: type == pull_request ||  fork == false
       script:
-          - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then
-                 bash ./build/bin/push-images &&
-                 bash -x ../build-tools/release-merge-commit;
-             fi'
+        - make coverage
+
+    - stage: release
+      if: type != pull_request && fork == false
+      script:
+        - bash ./build/bin/push-images
+        - bash ../build-tools/release-merge-commit
