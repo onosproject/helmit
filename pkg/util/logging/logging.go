@@ -64,14 +64,14 @@ type Step struct {
 // Log logs a progress message
 func (s *Step) Log(message string) {
 	if s.verbose {
-		fmt.Fprintln(writer, fmt.Sprintf("  %s %s %s", time.Now().Format(time.RFC3339), s.test, message))
+		fmt.Fprintf(writer, "  %s %s %s\n", time.Now().Format(time.RFC3339), s.test, message)
 	}
 }
 
 // Logf logs a progress message
 func (s *Step) Logf(message string, args ...interface{}) {
 	if s.verbose {
-		fmt.Fprintln(writer, fmt.Sprintf("  %s %s %s", time.Now().Format(time.RFC3339), s.test, fmt.Sprintf(message, args...)))
+		fmt.Fprintf(writer, "  %s %s %s\n", time.Now().Format(time.RFC3339), s.test, fmt.Sprintf(message, args...))
 	}
 }
 

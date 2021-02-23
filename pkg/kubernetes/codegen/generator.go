@@ -97,7 +97,7 @@ func getTemplate(name string) *template.Template {
 }
 
 func generateTemplate(t *template.Template, outputFile string, options interface{}) error {
-	fmt.Println(fmt.Sprintf("Generating file %s from template %s", outputFile, t.Name()))
+	fmt.Printf("Generating file %s from template %s\n", outputFile, t.Name())
 	rc, wc, _ := pipe.Commands(
 		exec.Command("gofmt"),
 	)

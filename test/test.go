@@ -15,7 +15,6 @@
 package test
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -48,7 +47,7 @@ func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
 
 	topo := helm.Chart("onos-topo").
 		Release("onos-topo").
-		Set("store.controller", fmt.Sprintf("atomix-controller-kubernetes-controller:5679"))
+		Set("store.controller", "atomix-controller-kubernetes-controller:5679")
 	err = topo.Install(true)
 	assert.NoError(t, err)
 
