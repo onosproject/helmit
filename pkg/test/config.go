@@ -38,7 +38,7 @@ type Config struct {
 	Tests       []string `json:"tests,omitempty"`
 	Iterations  int      `json:"iterations,omitempty"`
 	Verbose     bool     `json:"verbose,omitempty"`
-	NoTeardown  bool     `json:"verbose,omitempty"`
+	NoTeardown  bool     `json:"noteardown,omitempty"`
 }
 
 // getTestContext returns the current test context

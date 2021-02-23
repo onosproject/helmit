@@ -352,10 +352,10 @@ func (t *WorkerTask) runBenchmarks() error {
 	writer.Init(os.Stdout, 0, 0, 3, ' ', tabwriter.FilterHTML)
 	fmt.Fprintln(writer, "BENCHMARK\tREQUESTS\tDURATION\tTHROUGHPUT\tMEAN LATENCY\tMEDIAN LATENCY\t75% LATENCY\t95% LATENCY\t99% LATENCY")
 	for _, result := range results {
-		fmt.Fprintln(writer, fmt.Sprintf("%s\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s",
+		fmt.Fprintf(writer, "%s\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
 			result.benchmark, result.requests, result.duration, result.throughput, result.meanLatency,
 			result.latencyPercentiles[.5], result.latencyPercentiles[.75],
-			result.latencyPercentiles[.95], result.latencyPercentiles[.99]))
+			result.latencyPercentiles[.95], result.latencyPercentiles[.99])
 	}
 
 	writer.Flush()

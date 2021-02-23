@@ -28,7 +28,7 @@ type ChartBenchmarkSuite struct {
 	value input.Source
 }
 
-// SetupBenchmark :: benchmark
+// SetupSuite :: benchmark
 func (s *ChartBenchmarkSuite) SetupSuite(b *benchmark.Context) error {
 	atomix := helm.Chart("kubernetes-controller").
 		Release("atomix-controller").
