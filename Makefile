@@ -32,7 +32,7 @@ coverage: build deps license_check
 	#./build/bin/coveralls-coverage
 
 linters: golang-ci # @HELP examines Go source code and reports coding problems
-	golangci-lint run
+	golangci-lint run --timeout 5m
 
 build-tools: # @HELP install the ONOS build tools if needed
 	@if [ ! -d "../build-tools" ]; then cd .. && git clone https://github.com/onosproject/build-tools.git; fi
