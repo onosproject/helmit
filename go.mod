@@ -10,6 +10,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/iancoleman/strcase v0.0.0-20191112232945-16388991a334
 	github.com/joncalhoun/pipe v0.0.0-20170510025636-72505674a733
+	github.com/onosproject/onos-lib-go v0.6.1
 	github.com/spf13/cobra v0.0.6
 	github.com/stretchr/testify v1.5.1
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect

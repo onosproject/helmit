@@ -1,0 +1,67 @@
+/*
+Copyright 2020-present Open Networking Foundation.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+
+package onos.test.helm;
+
+
+// Helm helm gRPC service
+service Helm {
+    // Install installs a helm chart
+    rpc Install(HelmReleaseRequest) returns (HelmReleaseResponse);
+    // Uninstall uninstall a helm chart
+    rpc Uninstall(HelmUninstallRequest) returns (HelmUninstallResponse);
+}
+
+// HelmUninstallRequest an uninstall helm chart request
+message HelmUninstallRequest {
+    string name = 1;
+}
+
+// HelmUninstallResponse an uninstall helm chart response
+message HelmUninstallResponse {
+    Status status = 1;
+}
+
+// HelmChart helm chart information
+message HelmChart {
+    string name = 1;
+    string repository = 2;
+}
+
+
+// HelmReleaseRequest a request for installing a helm chart
+message HelmReleaseRequest {
+    string name = 1;
+    string namespace = 2;
+    bool skipCRDs  = 3;
+    HelmChart chart = 4;
+    bool wait = 5;
+    map<string, string> values = 6;
+
+}
+
+
+// HelmReleaseResponse a response to a HelmReleaseRequest
+message HelmReleaseResponse {
+    Status status = 1;
+}
+
+enum Status {
+    SUCCEED = 0;
+    FAILED = 1;
+}
