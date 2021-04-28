@@ -3,7 +3,7 @@ module github.com/onosproject/helmit
 go 1.14
 
 require (
-	github.com/atomix/atomix-go-client v0.0.0-20200114212658-58c359bc47b1 // indirect
+	cloud.google.com/go v0.43.0 // indirect
 	github.com/atomix/go-client v0.4.1
 	github.com/dustinkirkland/golang-petname v0.0.0-20191129215211-8e5a1ed0cff0
 	github.com/fatih/color v1.7.0
@@ -15,7 +15,6 @@ require (
 	github.com/spf13/cobra v0.0.6
 	github.com/stretchr/testify v1.5.1
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
-	golang.org/x/tools v0.0.0-20191029190741-b9c20aec41a5
 	google.golang.org/grpc v1.31.1
 	gopkg.in/yaml.v2 v2.2.8
 	helm.sh/helm/v3 v3.1.1
