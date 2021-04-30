@@ -18,8 +18,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/input"
 	"github.com/onosproject/helmit/pkg/registry"
-	"github.com/onosproject/helmit/pkg/util"
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
 	"net"
@@ -84,7 +84,7 @@ func (w *Worker) SetupSuite(ctx context.Context, request *SuiteRequest) (*SuiteR
 	}
 
 	if setupSuite, ok := suite.(SetupSuite); ok {
-		if err := setupSuite.SetupSuite(util.NewContext(request.Suite, request.Args)); err != nil {
+		if err := setupSuite.SetupSuite(input.NewContext(request.Suite, request.Args)); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -106,7 +106,7 @@ func (w *Worker) TearDownSuite(ctx context.Context, request *SuiteRequest) (*Sui
 	}
 
 	if tearDownSuite, ok := suite.(TearDownSuite); ok {
-		if err := tearDownSuite.TearDownSuite(util.NewContext(request.Suite, request.Args)); err != nil {
+		if err := tearDownSuite.TearDownSuite(input.NewContext(request.Suite, request.Args)); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -128,7 +128,7 @@ func (w *Worker) SetupWorker(ctx context.Context, request *SuiteRequest) (*Suite
 	}
 
 	if setupWorker, ok := suite.(SetupWorker); ok {
-		if err := setupWorker.SetupWorker(util.NewContext(request.Suite, request.Args)); err != nil {
+		if err := setupWorker.SetupWorker(input.NewContext(request.Suite, request.Args)); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -150,7 +150,7 @@ func (w *Worker) TearDownWorker(ctx context.Context, request *SuiteRequest) (*Su
 	}
 
 	if tearDownWorker, ok := suite.(TearDownWorker); ok {
-		if err := tearDownWorker.TearDownWorker(util.NewContext(request.Suite, request.Args)); err != nil {
+		if err := tearDownWorker.TearDownWorker(input.NewContext(request.Suite, request.Args)); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -171,7 +171,7 @@ func (w *Worker) SetupBenchmark(ctx context.Context, request *BenchmarkRequest) 
 		return nil, err
 	}
 
-	context := util.NewContext(request.Benchmark, request.Args)
+	context := input.NewContext(request.Benchmark, request.Args)
 	if setupBenchmark, ok := suite.(SetupBenchmark); ok {
 		if err := setupBenchmark.SetupBenchmark(context); err != nil {
 			step.Fail(err)
@@ -199,7 +199,7 @@ func (w *Worker) TearDownBenchmark(ctx context.Context, request *BenchmarkReques
 		return nil, err
 	}
 
-	context := util.NewContext(request.Benchmark, request.Args)
+	context := input.NewContext(request.Benchmark, request.Args)
 	if tearDownBenchmark, ok := suite.(TearDownBenchmark); ok {
 		if err := tearDownBenchmark.TearDownBenchmark(context); err != nil {
 			step.Fail(err)
@@ -227,7 +227,7 @@ func (w *Worker) RunBenchmark(ctx context.Context, request *RunRequest) (*RunRes
 		return nil, err
 	}
 
-	context := util.NewContext(request.Benchmark, request.Args)
+	context := input.NewContext(request.Benchmark, request.Args)
 	benchmark := newBenchmark(int(request.Requests), request.Duration, int(request.Parallelism), request.MaxLatency, context)
 	result, err := benchmark.run(suite)
 	if err != nil {

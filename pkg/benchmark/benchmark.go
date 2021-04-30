@@ -16,7 +16,7 @@ package benchmark
 
 import (
 	"fmt"
-	"github.com/onosproject/helmit/pkg/util"
+	"github.com/onosproject/helmit/pkg/input"
 	"math"
 	"reflect"
 	"sort"
@@ -35,36 +35,36 @@ type Suite struct{}
 
 // SetupSuite is an interface for setting up a suite of benchmarks
 type SetupSuite interface {
-	SetupSuite(c *util.Context) error
+	SetupSuite(c *input.Context) error
 }
 
 // TearDownSuite is an interface for tearing down a suite of benchmarks
 type TearDownSuite interface {
-	TearDownSuite(c *util.Context) error
+	TearDownSuite(c *input.Context) error
 }
 
 // SetupWorker is an interface for setting up individual benchmarks
 type SetupWorker interface {
-	SetupWorker(c *util.Context) error
+	SetupWorker(c *input.Context) error
 }
 
 // TearDownWorker is an interface for tearing down individual benchmarks
 type TearDownWorker interface {
-	TearDownWorker(c *util.Context) error
+	TearDownWorker(c *input.Context) error
 }
 
 // SetupBenchmark is an interface for executing code before every benchmark
 type SetupBenchmark interface {
-	SetupBenchmark(c *util.Context) error
+	SetupBenchmark(c *input.Context) error
 }
 
 // TearDownBenchmark is an interface for executing code after every benchmark
 type TearDownBenchmark interface {
-	TearDownBenchmark(c *util.Context) error
+	TearDownBenchmark(c *input.Context) error
 }
 
 // newBenchmark creates a new benchmark
-func newBenchmark(requests int, duration *time.Duration, parallelism int, maxLatency *time.Duration, context *util.Context) *Benchmark {
+func newBenchmark(requests int, duration *time.Duration, parallelism int, maxLatency *time.Duration, context *input.Context) *Benchmark {
 	return &Benchmark{
 		Context:     context,
 		requests:    requests,
@@ -76,7 +76,7 @@ func newBenchmark(requests int, duration *time.Duration, parallelism int, maxLat
 
 // Benchmark is a benchmark runner
 type Benchmark struct {
-	*util.Context
+	*input.Context
 
 	requests    int
 	duration    *time.Duration

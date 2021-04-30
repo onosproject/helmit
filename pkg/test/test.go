@@ -16,7 +16,7 @@ package test
 
 import (
 	"fmt"
-	"github.com/onosproject/helmit/pkg/util"
+	"github.com/onosproject/helmit/pkg/input"
 	"os"
 	"reflect"
 	"regexp"
@@ -32,7 +32,7 @@ type Suite struct{}
 
 // SetupTestSuite is an interface for setting up a suite of tests
 type SetupTestSuite interface {
-	SetupTestSuite(c *util.Context) error
+	SetupTestSuite(c *input.Context) error
 }
 
 // SetupTest is an interface for setting up individual tests
@@ -88,7 +88,7 @@ func RunTests(t *testing.T, suite TestingSuite, request *TestRequest) {
 		}
 		if !suiteSetupDone {
 			if setupTestSuite, ok := suite.(SetupTestSuite); ok {
-				if err := setupTestSuite.SetupTestSuite(util.NewContext("", request.Args)); err != nil {
+				if err := setupTestSuite.SetupTestSuite(input.NewContext("", request.Args)); err != nil {
 					panic(err)
 				}
 			}

@@ -12,25 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package util
+package input
 
 import (
 	"strconv"
 )
-
-// NewContext returns a new test context
-func NewContext(name string, args map[string]string) *Context {
-	return &Context{
-		Name: name,
-		args: args,
-	}
-}
-
-// Context provides the test context
-type Context struct {
-	Name string
-	args map[string]string
-}
 
 // GetArg gets an argument
 func (c *Context) GetArg(name string) *Arg {
