@@ -16,10 +16,10 @@ package benchmark
 
 import (
 	"fmt"
+	"github.com/onosproject/helmit/pkg/util"
 	"math"
 	"reflect"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -35,85 +35,36 @@ type Suite struct{}
 
 // SetupSuite is an interface for setting up a suite of benchmarks
 type SetupSuite interface {
-	SetupSuite(c *Context) error
+	SetupSuite(c *util.Context) error
 }
 
 // TearDownSuite is an interface for tearing down a suite of benchmarks
 type TearDownSuite interface {
-	TearDownSuite(c *Context) error
+	TearDownSuite(c *util.Context) error
 }
 
 // SetupWorker is an interface for setting up individual benchmarks
 type SetupWorker interface {
-	SetupWorker(c *Context) error
+	SetupWorker(c *util.Context) error
 }
 
 // TearDownWorker is an interface for tearing down individual benchmarks
 type TearDownWorker interface {
-	TearDownWorker(c *Context) error
+	TearDownWorker(c *util.Context) error
 }
 
 // SetupBenchmark is an interface for executing code before every benchmark
 type SetupBenchmark interface {
-	SetupBenchmark(c *Context) error
+	SetupBenchmark(c *util.Context) error
 }
 
 // TearDownBenchmark is an interface for executing code after every benchmark
 type TearDownBenchmark interface {
-	TearDownBenchmark(c *Context) error
-}
-
-// newContext returns a new benchmark context
-func newContext(name string, args map[string]string) *Context {
-	return &Context{
-		Name: name,
-		args: args,
-	}
-}
-
-// Context provides the benchmark context
-type Context struct {
-	Name string
-	args map[string]string
-}
-
-// GetArg gets a benchmark argument
-func (c *Context) GetArg(name string) *Arg {
-	if value, ok := c.args[name]; ok {
-		return &Arg{
-			value: value,
-		}
-	}
-	return &Arg{}
-}
-
-// Arg is a benchmark argument
-type Arg struct {
-	value string
-}
-
-// Int returns the argument as an int
-func (a *Arg) Int(def int) int {
-	if a.value == "" {
-		return def
-	}
-	i, err := strconv.Atoi(a.value)
-	if err != nil {
-		panic(err)
-	}
-	return i
-}
-
-// String returns the argument as a string
-func (a *Arg) String(def string) string {
-	if a.value == "" {
-		return def
-	}
-	return a.value
+	TearDownBenchmark(c *util.Context) error
 }
 
 // newBenchmark creates a new benchmark
-func newBenchmark(requests int, duration *time.Duration, parallelism int, maxLatency *time.Duration, context *Context) *Benchmark {
+func newBenchmark(requests int, duration *time.Duration, parallelism int, maxLatency *time.Duration, context *util.Context) *Benchmark {
 	return &Benchmark{
 		Context:     context,
 		requests:    requests,
@@ -125,7 +76,7 @@ func newBenchmark(requests int, duration *time.Duration, parallelism int, maxLat
 
 // Benchmark is a benchmark runner
 type Benchmark struct {
-	*Context
+	*util.Context
 
 	requests    int
 	duration    *time.Duration

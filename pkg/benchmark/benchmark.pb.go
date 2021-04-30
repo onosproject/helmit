@@ -1926,7 +1926,7 @@ func (m *RunRequest) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Iterations", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Requests", wireType)
 			}
 			m.Requests = 0
 			for shift := uint(0); ; shift += 7 {
@@ -2280,7 +2280,7 @@ func (m *RunResponse) Unmarshal(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Iterations", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Requests", wireType)
 			}
 			m.Requests = 0
 			for shift := uint(0); ; shift += 7 {

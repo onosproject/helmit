@@ -22,6 +22,7 @@ import (
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/input"
 	"github.com/onosproject/helmit/pkg/kubernetes"
+	"github.com/onosproject/helmit/pkg/util"
 	"time"
 )
 
@@ -35,7 +36,7 @@ type AtomixBenchmarkSuite struct {
 }
 
 // SetupBenchmarkSuite sets up the Atomix cluster
-func (s *AtomixBenchmarkSuite) SetupSuite(c *benchmark.Context) error {
+func (s *AtomixBenchmarkSuite) SetupSuite(c *util.Context) error {
 	err := helm.Chart("atomix-controller").
 		Release("atomix-controller").
 		Set("scope", "Namespace").
@@ -58,7 +59,7 @@ func (s *AtomixBenchmarkSuite) SetupSuite(c *benchmark.Context) error {
 }
 
 // SetupBenchmarkWorker creates an instance of the map on each worker node
-func (s *AtomixBenchmarkSuite) SetupWorker(c *benchmark.Context) error {
+func (s *AtomixBenchmarkSuite) SetupWorker(c *util.Context) error {
 	address, err := getControllerAddress()
 	if err != nil {
 		return err

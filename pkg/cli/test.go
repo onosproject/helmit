@@ -87,6 +87,7 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().Bool("until-failure", false, "run until an error is detected")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following tests")
 	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
+	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named test arguments")
 	return cmd
 }
 
@@ -111,6 +112,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	untilFailure, _ := cmd.Flags().GetBool("until-failure")
 	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
 	secretsArray, _ := cmd.Flags().GetStringSlice("secret")
+	testArgs, _ := cmd.Flags().GetStringToString("args")
 
 	// Either a command package or image must be specified
 	if pkgPath == "" && image == "" {
@@ -183,6 +185,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		Iterations: iterations,
 		Verbose:    logging.GetVerbose(),
 		NoTeardown: noTeardown,
+		Args:       testArgs,
 	}
 	return test.Run(config)
 }

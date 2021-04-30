@@ -74,7 +74,7 @@ func (w *Worker) runTests(request *TestRequest) {
 		{
 			Name: request.Suite,
 			F: func(t *testing.T) {
-				RunTests(t, test, request.Tests)
+				RunTests(t, test, request)
 			},
 		},
 	}

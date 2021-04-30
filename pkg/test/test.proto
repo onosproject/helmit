@@ -27,6 +27,9 @@ message TestRequest {
 
     // tests are the tests to run
     repeated string tests = 2;
+
+    // args is the test arguments
+    map<string, string> args = 3;
 }
 
 // TestResponse is a test response

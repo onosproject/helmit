@@ -15,6 +15,7 @@
 package test
 
 import (
+	"github.com/onosproject/helmit/pkg/util"
 	"time"
 
 	"github.com/onosproject/helmit/pkg/benchmark"
@@ -29,7 +30,7 @@ type ChartBenchmarkSuite struct {
 }
 
 // SetupSuite :: benchmark
-func (s *ChartBenchmarkSuite) SetupSuite(b *benchmark.Context) error {
+func (s *ChartBenchmarkSuite) SetupSuite(b *util.Context) error {
 	atomix := helm.Chart("kubernetes-controller").
 		Release("atomix-controller").
 		Set("scope", "Namespace")
@@ -48,7 +49,7 @@ func (s *ChartBenchmarkSuite) SetupSuite(b *benchmark.Context) error {
 }
 
 // SetupWorker :: benchmark
-func (s *ChartBenchmarkSuite) SetupWorker(b *benchmark.Context) error {
+func (s *ChartBenchmarkSuite) SetupWorker(b *util.Context) error {
 	s.value = input.RandomString(8)
 	return nil
 }
