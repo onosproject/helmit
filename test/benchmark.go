@@ -29,7 +29,7 @@ type ChartBenchmarkSuite struct {
 }
 
 // SetupSuite :: benchmark
-func (s *ChartBenchmarkSuite) SetupSuite(b *benchmark.Context) error {
+func (s *ChartBenchmarkSuite) SetupSuite(b *input.Context) error {
 	atomix := helm.Chart("kubernetes-controller").
 		Release("atomix-controller").
 		Set("scope", "Namespace")
@@ -48,7 +48,7 @@ func (s *ChartBenchmarkSuite) SetupSuite(b *benchmark.Context) error {
 }
 
 // SetupWorker :: benchmark
-func (s *ChartBenchmarkSuite) SetupWorker(b *benchmark.Context) error {
+func (s *ChartBenchmarkSuite) SetupWorker(b *input.Context) error {
 	s.value = input.RandomString(8)
 	return nil
 }

@@ -34,11 +34,12 @@ const (
 // Config is a test configuration
 type Config struct {
 	*job.Config `json:",inline"`
-	Suites      []string `json:"suites,omitempty"`
-	Tests       []string `json:"tests,omitempty"`
-	Iterations  int      `json:"iterations,omitempty"`
-	Verbose     bool     `json:"verbose,omitempty"`
-	NoTeardown  bool     `json:"noteardown,omitempty"`
+	Suites      []string          `json:"suites,omitempty"`
+	Tests       []string          `json:"tests,omitempty"`
+	Iterations  int               `json:"iterations,omitempty"`
+	Verbose     bool              `json:"verbose,omitempty"`
+	NoTeardown  bool              `json:"noteardown,omitempty"`
+	Args        map[string]string `json:"args,omitempty"`
 }
 
 // getTestContext returns the current test context

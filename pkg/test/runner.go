@@ -60,7 +60,7 @@ func Run(config *Config) error {
 				Context:         configContext,
 				Values:          config.Values,
 				ValueFiles:      configValueFiles,
-				Args:            config.Args,
+				Args:            config.Config.Args,
 				Env:             config.Env,
 				Timeout:         config.Timeout,
 				NoTeardown:      config.NoTeardown,
@@ -70,6 +70,7 @@ func Run(config *Config) error {
 			Tests:      config.Tests,
 			Iterations: config.Iterations,
 			Verbose:    config.Verbose,
+			Args:       config.Args,
 		},
 		Type: testJobType,
 	}

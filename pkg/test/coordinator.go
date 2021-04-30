@@ -69,10 +69,12 @@ func (c *Coordinator) Run() (int, error) {
 					Timeout:         c.config.Config.Timeout,
 					NoTeardown:      c.config.Config.NoTeardown,
 					Secrets:         c.config.Config.Secrets,
+					Args:            c.config.Config.Args,
 				},
 				Suites:     []string{suite},
 				Tests:      c.config.Tests,
 				Iterations: c.config.Iterations,
+				Args:       c.config.Args,
 			}
 			task := &WorkerTask{
 				runner: c.runner,
@@ -127,6 +129,7 @@ func (t *WorkerTask) Run() (int, error) {
 	_, err = client.RunTests(context.Background(), &TestRequest{
 		Suite: t.config.Suites[0],
 		Tests: t.config.Tests,
+		Args:  t.config.Args,
 	})
 
 	if err != nil {

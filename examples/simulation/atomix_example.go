@@ -18,7 +18,6 @@ import (
 	"context"
 	atomix "github.com/atomix/go-client/pkg/client"
 	"github.com/atomix/go-client/pkg/client/map"
-	"github.com/onosproject/helmit/pkg/benchmark"
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/input"
 	"github.com/onosproject/helmit/pkg/kubernetes"
@@ -67,7 +66,7 @@ func (s *AtomixSimulationSuite) SetupSimulation(c *simulation.Simulator) error {
 }
 
 // SetupSimulator creates an instance of the map on each simulator pod
-func (s *AtomixSimulationSuite) SetupSimulator(c *benchmark.Context) error {
+func (s *AtomixSimulationSuite) SetupSimulator(c *input.Context) error {
 	address, err := getControllerAddress()
 	if err != nil {
 		return err

@@ -16,6 +16,7 @@ package test
 
 import (
 	"fmt"
+	"github.com/onosproject/helmit/pkg/input"
 	"os"
 	"reflect"
 	"regexp"
@@ -31,7 +32,7 @@ type Suite struct{}
 
 // SetupTestSuite is an interface for setting up a suite of tests
 type SetupTestSuite interface {
-	SetupTestSuite() error
+	SetupTestSuite(c *input.Context) error
 }
 
 // SetupTest is an interface for setting up individual tests
@@ -68,7 +69,7 @@ func failTestOnPanic(t *testing.T) {
 }
 
 // RunTests runs a test suite
-func RunTests(t *testing.T, suite TestingSuite, cases []string) {
+func RunTests(t *testing.T, suite TestingSuite, request *TestRequest) {
 	defer failTestOnPanic(t)
 
 	suiteSetupDone := false
@@ -77,7 +78,7 @@ func RunTests(t *testing.T, suite TestingSuite, cases []string) {
 	tests := []testing.InternalTest{}
 	for index := 0; index < methodFinder.NumMethod(); index++ {
 		method := methodFinder.Method(index)
-		ok, err := testFilter(method.Name, cases)
+		ok, err := testFilter(method.Name, request.Tests)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "invalid regexp for -m: %s\n", err)
 			os.Exit(1)
@@ -87,7 +88,7 @@ func RunTests(t *testing.T, suite TestingSuite, cases []string) {
 		}
 		if !suiteSetupDone {
 			if setupTestSuite, ok := suite.(SetupTestSuite); ok {
-				if err := setupTestSuite.SetupTestSuite(); err != nil {
+				if err := setupTestSuite.SetupTestSuite(input.NewContext("", request.Args)); err != nil {
 					panic(err)
 				}
 			}

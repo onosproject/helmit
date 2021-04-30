@@ -35,7 +35,7 @@ type AtomixBenchmarkSuite struct {
 }
 
 // SetupBenchmarkSuite sets up the Atomix cluster
-func (s *AtomixBenchmarkSuite) SetupSuite(c *benchmark.Context) error {
+func (s *AtomixBenchmarkSuite) SetupSuite(c *input.Context) error {
 	err := helm.Chart("atomix-controller").
 		Release("atomix-controller").
 		Set("scope", "Namespace").
@@ -58,7 +58,7 @@ func (s *AtomixBenchmarkSuite) SetupSuite(c *benchmark.Context) error {
 }
 
 // SetupBenchmarkWorker creates an instance of the map on each worker node
-func (s *AtomixBenchmarkSuite) SetupWorker(c *benchmark.Context) error {
+func (s *AtomixBenchmarkSuite) SetupWorker(c *input.Context) error {
 	address, err := getControllerAddress()
 	if err != nil {
 		return err
