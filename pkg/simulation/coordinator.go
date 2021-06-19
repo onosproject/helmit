@@ -17,6 +17,7 @@ package simulation
 import (
 	"context"
 	"fmt"
+	"github.com/onosproject/onos-lib-go/pkg/southbound"
 	"sync"
 	"time"
 
@@ -198,7 +199,10 @@ func (t *WorkerTask) getSimulators() ([]SimulatorServiceClient, error) {
 
 	workers := make([]SimulatorServiceClient, t.config.Simulators)
 	for i := 0; i < t.config.Simulators; i++ {
-		worker, err := grpc.Dial(t.getWorkerAddress(i, t.config.ID), grpc.WithInsecure())
+		worker, err := grpc.Dial(
+			t.getWorkerAddress(i, t.config.ID),
+			grpc.WithInsecure(),
+			grpc.WithUnaryInterceptor(southbound.RetryingUnaryClientInterceptor()))
 		if err != nil {
 			return nil, err
 		}
