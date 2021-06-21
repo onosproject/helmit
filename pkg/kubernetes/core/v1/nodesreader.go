@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type NodesReader interface {
-	Get(name string) (*Node, error)
-	List() ([]*Node, error)
+	Get(ctx context.Context, name string) (*Node, error)
+	List(ctx context.Context) ([]*Node, error)
 }
 
 func NewNodesReader(client resource.Client, filter resource.Filter) NodesReader {
@@ -29,7 +30,7 @@ type nodesReader struct {
 	filter resource.Filter
 }
 
-func (c *nodesReader) Get(name string) (*Node, error) {
+func (c *nodesReader) Get(ctx context.Context, name string) (*Node, error) {
 	node := &corev1.Node{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *nodesReader) Get(name string) (*Node, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(node)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *nodesReader) Get(name string) (*Node, error) {
 	return NewNode(node, c.Client), nil
 }
 
-func (c *nodesReader) List() ([]*Node, error) {
+func (c *nodesReader) List(ctx context.Context) ([]*Node, error) {
 	list := &corev1.NodeList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *nodesReader) List() ([]*Node, error) {
 		Resource(NodeResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

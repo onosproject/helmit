@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type DeploymentsReader interface {
-	Get(name string) (*Deployment, error)
-	List() ([]*Deployment, error)
+	Get(ctx context.Context, name string) (*Deployment, error)
+	List(ctx context.Context) ([]*Deployment, error)
 }
 
 func NewDeploymentsReader(client resource.Client, filter resource.Filter) DeploymentsReader {
@@ -29,7 +30,7 @@ type deploymentsReader struct {
 	filter resource.Filter
 }
 
-func (c *deploymentsReader) Get(name string) (*Deployment, error) {
+func (c *deploymentsReader) Get(ctx context.Context, name string) (*Deployment, error) {
 	deployment := &appsv1.Deployment{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *deploymentsReader) Get(name string) (*Deployment, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(deployment)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *deploymentsReader) Get(name string) (*Deployment, error) {
 	return NewDeployment(deployment, c.Client), nil
 }
 
-func (c *deploymentsReader) List() ([]*Deployment, error) {
+func (c *deploymentsReader) List(ctx context.Context) ([]*Deployment, error) {
 	list := &appsv1.DeploymentList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *deploymentsReader) List() ([]*Deployment, error) {
 		Resource(DeploymentResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type JobsReader interface {
-	Get(name string) (*Job, error)
-	List() ([]*Job, error)
+	Get(ctx context.Context, name string) (*Job, error)
+	List(ctx context.Context) ([]*Job, error)
 }
 
 func NewJobsReader(client resource.Client, filter resource.Filter) JobsReader {
@@ -29,7 +30,7 @@ type jobsReader struct {
 	filter resource.Filter
 }
 
-func (c *jobsReader) Get(name string) (*Job, error) {
+func (c *jobsReader) Get(ctx context.Context, name string) (*Job, error) {
 	job := &batchv1.Job{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *jobsReader) Get(name string) (*Job, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(job)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *jobsReader) Get(name string) (*Job, error) {
 	return NewJob(job, c.Client), nil
 }
 
-func (c *jobsReader) List() ([]*Job, error) {
+func (c *jobsReader) List(ctx context.Context) ([]*Job, error) {
 	list := &batchv1.JobList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *jobsReader) List() ([]*Job, error) {
 		Resource(JobResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

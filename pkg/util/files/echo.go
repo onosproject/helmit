@@ -15,6 +15,7 @@
 package files
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -76,7 +77,7 @@ func (o *EchoOptions) Do() error {
 		return errors.New("target file cannot be empty")
 	}
 
-	pod, err := o.client.Clientset().CoreV1().Pods(o.client.Namespace()).Get(o.pod, metav1.GetOptions{})
+	pod, err := o.client.Clientset().CoreV1().Pods(o.client.Namespace()).Get(context.Background(), o.pod, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}

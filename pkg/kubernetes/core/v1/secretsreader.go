@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type SecretsReader interface {
-	Get(name string) (*Secret, error)
-	List() ([]*Secret, error)
+	Get(ctx context.Context, name string) (*Secret, error)
+	List(ctx context.Context) ([]*Secret, error)
 }
 
 func NewSecretsReader(client resource.Client, filter resource.Filter) SecretsReader {
@@ -29,7 +30,7 @@ type secretsReader struct {
 	filter resource.Filter
 }
 
-func (c *secretsReader) Get(name string) (*Secret, error) {
+func (c *secretsReader) Get(ctx context.Context, name string) (*Secret, error) {
 	secret := &corev1.Secret{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *secretsReader) Get(name string) (*Secret, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(secret)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *secretsReader) Get(name string) (*Secret, error) {
 	return NewSecret(secret, c.Client), nil
 }
 
-func (c *secretsReader) List() ([]*Secret, error) {
+func (c *secretsReader) List(ctx context.Context) ([]*Secret, error) {
 	list := &corev1.SecretList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *secretsReader) List() ([]*Secret, error) {
 		Resource(SecretResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

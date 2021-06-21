@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type RolesReader interface {
-	Get(name string) (*Role, error)
-	List() ([]*Role, error)
+	Get(ctx context.Context, name string) (*Role, error)
+	List(ctx context.Context) ([]*Role, error)
 }
 
 func NewRolesReader(client resource.Client, filter resource.Filter) RolesReader {
@@ -29,7 +30,7 @@ type rolesReader struct {
 	filter resource.Filter
 }
 
-func (c *rolesReader) Get(name string) (*Role, error) {
+func (c *rolesReader) Get(ctx context.Context, name string) (*Role, error) {
 	role := &rbacv1.Role{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *rolesReader) Get(name string) (*Role, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(role)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *rolesReader) Get(name string) (*Role, error) {
 	return NewRole(role, c.Client), nil
 }
 
-func (c *rolesReader) List() ([]*Role, error) {
+func (c *rolesReader) List(ctx context.Context) ([]*Role, error) {
 	list := &rbacv1.RoleList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *rolesReader) List() ([]*Role, error) {
 		Resource(RoleResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

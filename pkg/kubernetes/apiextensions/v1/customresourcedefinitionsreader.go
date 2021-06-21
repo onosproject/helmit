@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	clientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -13,8 +14,8 @@ import (
 )
 
 type CustomResourceDefinitionsReader interface {
-	Get(name string) (*CustomResourceDefinition, error)
-	List() ([]*CustomResourceDefinition, error)
+	Get(ctx context.Context, name string) (*CustomResourceDefinition, error)
+	List(ctx context.Context) ([]*CustomResourceDefinition, error)
 }
 
 func NewCustomResourceDefinitionsReader(client resource.Client, filter resource.Filter) CustomResourceDefinitionsReader {
@@ -29,7 +30,7 @@ type customResourceDefinitionsReader struct {
 	filter resource.Filter
 }
 
-func (c *customResourceDefinitionsReader) Get(name string) (*CustomResourceDefinition, error) {
+func (c *customResourceDefinitionsReader) Get(ctx context.Context, name string) (*CustomResourceDefinition, error) {
 	customResourceDefinition := &apiextensionsv1.CustomResourceDefinition{}
 	client, err := clientset.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *customResourceDefinitionsReader) Get(name string) (*CustomResourceDefin
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(customResourceDefinition)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *customResourceDefinitionsReader) Get(name string) (*CustomResourceDefin
 	return NewCustomResourceDefinition(customResourceDefinition, c.Client), nil
 }
 
-func (c *customResourceDefinitionsReader) List() ([]*CustomResourceDefinition, error) {
+func (c *customResourceDefinitionsReader) List(ctx context.Context) ([]*CustomResourceDefinition, error) {
 	list := &apiextensionsv1.CustomResourceDefinitionList{}
 	client, err := clientset.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *customResourceDefinitionsReader) List() ([]*CustomResourceDefinition, e
 		Resource(CustomResourceDefinitionResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

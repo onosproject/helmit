@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type ServicesReader interface {
-	Get(name string) (*Service, error)
-	List() ([]*Service, error)
+	Get(ctx context.Context, name string) (*Service, error)
+	List(ctx context.Context) ([]*Service, error)
 }
 
 func NewServicesReader(client resource.Client, filter resource.Filter) ServicesReader {
@@ -29,7 +30,7 @@ type servicesReader struct {
 	filter resource.Filter
 }
 
-func (c *servicesReader) Get(name string) (*Service, error) {
+func (c *servicesReader) Get(ctx context.Context, name string) (*Service, error) {
 	service := &corev1.Service{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *servicesReader) Get(name string) (*Service, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(service)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *servicesReader) Get(name string) (*Service, error) {
 	return NewService(service, c.Client), nil
 }
 
-func (c *servicesReader) List() ([]*Service, error) {
+func (c *servicesReader) List(ctx context.Context) ([]*Service, error) {
 	list := &corev1.ServiceList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *servicesReader) List() ([]*Service, error) {
 		Resource(ServiceResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

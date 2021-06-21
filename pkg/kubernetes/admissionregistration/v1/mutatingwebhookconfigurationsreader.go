@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type MutatingWebhookConfigurationsReader interface {
-	Get(name string) (*MutatingWebhookConfiguration, error)
-	List() ([]*MutatingWebhookConfiguration, error)
+	Get(ctx context.Context, name string) (*MutatingWebhookConfiguration, error)
+	List(ctx context.Context) ([]*MutatingWebhookConfiguration, error)
 }
 
 func NewMutatingWebhookConfigurationsReader(client resource.Client, filter resource.Filter) MutatingWebhookConfigurationsReader {
@@ -29,7 +30,7 @@ type mutatingWebhookConfigurationsReader struct {
 	filter resource.Filter
 }
 
-func (c *mutatingWebhookConfigurationsReader) Get(name string) (*MutatingWebhookConfiguration, error) {
+func (c *mutatingWebhookConfigurationsReader) Get(ctx context.Context, name string) (*MutatingWebhookConfiguration, error) {
 	mutatingWebhookConfiguration := &admissionregistrationv1.MutatingWebhookConfiguration{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *mutatingWebhookConfigurationsReader) Get(name string) (*MutatingWebhook
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(mutatingWebhookConfiguration)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *mutatingWebhookConfigurationsReader) Get(name string) (*MutatingWebhook
 	return NewMutatingWebhookConfiguration(mutatingWebhookConfiguration, c.Client), nil
 }
 
-func (c *mutatingWebhookConfigurationsReader) List() ([]*MutatingWebhookConfiguration, error) {
+func (c *mutatingWebhookConfigurationsReader) List(ctx context.Context) ([]*MutatingWebhookConfiguration, error) {
 	list := &admissionregistrationv1.MutatingWebhookConfigurationList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *mutatingWebhookConfigurationsReader) List() ([]*MutatingWebhookConfigur
 		Resource(MutatingWebhookConfigurationResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

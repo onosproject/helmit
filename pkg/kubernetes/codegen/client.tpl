@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	helmkube "helm.sh/helm/v3/pkg/kube"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"context"
 )
 
 // New returns a new Kubernetes client for the current namespace
@@ -160,7 +161,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
         case "{{ $resource.Resource.Kind.Kind }}":
             {{- $name := ($resource.Resource.Names.Singular | toLowerCamel) }}
             {{ $name }}Client := {{ $resource.Resource.Kind.Package.Alias }}.New{{ $resource.Reader.Types.Interface }}(client, resource.NoFilter)
-            {{ $name }}, err := {{ $name }}Client.Get(owner.Name)
+            {{ $name }}, err := {{ $name }}Client.Get(context.Background(), owner.Name)
             if err != nil && !errors.IsNotFound(err) {
                 return false, err
             } else if err == nil {
@@ -192,7 +193,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
         instance, ok := meta.Labels["app.kubernetes.io/instance"]
         if ok {
             {{ $name }}Client := {{ $resource.Resource.Kind.Package.Alias }}.New{{ $resource.Reader.Types.Interface }}(client, resource.NoFilter)
-            {{ $name }}, err := {{ $name }}Client.Get(instance)
+            {{ $name }}, err := {{ $name }}Client.Get(context.Background(), instance)
             if err != nil && !errors.IsNotFound(err) {
                 return false, err
             } else if err == nil {

@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +35,7 @@ type Role struct {
 	Object *rbacv1.Role
 }
 
-func (r *Role) Delete() error {
+func (r *Role) Delete(ctx context.Context) error {
 	client, err := kubernetes.NewForConfig(r.Config())
 	if err != nil {
 		return err
@@ -47,6 +48,6 @@ func (r *Role) Delete() error {
 		Name(r.Name).
 		VersionedParams(&metav1.DeleteOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Error()
 }

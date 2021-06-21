@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	corev1 "github.com/onosproject/helmit/pkg/kubernetes/core/v1"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	appsv1 "k8s.io/api/apps/v1"
@@ -37,7 +38,7 @@ type ReplicaSet struct {
 	corev1.PodsReference
 }
 
-func (r *ReplicaSet) Delete() error {
+func (r *ReplicaSet) Delete(ctx context.Context) error {
 	client, err := kubernetes.NewForConfig(r.Config())
 	if err != nil {
 		return err
@@ -50,6 +51,6 @@ func (r *ReplicaSet) Delete() error {
 		Name(r.Name).
 		VersionedParams(&metav1.DeleteOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Error()
 }

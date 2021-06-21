@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +37,7 @@ type Deployment struct {
 	ReplicaSetsReference
 }
 
-func (r *Deployment) Delete() error {
+func (r *Deployment) Delete(ctx context.Context) error {
 	client, err := kubernetes.NewForConfig(r.Config())
 	if err != nil {
 		return err
@@ -49,6 +50,6 @@ func (r *Deployment) Delete() error {
 		Name(r.Name).
 		VersionedParams(&metav1.DeleteOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Error()
 }

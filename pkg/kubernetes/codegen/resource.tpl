@@ -17,6 +17,7 @@ import (
     {{- end }}
     {{- end }}
     "time"
+    "context"
 )
 
 var {{ $resource.Types.Kind }} = resource.Kind{
@@ -61,7 +62,7 @@ type {{ $resource.Types.Struct }} struct {
     {{- end }}
 }
 
-func (r *{{ $resource.Types.Struct }}) Delete() error {
+func (r *{{ $resource.Types.Struct }}) Delete(ctx context.Context) error {
     client, err := {{ .Resource.Client.Package.Alias }}.NewForConfig(r.Config())
     if err != nil {
         return err
@@ -74,6 +75,6 @@ func (r *{{ $resource.Types.Struct }}) Delete() error {
 		Name(r.Name).
 		VersionedParams(&metav1.DeleteOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Error()
 }

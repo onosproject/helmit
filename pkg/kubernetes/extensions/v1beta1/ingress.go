@@ -3,6 +3,7 @@
 package v1beta1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +35,7 @@ type Ingress struct {
 	Object *extensionsv1beta1.Ingress
 }
 
-func (r *Ingress) Delete() error {
+func (r *Ingress) Delete(ctx context.Context) error {
 	client, err := kubernetes.NewForConfig(r.Config())
 	if err != nil {
 		return err
@@ -47,6 +48,6 @@ func (r *Ingress) Delete() error {
 		Name(r.Name).
 		VersionedParams(&metav1.DeleteOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Error()
 }

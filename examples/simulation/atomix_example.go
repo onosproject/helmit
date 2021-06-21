@@ -123,7 +123,7 @@ func getControllerAddress() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	services, err := client.CoreV1().Services().List()
+	services, err := client.CoreV1().Services().List(context.Background())
 	if err != nil || len(services) == 0 {
 		return "", err
 	}

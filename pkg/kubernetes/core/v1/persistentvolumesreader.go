@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type PersistentVolumesReader interface {
-	Get(name string) (*PersistentVolume, error)
-	List() ([]*PersistentVolume, error)
+	Get(ctx context.Context, name string) (*PersistentVolume, error)
+	List(ctx context.Context) ([]*PersistentVolume, error)
 }
 
 func NewPersistentVolumesReader(client resource.Client, filter resource.Filter) PersistentVolumesReader {
@@ -29,7 +30,7 @@ type persistentVolumesReader struct {
 	filter resource.Filter
 }
 
-func (c *persistentVolumesReader) Get(name string) (*PersistentVolume, error) {
+func (c *persistentVolumesReader) Get(ctx context.Context, name string) (*PersistentVolume, error) {
 	persistentVolume := &corev1.PersistentVolume{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *persistentVolumesReader) Get(name string) (*PersistentVolume, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(persistentVolume)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *persistentVolumesReader) Get(name string) (*PersistentVolume, error) {
 	return NewPersistentVolume(persistentVolume, c.Client), nil
 }
 
-func (c *persistentVolumesReader) List() ([]*PersistentVolume, error) {
+func (c *persistentVolumesReader) List(ctx context.Context) ([]*PersistentVolume, error) {
 	list := &corev1.PersistentVolumeList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *persistentVolumesReader) List() ([]*PersistentVolume, error) {
 		Resource(PersistentVolumeResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

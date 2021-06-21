@@ -15,6 +15,7 @@
 package v1
 
 import (
+	"context"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -22,9 +23,9 @@ import (
 )
 
 // Wait waits for the Deployment to be ready
-func (d *Deployment) Wait(timeout time.Duration) error {
+func (d *Deployment) Wait(ctx context.Context, timeout time.Duration) error {
 	return wait.Poll(time.Second, timeout, func() (bool, error) {
-		deployment, err := d.Clientset().AppsV1().Deployments(d.Namespace).Get(d.Name, metav1.GetOptions{})
+		deployment, err := d.Clientset().AppsV1().Deployments(d.Namespace).Get(ctx, d.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -39,9 +40,9 @@ func (d *Deployment) Wait(timeout time.Duration) error {
 }
 
 // Wait waits for the StatefulSet to be ready
-func (s *StatefulSet) Wait(timeout time.Duration) error {
+func (s *StatefulSet) Wait(ctx context.Context, timeout time.Duration) error {
 	return wait.Poll(time.Second, timeout, func() (bool, error) {
-		set, err := s.Clientset().AppsV1().StatefulSets(s.Namespace).Get(s.Name, metav1.GetOptions{})
+		set, err := s.Clientset().AppsV1().StatefulSets(s.Namespace).Get(ctx, s.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}

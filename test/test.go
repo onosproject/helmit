@@ -15,6 +15,7 @@
 package test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -53,31 +54,31 @@ func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
 
 	client := kubernetes.NewForReleaseOrDie(topo)
 
-	pods, err := client.CoreV1().Pods().List()
+	pods, err := client.CoreV1().Pods().List(context.Background())
 	assert.NoError(t, err)
 	assert.Len(t, pods, 2)
 
 	deployment, err := client.AppsV1().
 		Deployments().
-		Get("onos-topo")
+		Get(context.Background(), "onos-topo")
 	assert.NoError(t, err)
 
-	pods, err = deployment.Pods().List()
+	pods, err = deployment.Pods().List(context.Background())
 	assert.NoError(t, err)
 	assert.Len(t, pods, 1)
 	pod := pods[0]
-	err = pod.Delete()
+	err = pod.Delete(context.Background())
 	assert.NoError(t, err)
 
-	err = deployment.Wait(1 * time.Minute)
+	err = deployment.Wait(context.Background(), 1*time.Minute)
 	assert.NoError(t, err)
 
-	pods, err = deployment.Pods().List()
+	pods, err = deployment.Pods().List(context.Background())
 	assert.NoError(t, err)
 	assert.Len(t, pods, 1)
 	assert.NotEqual(t, pod.Name, pods[0].Name)
 
-	services, err := client.CoreV1().Services().List()
+	services, err := client.CoreV1().Services().List(context.Background())
 	assert.NoError(t, err)
 	assert.Len(t, services, 2)
 

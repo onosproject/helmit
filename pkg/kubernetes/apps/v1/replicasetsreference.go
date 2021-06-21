@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	corev1 "github.com/onosproject/helmit/pkg/kubernetes/core/v1"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +16,7 @@ type ReplicaSetsReference interface {
 
 func NewReplicaSetsReference(resources resource.Client, filter resource.Filter) ReplicaSetsReference {
 	var ownerFilter resource.Filter = func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
-		list, err := NewReplicaSetsReader(resources, filter).List()
+		list, err := NewReplicaSetsReader(resources, filter).List(context.Background())
 		if err != nil {
 			return false, err
 		}

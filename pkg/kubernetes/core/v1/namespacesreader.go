@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type NamespacesReader interface {
-	Get(name string) (*Namespace, error)
-	List() ([]*Namespace, error)
+	Get(ctx context.Context, name string) (*Namespace, error)
+	List(ctx context.Context) ([]*Namespace, error)
 }
 
 func NewNamespacesReader(client resource.Client, filter resource.Filter) NamespacesReader {
@@ -29,7 +30,7 @@ type namespacesReader struct {
 	filter resource.Filter
 }
 
-func (c *namespacesReader) Get(name string) (*Namespace, error) {
+func (c *namespacesReader) Get(ctx context.Context, name string) (*Namespace, error) {
 	namespace := &corev1.Namespace{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *namespacesReader) Get(name string) (*Namespace, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(namespace)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *namespacesReader) Get(name string) (*Namespace, error) {
 	return NewNamespace(namespace, c.Client), nil
 }
 
-func (c *namespacesReader) List() ([]*Namespace, error) {
+func (c *namespacesReader) List(ctx context.Context) ([]*Namespace, error) {
 	list := &corev1.NamespaceList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *namespacesReader) List() ([]*Namespace, error) {
 		Resource(NamespaceResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

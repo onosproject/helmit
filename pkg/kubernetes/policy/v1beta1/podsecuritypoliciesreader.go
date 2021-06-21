@@ -3,6 +3,7 @@
 package v1beta1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type PodSecurityPoliciesReader interface {
-	Get(name string) (*PodSecurityPolicy, error)
-	List() ([]*PodSecurityPolicy, error)
+	Get(ctx context.Context, name string) (*PodSecurityPolicy, error)
+	List(ctx context.Context) ([]*PodSecurityPolicy, error)
 }
 
 func NewPodSecurityPoliciesReader(client resource.Client, filter resource.Filter) PodSecurityPoliciesReader {
@@ -29,7 +30,7 @@ type podSecurityPoliciesReader struct {
 	filter resource.Filter
 }
 
-func (c *podSecurityPoliciesReader) Get(name string) (*PodSecurityPolicy, error) {
+func (c *podSecurityPoliciesReader) Get(ctx context.Context, name string) (*PodSecurityPolicy, error) {
 	podSecurityPolicy := &policyv1beta1.PodSecurityPolicy{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *podSecurityPoliciesReader) Get(name string) (*PodSecurityPolicy, error)
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(podSecurityPolicy)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *podSecurityPoliciesReader) Get(name string) (*PodSecurityPolicy, error)
 	return NewPodSecurityPolicy(podSecurityPolicy, c.Client), nil
 }
 
-func (c *podSecurityPoliciesReader) List() ([]*PodSecurityPolicy, error) {
+func (c *podSecurityPoliciesReader) List(ctx context.Context) ([]*PodSecurityPolicy, error) {
 	list := &policyv1beta1.PodSecurityPolicyList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *podSecurityPoliciesReader) List() ([]*PodSecurityPolicy, error) {
 		Resource(PodSecurityPolicyResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

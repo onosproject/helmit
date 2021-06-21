@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type ReplicaSetsReader interface {
-	Get(name string) (*ReplicaSet, error)
-	List() ([]*ReplicaSet, error)
+	Get(ctx context.Context, name string) (*ReplicaSet, error)
+	List(ctx context.Context) ([]*ReplicaSet, error)
 }
 
 func NewReplicaSetsReader(client resource.Client, filter resource.Filter) ReplicaSetsReader {
@@ -29,7 +30,7 @@ type replicaSetsReader struct {
 	filter resource.Filter
 }
 
-func (c *replicaSetsReader) Get(name string) (*ReplicaSet, error) {
+func (c *replicaSetsReader) Get(ctx context.Context, name string) (*ReplicaSet, error) {
 	replicaSet := &appsv1.ReplicaSet{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *replicaSetsReader) Get(name string) (*ReplicaSet, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(replicaSet)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *replicaSetsReader) Get(name string) (*ReplicaSet, error) {
 	return NewReplicaSet(replicaSet, c.Client), nil
 }
 
-func (c *replicaSetsReader) List() ([]*ReplicaSet, error) {
+func (c *replicaSetsReader) List(ctx context.Context) ([]*ReplicaSet, error) {
 	list := &appsv1.ReplicaSetList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *replicaSetsReader) List() ([]*ReplicaSet, error) {
 		Resource(ReplicaSetResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

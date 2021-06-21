@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type ClusterRolesReader interface {
-	Get(name string) (*ClusterRole, error)
-	List() ([]*ClusterRole, error)
+	Get(ctx context.Context, name string) (*ClusterRole, error)
+	List(ctx context.Context) ([]*ClusterRole, error)
 }
 
 func NewClusterRolesReader(client resource.Client, filter resource.Filter) ClusterRolesReader {
@@ -29,7 +30,7 @@ type clusterRolesReader struct {
 	filter resource.Filter
 }
 
-func (c *clusterRolesReader) Get(name string) (*ClusterRole, error) {
+func (c *clusterRolesReader) Get(ctx context.Context, name string) (*ClusterRole, error) {
 	clusterRole := &rbacv1.ClusterRole{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *clusterRolesReader) Get(name string) (*ClusterRole, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(clusterRole)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *clusterRolesReader) Get(name string) (*ClusterRole, error) {
 	return NewClusterRole(clusterRole, c.Client), nil
 }
 
-func (c *clusterRolesReader) List() ([]*ClusterRole, error) {
+func (c *clusterRolesReader) List(ctx context.Context) ([]*ClusterRole, error) {
 	list := &rbacv1.ClusterRoleList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *clusterRolesReader) List() ([]*ClusterRole, error) {
 		Resource(ClusterRoleResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

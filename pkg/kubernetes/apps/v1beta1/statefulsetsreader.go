@@ -3,6 +3,7 @@
 package v1beta1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	appsv1beta1 "k8s.io/api/apps/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type StatefulSetsReader interface {
-	Get(name string) (*StatefulSet, error)
-	List() ([]*StatefulSet, error)
+	Get(ctx context.Context, name string) (*StatefulSet, error)
+	List(ctx context.Context) ([]*StatefulSet, error)
 }
 
 func NewStatefulSetsReader(client resource.Client, filter resource.Filter) StatefulSetsReader {
@@ -29,7 +30,7 @@ type statefulSetsReader struct {
 	filter resource.Filter
 }
 
-func (c *statefulSetsReader) Get(name string) (*StatefulSet, error) {
+func (c *statefulSetsReader) Get(ctx context.Context, name string) (*StatefulSet, error) {
 	statefulSet := &appsv1beta1.StatefulSet{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *statefulSetsReader) Get(name string) (*StatefulSet, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(statefulSet)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *statefulSetsReader) Get(name string) (*StatefulSet, error) {
 	return NewStatefulSet(statefulSet, c.Client), nil
 }
 
-func (c *statefulSetsReader) List() ([]*StatefulSet, error) {
+func (c *statefulSetsReader) List(ctx context.Context) ([]*StatefulSet, error) {
 	list := &appsv1beta1.StatefulSetList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *statefulSetsReader) List() ([]*StatefulSet, error) {
 		Resource(StatefulSetResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

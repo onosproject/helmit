@@ -13,6 +13,9 @@ import (
     {{- if .Resource.References }}
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	{{- end }}
+    {{- if .Resource.References }}
+	"context"
+	{{- end }}
 )
 
 type {{ .Reference.Types.Interface }} interface {
@@ -30,7 +33,7 @@ func New{{ .Reference.Types.Interface }}(resources resource.Client, filter resou
     {{- if .Resource.References }}
     var ownerFilter resource.Filter = func(kind metav1.GroupVersionKind, meta metav1.ObjectMeta) (bool, error) {
         {{- $name :=  (.Resource.Names.Plural | toLowerCamel) }}
-        list, err := New{{ .Reader.Types.Interface }}(resources, filter).List()
+        list, err := New{{ .Reader.Types.Interface }}(resources, filter).List(context.Background())
         if err != nil {
             return false, err
         }

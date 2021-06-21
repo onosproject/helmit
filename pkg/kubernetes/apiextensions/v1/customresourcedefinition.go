@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	clientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -34,7 +35,7 @@ type CustomResourceDefinition struct {
 	Object *apiextensionsv1.CustomResourceDefinition
 }
 
-func (r *CustomResourceDefinition) Delete() error {
+func (r *CustomResourceDefinition) Delete(ctx context.Context) error {
 	client, err := clientset.NewForConfig(r.Config())
 	if err != nil {
 		return err
@@ -47,6 +48,6 @@ func (r *CustomResourceDefinition) Delete() error {
 		Name(r.Name).
 		VersionedParams(&metav1.DeleteOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Error()
 }
