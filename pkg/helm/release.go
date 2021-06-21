@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/iancoleman/strcase"
 	"helm.sh/helm/v3/pkg/action"
@@ -77,6 +78,7 @@ func newRelease(name string, namespace string, client *kubernetes.Clientset, cha
 		name:      name,
 		values:    make(map[string]interface{}),
 		overrides: values,
+		timeout:   5 * time.Minute,
 	}
 }
 
@@ -94,6 +96,7 @@ type HelmRelease struct {
 	release   *release.Release
 	userName  string
 	password  string
+	timeout   time.Duration
 }
 
 // Namespace returns the release namespace
@@ -127,6 +130,17 @@ func (r *HelmRelease) SetUsername(userName string) *HelmRelease {
 func (r *HelmRelease) SetPassword(password string) *HelmRelease {
 	r.password = password
 	return r
+}
+
+// WithTimeout specifies the maximum time to allow for an install operation to complete
+func (r *HelmRelease) WithTimeout(timeout time.Duration) *HelmRelease {
+	r.timeout = timeout
+	return r
+}
+
+// Timeout returns the maximum time to allow for an install operation to complete
+func (r *HelmRelease) Timeout() time.Duration {
+	return r.timeout
 }
 
 // Values is the release's values
@@ -178,6 +192,7 @@ func (r *HelmRelease) Install(wait bool) error {
 	install.RepoURL = r.chart.Repository()
 	install.ReleaseName = r.Name()
 	install.Wait = wait
+	install.Timeout = r.Timeout()
 
 	// Locate the chart path
 	path, err := install.ChartPathOptions.LocateChart(r.chart.Name(), settings)
