@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type StorageClassesReader interface {
-	Get(name string) (*StorageClass, error)
-	List() ([]*StorageClass, error)
+	Get(ctx context.Context, name string) (*StorageClass, error)
+	List(ctx context.Context) ([]*StorageClass, error)
 }
 
 func NewStorageClassesReader(client resource.Client, filter resource.Filter) StorageClassesReader {
@@ -29,7 +30,7 @@ type storageClassesReader struct {
 	filter resource.Filter
 }
 
-func (c *storageClassesReader) Get(name string) (*StorageClass, error) {
+func (c *storageClassesReader) Get(ctx context.Context, name string) (*StorageClass, error) {
 	storageClass := &storagev1.StorageClass{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *storageClassesReader) Get(name string) (*StorageClass, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(storageClass)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *storageClassesReader) Get(name string) (*StorageClass, error) {
 	return NewStorageClass(storageClass, c.Client), nil
 }
 
-func (c *storageClassesReader) List() ([]*StorageClass, error) {
+func (c *storageClassesReader) List(ctx context.Context) ([]*StorageClass, error) {
 	list := &storagev1.StorageClassList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *storageClassesReader) List() ([]*StorageClass, error) {
 		Resource(StorageClassResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

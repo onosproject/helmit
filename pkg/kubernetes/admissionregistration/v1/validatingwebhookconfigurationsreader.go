@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type ValidatingWebhookConfigurationsReader interface {
-	Get(name string) (*ValidatingWebhookConfiguration, error)
-	List() ([]*ValidatingWebhookConfiguration, error)
+	Get(ctx context.Context, name string) (*ValidatingWebhookConfiguration, error)
+	List(ctx context.Context) ([]*ValidatingWebhookConfiguration, error)
 }
 
 func NewValidatingWebhookConfigurationsReader(client resource.Client, filter resource.Filter) ValidatingWebhookConfigurationsReader {
@@ -29,7 +30,7 @@ type validatingWebhookConfigurationsReader struct {
 	filter resource.Filter
 }
 
-func (c *validatingWebhookConfigurationsReader) Get(name string) (*ValidatingWebhookConfiguration, error) {
+func (c *validatingWebhookConfigurationsReader) Get(ctx context.Context, name string) (*ValidatingWebhookConfiguration, error) {
 	validatingWebhookConfiguration := &admissionregistrationv1.ValidatingWebhookConfiguration{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *validatingWebhookConfigurationsReader) Get(name string) (*ValidatingWeb
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(validatingWebhookConfiguration)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *validatingWebhookConfigurationsReader) Get(name string) (*ValidatingWeb
 	return NewValidatingWebhookConfiguration(validatingWebhookConfiguration, c.Client), nil
 }
 
-func (c *validatingWebhookConfigurationsReader) List() ([]*ValidatingWebhookConfiguration, error) {
+func (c *validatingWebhookConfigurationsReader) List(ctx context.Context) ([]*ValidatingWebhookConfiguration, error) {
 	list := &admissionregistrationv1.ValidatingWebhookConfigurationList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *validatingWebhookConfigurationsReader) List() ([]*ValidatingWebhookConf
 		Resource(ValidatingWebhookConfigurationResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

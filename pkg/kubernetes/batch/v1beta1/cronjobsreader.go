@@ -3,6 +3,7 @@
 package v1beta1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	batchv1beta1 "k8s.io/api/batch/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type CronJobsReader interface {
-	Get(name string) (*CronJob, error)
-	List() ([]*CronJob, error)
+	Get(ctx context.Context, name string) (*CronJob, error)
+	List(ctx context.Context) ([]*CronJob, error)
 }
 
 func NewCronJobsReader(client resource.Client, filter resource.Filter) CronJobsReader {
@@ -29,7 +30,7 @@ type cronJobsReader struct {
 	filter resource.Filter
 }
 
-func (c *cronJobsReader) Get(name string) (*CronJob, error) {
+func (c *cronJobsReader) Get(ctx context.Context, name string) (*CronJob, error) {
 	cronJob := &batchv1beta1.CronJob{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *cronJobsReader) Get(name string) (*CronJob, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(cronJob)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *cronJobsReader) Get(name string) (*CronJob, error) {
 	return NewCronJob(cronJob, c.Client), nil
 }
 
-func (c *cronJobsReader) List() ([]*CronJob, error) {
+func (c *cronJobsReader) List(ctx context.Context) ([]*CronJob, error) {
 	list := &batchv1beta1.CronJobList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *cronJobsReader) List() ([]*CronJob, error) {
 		Resource(CronJobResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

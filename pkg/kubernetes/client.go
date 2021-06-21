@@ -3,6 +3,7 @@
 package kubernetes
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/helm"
 	admissionregistrationv1 "github.com/onosproject/helmit/pkg/kubernetes/admissionregistration/v1"
 	apiextensionsv1 "github.com/onosproject/helmit/pkg/kubernetes/apiextensions/v1"
@@ -11,7 +12,6 @@ import (
 	appsv1beta1 "github.com/onosproject/helmit/pkg/kubernetes/apps/v1beta1"
 	batchv1 "github.com/onosproject/helmit/pkg/kubernetes/batch/v1"
 	batchv1beta1 "github.com/onosproject/helmit/pkg/kubernetes/batch/v1beta1"
-	batchv2alpha1 "github.com/onosproject/helmit/pkg/kubernetes/batch/v2alpha1"
 	"github.com/onosproject/helmit/pkg/kubernetes/config"
 	corev1 "github.com/onosproject/helmit/pkg/kubernetes/core/v1"
 	extensionsv1beta1 "github.com/onosproject/helmit/pkg/kubernetes/extensions/v1beta1"
@@ -85,7 +85,6 @@ type Client interface {
 	AppsV1beta1() appsv1beta1.Client
 	BatchV1() batchv1.Client
 	BatchV1beta1() batchv1beta1.Client
-	BatchV2alpha1() batchv2alpha1.Client
 	ExtensionsV1beta1() extensionsv1beta1.Client
 	NetworkingV1beta1() networkingv1beta1.Client
 	PolicyV1beta1() policyv1beta1.Client
@@ -178,7 +177,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "MutatingWebhookConfiguration":
 			mutatingWebhookConfigurationClient := admissionregistrationv1.NewMutatingWebhookConfigurationsReader(client, resource.NoFilter)
-			mutatingWebhookConfiguration, err := mutatingWebhookConfigurationClient.Get(owner.Name)
+			mutatingWebhookConfiguration, err := mutatingWebhookConfigurationClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -196,7 +195,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "ValidatingWebhookConfiguration":
 			validatingWebhookConfigurationClient := admissionregistrationv1.NewValidatingWebhookConfigurationsReader(client, resource.NoFilter)
-			validatingWebhookConfiguration, err := validatingWebhookConfigurationClient.Get(owner.Name)
+			validatingWebhookConfiguration, err := validatingWebhookConfigurationClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -217,7 +216,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "CustomResourceDefinition":
 			customResourceDefinitionClient := apiextensionsv1.NewCustomResourceDefinitionsReader(client, resource.NoFilter)
-			customResourceDefinition, err := customResourceDefinitionClient.Get(owner.Name)
+			customResourceDefinition, err := customResourceDefinitionClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -238,7 +237,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "CustomResourceDefinition":
 			customResourceDefinitionClient := apiextensionsv1beta1.NewCustomResourceDefinitionsReader(client, resource.NoFilter)
-			customResourceDefinition, err := customResourceDefinitionClient.Get(owner.Name)
+			customResourceDefinition, err := customResourceDefinitionClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -259,7 +258,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "DaemonSet":
 			daemonSetClient := appsv1.NewDaemonSetsReader(client, resource.NoFilter)
-			daemonSet, err := daemonSetClient.Get(owner.Name)
+			daemonSet, err := daemonSetClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -277,7 +276,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "Deployment":
 			deploymentClient := appsv1.NewDeploymentsReader(client, resource.NoFilter)
-			deployment, err := deploymentClient.Get(owner.Name)
+			deployment, err := deploymentClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -295,7 +294,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "ReplicaSet":
 			replicaSetClient := appsv1.NewReplicaSetsReader(client, resource.NoFilter)
-			replicaSet, err := replicaSetClient.Get(owner.Name)
+			replicaSet, err := replicaSetClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -313,7 +312,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "StatefulSet":
 			statefulSetClient := appsv1.NewStatefulSetsReader(client, resource.NoFilter)
-			statefulSet, err := statefulSetClient.Get(owner.Name)
+			statefulSet, err := statefulSetClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -334,7 +333,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "Deployment":
 			deploymentClient := appsv1beta1.NewDeploymentsReader(client, resource.NoFilter)
-			deployment, err := deploymentClient.Get(owner.Name)
+			deployment, err := deploymentClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -352,7 +351,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "StatefulSet":
 			statefulSetClient := appsv1beta1.NewStatefulSetsReader(client, resource.NoFilter)
-			statefulSet, err := statefulSetClient.Get(owner.Name)
+			statefulSet, err := statefulSetClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -373,7 +372,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "Job":
 			jobClient := batchv1.NewJobsReader(client, resource.NoFilter)
-			job, err := jobClient.Get(owner.Name)
+			job, err := jobClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -394,7 +393,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "CronJob":
 			cronJobClient := batchv1beta1.NewCronJobsReader(client, resource.NoFilter)
-			cronJob, err := cronJobClient.Get(owner.Name)
+			cronJob, err := cronJobClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -411,32 +410,11 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 				}
 			}
 		}
-	case "batch/v2alpha1":
-		switch owner.Kind {
-		case "CronJob":
-			cronJobClient := batchv2alpha1.NewCronJobsReader(client, resource.NoFilter)
-			cronJob, err := cronJobClient.Get(owner.Name)
-			if err != nil && !errors.IsNotFound(err) {
-				return false, err
-			} else if err == nil {
-				groupVersionKind := metav1.GroupVersionKind{
-					Group:   batchv2alpha1.CronJobKind.Group,
-					Version: batchv2alpha1.CronJobKind.Version,
-					Kind:    batchv2alpha1.CronJobKind.Kind,
-				}
-				ok, err := filterResources(client, resources, groupVersionKind, cronJob.Object.ObjectMeta)
-				if ok {
-					return true, nil
-				} else if err != nil {
-					return false, err
-				}
-			}
-		}
 	case "extensions/v1beta1":
 		switch owner.Kind {
 		case "Ingress":
 			ingressClient := extensionsv1beta1.NewIngressesReader(client, resource.NoFilter)
-			ingress, err := ingressClient.Get(owner.Name)
+			ingress, err := ingressClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -457,7 +435,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "Ingress":
 			ingressClient := networkingv1beta1.NewIngressesReader(client, resource.NoFilter)
-			ingress, err := ingressClient.Get(owner.Name)
+			ingress, err := ingressClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -478,7 +456,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "PodDisruptionBudget":
 			podDisruptionBudgetClient := policyv1beta1.NewPodDisruptionBudgetsReader(client, resource.NoFilter)
-			podDisruptionBudget, err := podDisruptionBudgetClient.Get(owner.Name)
+			podDisruptionBudget, err := podDisruptionBudgetClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -496,7 +474,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "PodSecurityPolicy":
 			podSecurityPolicyClient := policyv1beta1.NewPodSecurityPoliciesReader(client, resource.NoFilter)
-			podSecurityPolicy, err := podSecurityPolicyClient.Get(owner.Name)
+			podSecurityPolicy, err := podSecurityPolicyClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -517,7 +495,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "ClusterRole":
 			clusterRoleClient := rbacv1.NewClusterRolesReader(client, resource.NoFilter)
-			clusterRole, err := clusterRoleClient.Get(owner.Name)
+			clusterRole, err := clusterRoleClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -535,7 +513,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "ClusterRoleBinding":
 			clusterRoleBindingClient := rbacv1.NewClusterRoleBindingsReader(client, resource.NoFilter)
-			clusterRoleBinding, err := clusterRoleBindingClient.Get(owner.Name)
+			clusterRoleBinding, err := clusterRoleBindingClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -553,7 +531,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "Role":
 			roleClient := rbacv1.NewRolesReader(client, resource.NoFilter)
-			role, err := roleClient.Get(owner.Name)
+			role, err := roleClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -571,7 +549,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "RoleBinding":
 			roleBindingClient := rbacv1.NewRoleBindingsReader(client, resource.NoFilter)
-			roleBinding, err := roleBindingClient.Get(owner.Name)
+			roleBinding, err := roleBindingClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -592,7 +570,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "StorageClass":
 			storageClassClient := storagev1.NewStorageClassesReader(client, resource.NoFilter)
-			storageClass, err := storageClassClient.Get(owner.Name)
+			storageClass, err := storageClassClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -613,7 +591,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 		switch owner.Kind {
 		case "ConfigMap":
 			configMapClient := corev1.NewConfigMapsReader(client, resource.NoFilter)
-			configMap, err := configMapClient.Get(owner.Name)
+			configMap, err := configMapClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -631,7 +609,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "Endpoints":
 			endpointsClient := corev1.NewEndpointsReader(client, resource.NoFilter)
-			endpoints, err := endpointsClient.Get(owner.Name)
+			endpoints, err := endpointsClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -649,7 +627,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "Namespace":
 			namespaceClient := corev1.NewNamespacesReader(client, resource.NoFilter)
-			namespace, err := namespaceClient.Get(owner.Name)
+			namespace, err := namespaceClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -667,7 +645,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "Node":
 			nodeClient := corev1.NewNodesReader(client, resource.NoFilter)
-			node, err := nodeClient.Get(owner.Name)
+			node, err := nodeClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -685,7 +663,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "PersistentVolume":
 			persistentVolumeClient := corev1.NewPersistentVolumesReader(client, resource.NoFilter)
-			persistentVolume, err := persistentVolumeClient.Get(owner.Name)
+			persistentVolume, err := persistentVolumeClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -703,7 +681,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "PersistentVolumeClaim":
 			persistentVolumeClaimClient := corev1.NewPersistentVolumeClaimsReader(client, resource.NoFilter)
-			persistentVolumeClaim, err := persistentVolumeClaimClient.Get(owner.Name)
+			persistentVolumeClaim, err := persistentVolumeClaimClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -721,7 +699,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "Pod":
 			podClient := corev1.NewPodsReader(client, resource.NoFilter)
-			pod, err := podClient.Get(owner.Name)
+			pod, err := podClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -739,7 +717,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "PodTemplate":
 			podTemplateClient := corev1.NewPodTemplatesReader(client, resource.NoFilter)
-			podTemplate, err := podTemplateClient.Get(owner.Name)
+			podTemplate, err := podTemplateClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -757,7 +735,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "Secret":
 			secretClient := corev1.NewSecretsReader(client, resource.NoFilter)
-			secret, err := secretClient.Get(owner.Name)
+			secret, err := secretClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -775,7 +753,7 @@ func filterOwner(client resource.Client, resources helmkube.ResourceList, owner 
 			}
 		case "Service":
 			serviceClient := corev1.NewServicesReader(client, resource.NoFilter)
-			service, err := serviceClient.Get(owner.Name)
+			service, err := serviceClient.Get(context.Background(), owner.Name)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -801,7 +779,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
 		instance, ok := meta.Labels["app.kubernetes.io/instance"]
 		if ok {
 			daemonSetClient := appsv1.NewDaemonSetsReader(client, resource.NoFilter)
-			daemonSet, err := daemonSetClient.Get(instance)
+			daemonSet, err := daemonSetClient.Get(context.Background(), instance)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -818,7 +796,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
 		instance, ok := meta.Labels["app.kubernetes.io/instance"]
 		if ok {
 			deploymentClient := appsv1.NewDeploymentsReader(client, resource.NoFilter)
-			deployment, err := deploymentClient.Get(instance)
+			deployment, err := deploymentClient.Get(context.Background(), instance)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -835,7 +813,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
 		instance, ok := meta.Labels["app.kubernetes.io/instance"]
 		if ok {
 			replicaSetClient := appsv1.NewReplicaSetsReader(client, resource.NoFilter)
-			replicaSet, err := replicaSetClient.Get(instance)
+			replicaSet, err := replicaSetClient.Get(context.Background(), instance)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -852,7 +830,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
 		instance, ok := meta.Labels["app.kubernetes.io/instance"]
 		if ok {
 			statefulSetClient := appsv1.NewStatefulSetsReader(client, resource.NoFilter)
-			statefulSet, err := statefulSetClient.Get(instance)
+			statefulSet, err := statefulSetClient.Get(context.Background(), instance)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -869,7 +847,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
 		instance, ok := meta.Labels["app.kubernetes.io/instance"]
 		if ok {
 			deploymentClient := appsv1beta1.NewDeploymentsReader(client, resource.NoFilter)
-			deployment, err := deploymentClient.Get(instance)
+			deployment, err := deploymentClient.Get(context.Background(), instance)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -886,7 +864,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
 		instance, ok := meta.Labels["app.kubernetes.io/instance"]
 		if ok {
 			deploymentClient := appsv1beta1.NewDeploymentsReader(client, resource.NoFilter)
-			deployment, err := deploymentClient.Get(instance)
+			deployment, err := deploymentClient.Get(context.Background(), instance)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -903,7 +881,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
 		instance, ok := meta.Labels["app.kubernetes.io/instance"]
 		if ok {
 			statefulSetClient := appsv1beta1.NewStatefulSetsReader(client, resource.NoFilter)
-			statefulSet, err := statefulSetClient.Get(instance)
+			statefulSet, err := statefulSetClient.Get(context.Background(), instance)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -920,7 +898,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
 		instance, ok := meta.Labels["app.kubernetes.io/instance"]
 		if ok {
 			statefulSetClient := appsv1beta1.NewStatefulSetsReader(client, resource.NoFilter)
-			statefulSet, err := statefulSetClient.Get(instance)
+			statefulSet, err := statefulSetClient.Get(context.Background(), instance)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -937,7 +915,7 @@ func filterApp(client resource.Client, resources helmkube.ResourceList, kind met
 		instance, ok := meta.Labels["app.kubernetes.io/instance"]
 		if ok {
 			serviceClient := corev1.NewServicesReader(client, resource.NoFilter)
-			service, err := serviceClient.Get(instance)
+			service, err := serviceClient.Get(context.Background(), instance)
 			if err != nil && !errors.IsNotFound(err) {
 				return false, err
 			} else if err == nil {
@@ -1003,10 +981,6 @@ func (c *client) BatchV1() batchv1.Client {
 
 func (c *client) BatchV1beta1() batchv1beta1.Client {
 	return batchv1beta1.NewClient(c, c.filter)
-}
-
-func (c *client) BatchV2alpha1() batchv2alpha1.Client {
-	return batchv2alpha1.NewClient(c, c.filter)
 }
 
 func (c *client) ExtensionsV1beta1() extensionsv1beta1.Client {

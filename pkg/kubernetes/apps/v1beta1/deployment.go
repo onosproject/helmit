@@ -3,6 +3,7 @@
 package v1beta1
 
 import (
+	"context"
 	appsv1 "github.com/onosproject/helmit/pkg/kubernetes/apps/v1"
 	corev1 "github.com/onosproject/helmit/pkg/kubernetes/core/v1"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
@@ -40,7 +41,7 @@ type Deployment struct {
 	corev1.PodsReference
 }
 
-func (r *Deployment) Delete() error {
+func (r *Deployment) Delete(ctx context.Context) error {
 	client, err := kubernetes.NewForConfig(r.Config())
 	if err != nil {
 		return err
@@ -53,6 +54,6 @@ func (r *Deployment) Delete() error {
 		Name(r.Name).
 		VersionedParams(&metav1.DeleteOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Error()
 }

@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type RoleBindingsReader interface {
-	Get(name string) (*RoleBinding, error)
-	List() ([]*RoleBinding, error)
+	Get(ctx context.Context, name string) (*RoleBinding, error)
+	List(ctx context.Context) ([]*RoleBinding, error)
 }
 
 func NewRoleBindingsReader(client resource.Client, filter resource.Filter) RoleBindingsReader {
@@ -29,7 +30,7 @@ type roleBindingsReader struct {
 	filter resource.Filter
 }
 
-func (c *roleBindingsReader) Get(name string) (*RoleBinding, error) {
+func (c *roleBindingsReader) Get(ctx context.Context, name string) (*RoleBinding, error) {
 	roleBinding := &rbacv1.RoleBinding{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *roleBindingsReader) Get(name string) (*RoleBinding, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(roleBinding)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *roleBindingsReader) Get(name string) (*RoleBinding, error) {
 	return NewRoleBinding(roleBinding, c.Client), nil
 }
 
-func (c *roleBindingsReader) List() ([]*RoleBinding, error) {
+func (c *roleBindingsReader) List(ctx context.Context) ([]*RoleBinding, error) {
 	list := &rbacv1.RoleBindingList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *roleBindingsReader) List() ([]*RoleBinding, error) {
 		Resource(RoleBindingResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

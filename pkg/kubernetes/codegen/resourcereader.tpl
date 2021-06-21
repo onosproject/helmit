@@ -10,11 +10,12 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"time"
+	"context"
 )
 
 type {{ .Reader.Types.Interface }} interface {
-	Get(name string) (*{{ .Resource.Types.Struct }}, error)
-	List() ([]*{{ .Resource.Types.Struct }}, error)
+	Get(ctx context.Context, name string) (*{{ .Resource.Types.Struct }}, error)
+	List(ctx context.Context) ([]*{{ .Resource.Types.Struct }}, error)
 }
 
 func New{{ .Reader.Types.Interface }}(client resource.Client, filter resource.Filter) {{ .Reader.Types.Interface }} {
@@ -33,7 +34,7 @@ type {{ .Reader.Types.Struct }} struct {
 {{- $kind := (printf "%s.%s" .Resource.Kind.Package.Alias .Resource.Kind.Kind) }}
 {{- $listKind := (printf "%s.%s" .Resource.Kind.Package.Alias .Resource.Kind.ListKind) }}
 
-func (c *{{ .Reader.Types.Struct }}) Get(name string) (*{{ .Resource.Types.Struct }}, error) {
+func (c *{{ .Reader.Types.Struct }}) Get(ctx context.Context, name string) (*{{ .Resource.Types.Struct }}, error) {
     {{ $singular }} := &{{ $kind }}{}
     client, err := {{ .Resource.Client.Package.Alias }}.NewForConfig(c.Config())
     if err != nil {
@@ -47,7 +48,7 @@ func (c *{{ .Reader.Types.Struct }}) Get(name string) (*{{ .Resource.Types.Struc
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into({{ $singular }})
 	if err != nil {
 		return nil, err
@@ -69,7 +70,7 @@ func (c *{{ .Reader.Types.Struct }}) Get(name string) (*{{ .Resource.Types.Struc
 	return New{{ .Resource.Types.Struct }}({{ $singular }}, c.Client), nil
 }
 
-func (c *{{ .Reader.Types.Struct }}) List() ([]*{{ .Resource.Types.Struct }}, error) {
+func (c *{{ .Reader.Types.Struct }}) List(ctx context.Context) ([]*{{ .Resource.Types.Struct }}, error) {
     list := &{{ $listKind }}{}
     client, err := {{ .Resource.Client.Package.Alias }}.NewForConfig(c.Config())
     if err != nil {
@@ -82,7 +83,7 @@ func (c *{{ .Reader.Types.Struct }}) List() ([]*{{ .Resource.Types.Struct }}, er
 		Resource({{ .Resource.Types.Resource }}.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type PersistentVolumeClaimsReader interface {
-	Get(name string) (*PersistentVolumeClaim, error)
-	List() ([]*PersistentVolumeClaim, error)
+	Get(ctx context.Context, name string) (*PersistentVolumeClaim, error)
+	List(ctx context.Context) ([]*PersistentVolumeClaim, error)
 }
 
 func NewPersistentVolumeClaimsReader(client resource.Client, filter resource.Filter) PersistentVolumeClaimsReader {
@@ -29,7 +30,7 @@ type persistentVolumeClaimsReader struct {
 	filter resource.Filter
 }
 
-func (c *persistentVolumeClaimsReader) Get(name string) (*PersistentVolumeClaim, error) {
+func (c *persistentVolumeClaimsReader) Get(ctx context.Context, name string) (*PersistentVolumeClaim, error) {
 	persistentVolumeClaim := &corev1.PersistentVolumeClaim{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *persistentVolumeClaimsReader) Get(name string) (*PersistentVolumeClaim,
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(persistentVolumeClaim)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *persistentVolumeClaimsReader) Get(name string) (*PersistentVolumeClaim,
 	return NewPersistentVolumeClaim(persistentVolumeClaim, c.Client), nil
 }
 
-func (c *persistentVolumeClaimsReader) List() ([]*PersistentVolumeClaim, error) {
+func (c *persistentVolumeClaimsReader) List(ctx context.Context) ([]*PersistentVolumeClaim, error) {
 	list := &corev1.PersistentVolumeClaimList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *persistentVolumeClaimsReader) List() ([]*PersistentVolumeClaim, error) 
 		Resource(PersistentVolumeClaimResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

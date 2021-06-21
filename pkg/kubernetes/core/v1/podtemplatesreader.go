@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type PodTemplatesReader interface {
-	Get(name string) (*PodTemplate, error)
-	List() ([]*PodTemplate, error)
+	Get(ctx context.Context, name string) (*PodTemplate, error)
+	List(ctx context.Context) ([]*PodTemplate, error)
 }
 
 func NewPodTemplatesReader(client resource.Client, filter resource.Filter) PodTemplatesReader {
@@ -29,7 +30,7 @@ type podTemplatesReader struct {
 	filter resource.Filter
 }
 
-func (c *podTemplatesReader) Get(name string) (*PodTemplate, error) {
+func (c *podTemplatesReader) Get(ctx context.Context, name string) (*PodTemplate, error) {
 	podTemplate := &corev1.PodTemplate{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *podTemplatesReader) Get(name string) (*PodTemplate, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(podTemplate)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *podTemplatesReader) Get(name string) (*PodTemplate, error) {
 	return NewPodTemplate(podTemplate, c.Client), nil
 }
 
-func (c *podTemplatesReader) List() ([]*PodTemplate, error) {
+func (c *podTemplatesReader) List(ctx context.Context) ([]*PodTemplate, error) {
 	list := &corev1.PodTemplateList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *podTemplatesReader) List() ([]*PodTemplate, error) {
 		Resource(PodTemplateResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@
 package v1beta1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	networkingv1beta1 "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type IngressesReader interface {
-	Get(name string) (*Ingress, error)
-	List() ([]*Ingress, error)
+	Get(ctx context.Context, name string) (*Ingress, error)
+	List(ctx context.Context) ([]*Ingress, error)
 }
 
 func NewIngressesReader(client resource.Client, filter resource.Filter) IngressesReader {
@@ -29,7 +30,7 @@ type ingressesReader struct {
 	filter resource.Filter
 }
 
-func (c *ingressesReader) Get(name string) (*Ingress, error) {
+func (c *ingressesReader) Get(ctx context.Context, name string) (*Ingress, error) {
 	ingress := &networkingv1beta1.Ingress{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *ingressesReader) Get(name string) (*Ingress, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(ingress)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *ingressesReader) Get(name string) (*Ingress, error) {
 	return NewIngress(ingress, c.Client), nil
 }
 
-func (c *ingressesReader) List() ([]*Ingress, error) {
+func (c *ingressesReader) List(ctx context.Context) ([]*Ingress, error) {
 	list := &networkingv1beta1.IngressList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *ingressesReader) List() ([]*Ingress, error) {
 		Resource(IngressResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

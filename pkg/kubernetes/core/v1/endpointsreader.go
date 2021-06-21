@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type EndpointsReader interface {
-	Get(name string) (*Endpoints, error)
-	List() ([]*Endpoints, error)
+	Get(ctx context.Context, name string) (*Endpoints, error)
+	List(ctx context.Context) ([]*Endpoints, error)
 }
 
 func NewEndpointsReader(client resource.Client, filter resource.Filter) EndpointsReader {
@@ -29,7 +30,7 @@ type endpointsReader struct {
 	filter resource.Filter
 }
 
-func (c *endpointsReader) Get(name string) (*Endpoints, error) {
+func (c *endpointsReader) Get(ctx context.Context, name string) (*Endpoints, error) {
 	endpoints := &corev1.Endpoints{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *endpointsReader) Get(name string) (*Endpoints, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(endpoints)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *endpointsReader) Get(name string) (*Endpoints, error) {
 	return NewEndpoints(endpoints, c.Client), nil
 }
 
-func (c *endpointsReader) List() ([]*Endpoints, error) {
+func (c *endpointsReader) List(ctx context.Context) ([]*Endpoints, error) {
 	list := &corev1.EndpointsList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *endpointsReader) List() ([]*Endpoints, error) {
 		Resource(EndpointsResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

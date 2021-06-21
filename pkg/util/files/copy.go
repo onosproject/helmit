@@ -16,6 +16,7 @@ package files
 
 import (
 	"archive/tar"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/onosproject/helmit/pkg/kubernetes"
@@ -75,7 +76,7 @@ func (c *CopyOptions) Do() error {
 		return errors.New("source and destination cannot be empty")
 	}
 
-	pod, err := c.client.Clientset().CoreV1().Pods(c.client.Namespace()).Get(c.pod, metav1.GetOptions{})
+	pod, err := c.client.Clientset().CoreV1().Pods(c.client.Namespace()).Get(context.Background(), c.pod, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}

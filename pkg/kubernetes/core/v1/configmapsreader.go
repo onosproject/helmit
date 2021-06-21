@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type ConfigMapsReader interface {
-	Get(name string) (*ConfigMap, error)
-	List() ([]*ConfigMap, error)
+	Get(ctx context.Context, name string) (*ConfigMap, error)
+	List(ctx context.Context) ([]*ConfigMap, error)
 }
 
 func NewConfigMapsReader(client resource.Client, filter resource.Filter) ConfigMapsReader {
@@ -29,7 +30,7 @@ type configMapsReader struct {
 	filter resource.Filter
 }
 
-func (c *configMapsReader) Get(name string) (*ConfigMap, error) {
+func (c *configMapsReader) Get(ctx context.Context, name string) (*ConfigMap, error) {
 	configMap := &corev1.ConfigMap{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *configMapsReader) Get(name string) (*ConfigMap, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(configMap)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *configMapsReader) Get(name string) (*ConfigMap, error) {
 	return NewConfigMap(configMap, c.Client), nil
 }
 
-func (c *configMapsReader) List() ([]*ConfigMap, error) {
+func (c *configMapsReader) List(ctx context.Context) ([]*ConfigMap, error) {
 	list := &corev1.ConfigMapList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *configMapsReader) List() ([]*ConfigMap, error) {
 		Resource(ConfigMapResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

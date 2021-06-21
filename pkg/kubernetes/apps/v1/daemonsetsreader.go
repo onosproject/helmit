@@ -3,6 +3,7 @@
 package v1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type DaemonSetsReader interface {
-	Get(name string) (*DaemonSet, error)
-	List() ([]*DaemonSet, error)
+	Get(ctx context.Context, name string) (*DaemonSet, error)
+	List(ctx context.Context) ([]*DaemonSet, error)
 }
 
 func NewDaemonSetsReader(client resource.Client, filter resource.Filter) DaemonSetsReader {
@@ -29,7 +30,7 @@ type daemonSetsReader struct {
 	filter resource.Filter
 }
 
-func (c *daemonSetsReader) Get(name string) (*DaemonSet, error) {
+func (c *daemonSetsReader) Get(ctx context.Context, name string) (*DaemonSet, error) {
 	daemonSet := &appsv1.DaemonSet{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *daemonSetsReader) Get(name string) (*DaemonSet, error) {
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(daemonSet)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *daemonSetsReader) Get(name string) (*DaemonSet, error) {
 	return NewDaemonSet(daemonSet, c.Client), nil
 }
 
-func (c *daemonSetsReader) List() ([]*DaemonSet, error) {
+func (c *daemonSetsReader) List(ctx context.Context) ([]*DaemonSet, error) {
 	list := &appsv1.DaemonSetList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *daemonSetsReader) List() ([]*DaemonSet, error) {
 		Resource(DaemonSetResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err

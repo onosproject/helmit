@@ -3,6 +3,7 @@
 package v1beta1
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/kubernetes/resource"
 	policyv1beta1 "k8s.io/api/policy/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,8 +14,8 @@ import (
 )
 
 type PodDisruptionBudgetsReader interface {
-	Get(name string) (*PodDisruptionBudget, error)
-	List() ([]*PodDisruptionBudget, error)
+	Get(ctx context.Context, name string) (*PodDisruptionBudget, error)
+	List(ctx context.Context) ([]*PodDisruptionBudget, error)
 }
 
 func NewPodDisruptionBudgetsReader(client resource.Client, filter resource.Filter) PodDisruptionBudgetsReader {
@@ -29,7 +30,7 @@ type podDisruptionBudgetsReader struct {
 	filter resource.Filter
 }
 
-func (c *podDisruptionBudgetsReader) Get(name string) (*PodDisruptionBudget, error) {
+func (c *podDisruptionBudgetsReader) Get(ctx context.Context, name string) (*PodDisruptionBudget, error) {
 	podDisruptionBudget := &policyv1beta1.PodDisruptionBudget{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -43,7 +44,7 @@ func (c *podDisruptionBudgetsReader) Get(name string) (*PodDisruptionBudget, err
 		Name(name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(podDisruptionBudget)
 	if err != nil {
 		return nil, err
@@ -65,7 +66,7 @@ func (c *podDisruptionBudgetsReader) Get(name string) (*PodDisruptionBudget, err
 	return NewPodDisruptionBudget(podDisruptionBudget, c.Client), nil
 }
 
-func (c *podDisruptionBudgetsReader) List() ([]*PodDisruptionBudget, error) {
+func (c *podDisruptionBudgetsReader) List(ctx context.Context) ([]*PodDisruptionBudget, error) {
 	list := &policyv1beta1.PodDisruptionBudgetList{}
 	client, err := kubernetes.NewForConfig(c.Config())
 	if err != nil {
@@ -78,7 +79,7 @@ func (c *podDisruptionBudgetsReader) List() ([]*PodDisruptionBudget, error) {
 		Resource(PodDisruptionBudgetResource.Name).
 		VersionedParams(&metav1.ListOptions{}, metav1.ParameterCodec).
 		Timeout(time.Minute).
-		Do().
+		Do(ctx).
 		Into(list)
 	if err != nil {
 		return nil, err
