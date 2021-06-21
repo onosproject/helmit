@@ -70,7 +70,7 @@ func (s *ChartTestSuite) TestLocalInstall(t *testing.T) {
 	err = pod.Delete(context.Background())
 	assert.NoError(t, err)
 
-	err = deployment.Wait(context.Background(), 1 * time.Minute)
+	err = deployment.Wait(context.Background(), 1*time.Minute)
 	assert.NoError(t, err)
 
 	pods, err = deployment.Pods().List(context.Background())
