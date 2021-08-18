@@ -17,9 +17,10 @@ package simulation
 import (
 	"context"
 	"fmt"
-	"github.com/onosproject/onos-lib-go/pkg/southbound"
 	"sync"
 	"time"
+
+	"github.com/onosproject/onos-lib-go/pkg/grpc/retry"
 
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/kubernetes/config"
@@ -202,7 +203,8 @@ func (t *WorkerTask) getSimulators() ([]SimulatorServiceClient, error) {
 		worker, err := grpc.Dial(
 			t.getWorkerAddress(i, t.config.ID),
 			grpc.WithInsecure(),
-			grpc.WithUnaryInterceptor(southbound.RetryingUnaryClientInterceptor()))
+			grpc.WithUnaryInterceptor(retry.RetryingUnaryClientInterceptor(retry.WithRetryOn())),
+			grpc.WithStreamInterceptor(retry.RetryingStreamClientInterceptor(retry.WithRetryOn())))
 		if err != nil {
 			return nil, err
 		}

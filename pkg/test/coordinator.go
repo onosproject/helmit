@@ -17,11 +17,13 @@ package test
 import (
 	"context"
 	"fmt"
+	"strconv"
+
+	"github.com/onosproject/onos-lib-go/pkg/grpc/retry"
+
 	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/registry"
-	"github.com/onosproject/onos-lib-go/pkg/southbound"
 	"google.golang.org/grpc"
-	"strconv"
 )
 
 // newCoordinator returns a new test coordinator
@@ -119,7 +121,10 @@ func (t *WorkerTask) Run() (int, error) {
 	}
 
 	address := fmt.Sprintf("%s:5000", job.ID)
-	conn, err := grpc.Dial(address, grpc.WithUnaryInterceptor(southbound.RetryingUnaryClientInterceptor()), grpc.WithInsecure())
+	conn, err := grpc.Dial(address,
+		grpc.WithUnaryInterceptor(retry.RetryingUnaryClientInterceptor(retry.WithRetryOn())),
+		grpc.WithStreamInterceptor(retry.RetryingStreamClientInterceptor(retry.WithRetryOn())),
+		grpc.WithInsecure())
 
 	if err != nil {
 		return 0, err
