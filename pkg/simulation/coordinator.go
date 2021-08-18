@@ -203,8 +203,8 @@ func (t *WorkerTask) getSimulators() ([]SimulatorServiceClient, error) {
 		worker, err := grpc.Dial(
 			t.getWorkerAddress(i, t.config.ID),
 			grpc.WithInsecure(),
-			grpc.WithUnaryInterceptor(retry.RetryingUnaryClientInterceptor(retry.WithRetryOn())),
-			grpc.WithStreamInterceptor(retry.RetryingStreamClientInterceptor(retry.WithRetryOn())))
+			grpc.WithUnaryInterceptor(retry.RetryingUnaryClientInterceptor()),
+			grpc.WithStreamInterceptor(retry.RetryingStreamClientInterceptor()))
 		if err != nil {
 			return nil, err
 		}
