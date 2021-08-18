@@ -122,8 +122,8 @@ func (t *WorkerTask) Run() (int, error) {
 
 	address := fmt.Sprintf("%s:5000", job.ID)
 	conn, err := grpc.Dial(address,
-		grpc.WithUnaryInterceptor(retry.RetryingUnaryClientInterceptor(retry.WithRetryOn())),
-		grpc.WithStreamInterceptor(retry.RetryingStreamClientInterceptor(retry.WithRetryOn())),
+		grpc.WithUnaryInterceptor(retry.RetryingUnaryClientInterceptor()),
+		grpc.WithStreamInterceptor(retry.RetryingStreamClientInterceptor()),
 		grpc.WithInsecure())
 
 	if err != nil {
