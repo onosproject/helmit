@@ -32,6 +32,8 @@ type Config struct {
 	ID              string
 	Namespace       string
 	ServiceAccount  string
+	Labels          map[string]string
+	Annotations     map[string]string
 	Image           string
 	ImagePullPolicy corev1.PullPolicy
 	Executable      string

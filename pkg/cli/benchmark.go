@@ -71,6 +71,8 @@ func getBenchCommand() *cobra.Command {
 	}
 	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the benchmarks")
 	cmd.Flags().String("service-account", "", "the name of the service account to use to run worker pods")
+	cmd.Flags().StringToString("labels",  map[string]string{}, "a mapping of labels to add to the test pod")
+	cmd.Flags().StringToString("annotations",  map[string]string{}, "a mapping of annotations to add to the test pod")
 	cmd.Flags().StringP("context", "c", "", "the benchmark context")
 	cmd.Flags().StringP("image", "i", "", "the benchmark image to run")
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
@@ -100,6 +102,8 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 
 	namespace, _ := cmd.Flags().GetString("namespace")
 	serviceAccount, _ := cmd.Flags().GetString("service-account")
+	labels, _ := cmd.Flags().GetStringToString("labels")
+	annotations, _ := cmd.Flags().GetStringToString("annotations")
 	context, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	suite, _ := cmd.Flags().GetString("suite")
@@ -185,6 +189,8 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 			ID:              benchID,
 			Namespace:       namespace,
 			ServiceAccount:  serviceAccount,
+			Labels:          labels,
+			Annotations:     annotations,
 			Executable:      executable,
 			Image:           image,
 			ImagePullPolicy: pullPolicy,

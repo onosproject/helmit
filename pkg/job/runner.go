@@ -374,6 +374,18 @@ func (n *Runner) createJob(job *Job) error {
 		serviceAccount = defaultServiceAccountName
 	}
 
+	labels := job.Labels
+	if labels == nil {
+		labels = make(map[string]string)
+	}
+	labels["job"] = job.ID
+	labels["type"] = job.Type
+
+	annotations := job.Annotations
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
 	zero := int32(0)
 	one := int32(1)
 	batchJob := &batchv1.Job{
@@ -391,12 +403,9 @@ func (n *Runner) createJob(job *Job) error {
 			BackoffLimit: &zero,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"job":  job.ID,
-						"type": job.Type,
-					},
+					Labels:      labels,
+					Annotations: annotations,
 				},
-
 				Spec: corev1.PodSpec{
 					ServiceAccountName: serviceAccount,
 					RestartPolicy:      corev1.RestartPolicyNever,
@@ -554,7 +563,7 @@ func (n *Runner) copyBinary(job *Job) error {
 	err = files.Copy(n).
 		From(job.Executable).
 		To(job.Executable).
-		On(pod.Name).
+		On(pod.Name, "job").
 		Do()
 	if err != nil {
 		step.Fail(err)
@@ -583,7 +592,7 @@ func (n *Runner) runBinary(job *Job) error {
 	err = files.Echo(n).
 		String(path.Base(job.Executable)).
 		To("/tmp/bin-ready").
-		On(pod.Name).
+		On(pod.Name, "job").
 		Do()
 	if err != nil {
 		step.Fail(err)
@@ -616,7 +625,7 @@ func (n *Runner) copyValueFiles(job *Job) error {
 			err := files.Copy(n).
 				From(valueFile).
 				To(valueFile).
-				On(pod.Name).
+				On(pod.Name, "job").
 				Do()
 			if err != nil {
 				fileStep.Fail(err)
@@ -650,7 +659,7 @@ func (n *Runner) copyContext(job *Job) error {
 	err = files.Copy(n).
 		From(job.Context).
 		To(job.Context).
-		On(pod.Name).
+		On(pod.Name, "job").
 		Do()
 	if err != nil {
 		step.Fail(err)
@@ -710,7 +719,7 @@ func (n *Runner) runJob(job *Job) error {
 	err = files.Echo(n).
 		String(path.Base(job.Context)).
 		To(readyFile).
-		On(pod.Name).
+		On(pod.Name, "job").
 		Do()
 
 	if err != nil {

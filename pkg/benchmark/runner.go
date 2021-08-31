@@ -55,6 +55,8 @@ func Run(config *Config) error {
 				ID:              config.ID,
 				Namespace:       config.Namespace,
 				ServiceAccount:  config.ServiceAccount,
+				Labels:          config.Labels,
+				Annotations:     config.Annotations,
 				Image:           config.Image,
 				ImagePullPolicy: config.ImagePullPolicy,
 				Executable:      configExecutable,
