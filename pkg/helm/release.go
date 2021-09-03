@@ -117,7 +117,7 @@ func (r *HelmRelease) Set(path string, value interface{}) *HelmRelease {
 
 // Get gets a value
 func (r *HelmRelease) Get(path string) interface{} {
-	return getValue(r.values, getPathNames(path))
+	return getValue(r.Values(), getPathNames(path))
 }
 
 // SetUsername sets the authentication user name
@@ -145,7 +145,10 @@ func (r *HelmRelease) Timeout() time.Duration {
 
 // Values is the release's values
 func (r *HelmRelease) Values() map[string]interface{} {
-	return r.values
+	if r.release == nil {
+		return mergeMaps(normalize(r.values).(map[string]interface{}), r.overrides)
+	}
+	return mergeMaps(r.release.Chart.Values, r.release.Config)
 }
 
 // SetSkipCRDs sets whether to skip CRDs
@@ -235,8 +238,7 @@ func (r *HelmRelease) Install(wait bool) error {
 		}
 	}
 
-	values := mergeMaps(normalize(r.values).(map[string]interface{}), r.overrides)
-	release, err := install.Run(chart, values)
+	release, err := install.Run(chart, r.Values())
 	if err != nil {
 		return err
 	}
