@@ -235,7 +235,7 @@ func (r *HelmRelease) Install(wait bool) error {
 		}
 	}
 
-	values := mergeMaps(r.overrides, normalize(r.values).(map[string]interface{}))
+	values := mergeMaps(normalize(r.values).(map[string]interface{}), r.overrides)
 	release, err := install.Run(chart, values)
 	if err != nil {
 		return err
