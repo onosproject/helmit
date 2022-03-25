@@ -1,9 +1,16 @@
+# SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 export CGO_ENABLED=0
 export GO111MODULE=on
 
 .PHONY: build
 
 HELMIT_VERSION := latest
+
+build-tools:=$(shell if [ ! -d "./build/build-tools" ]; then cd build && git clone https://github.com/onosproject/build-tools.git; fi)
+include ./build/build-tools/make/onf-common.mk
 
 build: # @HELP build the Go binaries and run all validations (default)
 build: build-helmit
@@ -19,39 +26,12 @@ generate:
 	go run github.com/onosproject/helmit/cmd/helmit-generate ./build/helmit-generate/generate.yaml ./pkg/kubernetes
 
 test: # @HELP run the unit tests and source code validation
-test: linters license_check build deps
+test: linters license build deps
 	go test github.com/onosproject/helmit/...
 
 jenkins-test:  # @HELP run the unit tests and source code validation producing a junit style report for Jenkins
-jenkins-test: build-tools deps license_check linters
-	TEST_PACKAGES=NONE ./../build-tools/build/jenkins/make-unit
-
-
-coverage: # @HELP generate unit test coverage data
-coverage: build deps license_check
-	#./build/bin/coveralls-coverage
-
-linters: golang-ci # @HELP examines Go source code and reports coding problems
-	golangci-lint run --timeout 5m
-
-build-tools: # @HELP install the ONOS build tools if needed
-	@if [ ! -d "../build-tools" ]; then cd .. && git clone https://github.com/onosproject/build-tools.git; fi
-
-jenkins-tools: # @HELP installs tooling needed for Jenkins
-	cd .. && go get -u github.com/jstemmer/go-junit-report && go get github.com/t-yuki/gocover-cobertura
-
-golang-ci: # @HELP install golang-ci if not present
-	golangci-lint --version || curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b `go env GOPATH`/bin v1.36.0
-
-deps: # @HELP ensure that the required dependencies are in place
-	go build -v ./...
-	bash -c "diff -u <(echo -n) <(git diff go.mod)"
-	bash -c "diff -u <(echo -n) <(git diff go.sum)"
-
-
-license_check: build-tools # @HELP examine and ensure license headers exist
-	./../build-tools/licensing/boilerplate.py -v --rootdir=${CURDIR}
-
+jenkins-test: deps license linters
+	TEST_PACKAGES=NONE ./build/build-tools/build/jenkins/make-unit
 
 proto: # @HELP build Protobuf/gRPC input types
 proto:
@@ -85,20 +65,12 @@ kind: images
 all: build images tests
 
 publish: # @HELP publish version on github and dockerhub
-	./../build-tools/publish-version ${VERSION} onosproject/helmit-runner onosproject/helmit-tests
+	./build/build-tools/publish-version ${VERSION} onosproject/helmit-runner onosproject/helmit-tests
 
-jenkins-publish: build-tools jenkins-tools # @HELP Jenkins calls this to publish artifacts
+jenkins-publish: # @HELP Jenkins calls this to publish artifacts
 	./build/bin/push-images
-	../build-tools/release-merge-commit
+	./build/build-tools/release-merge-commit
 
 all: t
-clean: # @HELP remove all the build artifacts
+clean:: # @HELP remove all the build artifacts
 	rm -rf ./build/_output ./vendor
-
-help:
-	@grep -E '^.*: *# *@HELP' $(MAKEFILE_LIST) \
-    | sort \
-    | awk ' \
-        BEGIN {FS = ": *# *@HELP"}; \
-        {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}; \
-    '

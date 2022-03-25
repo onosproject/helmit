@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ## Command-Line Tools
 
 The `helmit` command-line tool is used to run tests, benchmarks, and simulations inside a Kubernetes cluster.
