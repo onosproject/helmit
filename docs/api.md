@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+
+SPDX-License-Identifier: Apache-2.0
+-->
+
 ## Helm API
 
 Helmit provides a Go API for managing Helm charts within a Kubernetes cluster. Tests, benchmarks, and simulations
