@@ -8,7 +8,6 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/iancoleman/strcase v0.1.2
-	github.com/joncalhoun/pipe v0.0.0-20170510025636-72505674a733
 	github.com/onosproject/onos-lib-go v0.8.1
 	github.com/spf13/cobra v1.2.1
 	github.com/stretchr/testify v1.7.0
