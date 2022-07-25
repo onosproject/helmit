@@ -7,7 +7,7 @@ package codegen
 import (
 	"fmt"
 	"github.com/iancoleman/strcase"
-	"github.com/joncalhoun/pipe"
+	"github.com/onosproject/helmit/pkg/pipe"
 	"io"
 	"os"
 	"os/exec"
