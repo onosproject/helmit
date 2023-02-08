@@ -9,13 +9,13 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/iancoleman/strcase v0.1.2
 	github.com/onosproject/onos-lib-go v0.8.1
-	github.com/spf13/cobra v1.2.1
-	github.com/stretchr/testify v1.7.0
-	google.golang.org/grpc v1.41.0
+	github.com/spf13/cobra v1.6.1
+	github.com/stretchr/testify v1.8.1
+	google.golang.org/grpc v1.49.0
 	gopkg.in/yaml.v2 v2.4.0
-	helm.sh/helm/v3 v3.7.2
-	k8s.io/api v0.22.4
-	k8s.io/apiextensions-apiserver v0.22.4
-	k8s.io/apimachinery v0.22.4
-	k8s.io/client-go v0.22.4
+	helm.sh/helm/v3 v3.11.1
+	k8s.io/api v0.26.0
+	k8s.io/apiextensions-apiserver v0.26.0
+	k8s.io/apimachinery v0.26.0
+	k8s.io/client-go v0.26.0
 )
