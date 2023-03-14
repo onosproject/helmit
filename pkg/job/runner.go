@@ -303,7 +303,7 @@ func (n *Runner) createJob(job *Job) error {
 	})
 	env = append(env, corev1.EnvVar{
 		Name:  "JOB_TYPE",
-		Value: job.Type,
+		Value: string(job.Type),
 	})
 	env = append(env, corev1.EnvVar{
 		Name: "POD_NAMESPACE",
@@ -395,7 +395,7 @@ func (n *Runner) createJob(job *Job) error {
 		labels = make(map[string]string)
 	}
 	labels["job"] = job.ID
-	labels["type"] = job.Type
+	labels["type"] = string(job.Type)
 
 	annotations := job.Annotations
 	if annotations == nil {
@@ -410,7 +410,7 @@ func (n *Runner) createJob(job *Job) error {
 			Namespace: n.namespace,
 			Annotations: map[string]string{
 				"job":  job.ID,
-				"type": job.Type,
+				"type": string(job.Type),
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -466,7 +466,7 @@ func (n *Runner) createJob(job *Job) error {
 			Namespace: n.namespace,
 			Annotations: map[string]string{
 				"job":  job.ID,
-				"type": job.Type,
+				"type": string(job.Type),
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{
@@ -498,7 +498,7 @@ func (n *Runner) createJob(job *Job) error {
 				Name: job.ID,
 				Labels: map[string]string{
 					"job":  job.ID,
-					"type": job.Type,
+					"type": string(job.Type),
 				},
 				OwnerReferences: []metav1.OwnerReference{
 					{
@@ -713,7 +713,7 @@ func (n *Runner) createSecrets(job *Job) error {
 			Name: helmitSecretsName,
 			Labels: map[string]string{
 				"job":  job.ID,
-				"type": job.Type,
+				"type": string(job.Type),
 			},
 			OwnerReferences: []metav1.OwnerReference{
 				{

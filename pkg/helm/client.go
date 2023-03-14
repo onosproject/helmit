@@ -1,17 +1,14 @@
 package helm
 
 import (
-	"context"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
 	"log"
+	"os"
+	"path/filepath"
 )
 
 var settings = cli.New()
-
-type Cmd[T any] interface {
-	Do(ctx context.Context) error
-}
 
 func NewClient(context Context) *Helm {
 	return &Helm{
@@ -41,6 +38,22 @@ func (h *Helm) Upgrade(release string, chart string) *UpgradeCmd {
 
 func (h *Helm) Uninstall(release string) *UninstallCmd {
 	return newUninstall(h.context, release)
+}
+
+type Cmd struct {
+	context Context
+}
+
+func (cmd *Cmd) setContextDir() error {
+	dir := cmd.context.WorkDir
+	if dir != "" {
+		if absDir, err := filepath.Abs(dir); err != nil {
+			return err
+		} else if err := os.Chdir(absDir); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // getConfig gets the Helm configuration for the given namespace

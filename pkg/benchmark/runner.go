@@ -93,7 +93,7 @@ func run(suites map[string]BenchmarkingSuite) error {
 	benchType := getBenchmarkType()
 	switch benchType {
 	case benchmarkTypeCoordinator:
-		return runCoordinator(config)
+		return runCoordinator(suites, config)
 	case benchmarkTypeWorker:
 		return runWorker(suites, config)
 	}
@@ -101,8 +101,8 @@ func run(suites map[string]BenchmarkingSuite) error {
 }
 
 // runCoordinator runs a test image in the coordinator context
-func runCoordinator(config *Config) error {
-	coordinator, err := newCoordinator(config)
+func runCoordinator(suites map[string]BenchmarkingSuite, config *Config) error {
+	coordinator, err := newCoordinator(suites, config)
 	if err != nil {
 		return err
 	}

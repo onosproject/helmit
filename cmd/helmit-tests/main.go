@@ -6,24 +6,23 @@ package main
 
 import (
 	"github.com/onosproject/helmit/pkg/benchmark"
+	"github.com/onosproject/helmit/pkg/job"
 	"github.com/onosproject/helmit/pkg/simulation"
 	"github.com/onosproject/helmit/pkg/test"
 	tests "github.com/onosproject/helmit/test"
-	"os"
 )
 
 func main() {
-	jobType := os.Getenv("JOB_TYPE")
-	switch jobType {
-	case "test":
+	switch job.GetType() {
+	case job.TestType:
 		test.Main(map[string]test.TestingSuite{
 			"chart": &tests.ChartTestSuite{},
 		})
-	case "benchmark":
+	case job.BenchmarkType:
 		benchmark.Main(map[string]benchmark.BenchmarkingSuite{
 			"chart": &tests.ChartBenchmarkSuite{},
 		})
-	case "simulation":
+	case job.SimulationType:
 		simulation.Main(map[string]simulation.SimulatingSuite{
 			"chart": &tests.ChartSimulationSuite{},
 		})

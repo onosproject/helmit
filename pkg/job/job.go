@@ -12,6 +12,18 @@ import (
 	"time"
 )
 
+type Type string
+
+const (
+	BenchmarkType  Type = "benchmark"
+	SimulationType Type = "simulation"
+	TestType       Type = "test"
+)
+
+func GetType() Type {
+	return Type(os.Getenv("JOB_TYPE"))
+}
+
 const configPath = "/etc/helmit"
 const configFile = "job.json"
 const readyFile = "/tmp/job-ready"
@@ -40,7 +52,7 @@ type Config struct {
 type Job struct {
 	*Config
 	JobConfig interface{}
-	Type      string
+	Type      Type
 }
 
 // Bootstrap bootstraps the job

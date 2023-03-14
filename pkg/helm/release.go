@@ -8,7 +8,6 @@ import (
 	"helm.sh/helm/v3/pkg/downloader"
 	"helm.sh/helm/v3/pkg/getter"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -16,7 +15,9 @@ const defaultTimeout = 10 * time.Minute
 
 func newInstall(context Context, release string, chart string) *InstallCmd {
 	return &InstallCmd{
-		context:   context,
+		Cmd: &Cmd{
+			context: context,
+		},
 		namespace: context.Namespace,
 		release:   release,
 		chart:     chart,
@@ -26,7 +27,7 @@ func newInstall(context Context, release string, chart string) *InstallCmd {
 }
 
 type InstallCmd struct {
-	context    Context
+	*Cmd
 	namespace  string
 	release    string
 	chart      string
@@ -113,7 +114,7 @@ func (cmd *InstallCmd) Values(files ...string) *InstallCmd {
 
 // Do installs the Helm chart
 func (cmd *InstallCmd) Do(ctx context.Context) error {
-	if err := setContextDir(); err != nil {
+	if err := cmd.setContextDir(); err != nil {
 		return err
 	}
 
@@ -189,7 +190,9 @@ func (cmd *InstallCmd) Do(ctx context.Context) error {
 
 func newUpgrade(context Context, release string, chart string) *UpgradeCmd {
 	return &UpgradeCmd{
-		context:   context,
+		Cmd: &Cmd{
+			context: context,
+		},
 		namespace: context.Namespace,
 		release:   release,
 		chart:     chart,
@@ -199,7 +202,7 @@ func newUpgrade(context Context, release string, chart string) *UpgradeCmd {
 }
 
 type UpgradeCmd struct {
-	context    Context
+	*Cmd
 	namespace  string
 	release    string
 	chart      string
@@ -292,7 +295,7 @@ func (cmd *UpgradeCmd) Values(files ...string) *UpgradeCmd {
 
 // Do installs the Helm chart
 func (cmd *UpgradeCmd) Do(ctx context.Context) error {
-	if err := setContextDir(); err != nil {
+	if err := cmd.setContextDir(); err != nil {
 		return err
 	}
 
@@ -368,7 +371,9 @@ func (cmd *UpgradeCmd) Do(ctx context.Context) error {
 
 func newUninstall(context Context, release string) *UninstallCmd {
 	return &UninstallCmd{
-		context:   context,
+		Cmd: &Cmd{
+			context: context,
+		},
 		namespace: context.Namespace,
 		release:   release,
 		timeout:   defaultTimeout,
@@ -376,7 +381,7 @@ func newUninstall(context Context, release string) *UninstallCmd {
 }
 
 type UninstallCmd struct {
-	context   Context
+	*Cmd
 	namespace string
 	release   string
 	wait      bool
@@ -399,7 +404,7 @@ func (cmd *UninstallCmd) Timeout(timeout time.Duration) *UninstallCmd {
 }
 
 func (cmd *UninstallCmd) Do(ctx context.Context) error {
-	if err := setContextDir(); err != nil {
+	if err := cmd.setContextDir(); err != nil {
 		return err
 	}
 
@@ -413,17 +418,4 @@ func (cmd *UninstallCmd) Do(ctx context.Context) error {
 	uninstall.Timeout = cmd.timeout
 	_, err = uninstall.Run(cmd.release)
 	return err
-}
-
-// setContextDir sets the directory to the context dir
-func setContextDir() error {
-	dir := getContext().WorkDir
-	if dir != "" {
-		if absDir, err := filepath.Abs(dir); err != nil {
-			return err
-		} else if err := os.Chdir(absDir); err != nil {
-			return err
-		}
-	}
-	return nil
 }

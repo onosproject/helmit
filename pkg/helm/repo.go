@@ -16,12 +16,14 @@ import (
 
 func newRepo(context Context) *RepoCmd {
 	return &RepoCmd{
-		context: context,
+		Cmd: &Cmd{
+			context: context,
+		},
 	}
 }
 
 type RepoCmd struct {
-	context Context
+	*Cmd
 }
 
 func (repo *RepoCmd) Add(name string, url string) *RepoAddCmd {
@@ -34,14 +36,16 @@ func (repo *RepoCmd) Remove(name string) *RepoRemoveCmd {
 
 func newRepoAdd(context Context, name string, url string) *RepoAddCmd {
 	return &RepoAddCmd{
-		context: context,
-		name:    name,
-		url:     url,
+		Cmd: &Cmd{
+			context: context,
+		},
+		name: name,
+		url:  url,
 	}
 }
 
 type RepoAddCmd struct {
-	context  Context
+	*Cmd
 	name     string
 	url      string
 	username string
@@ -59,7 +63,7 @@ func (cmd *RepoAddCmd) Password(password string) *RepoAddCmd {
 }
 
 func (cmd *RepoAddCmd) Do(ctx context.Context) error {
-	if err := setContextDir(); err != nil {
+	if err := cmd.setContextDir(); err != nil {
 		return err
 	}
 
@@ -130,18 +134,20 @@ func (cmd *RepoAddCmd) Do(ctx context.Context) error {
 
 func newRepoRemove(context Context, names ...string) *RepoRemoveCmd {
 	return &RepoRemoveCmd{
-		context: context,
-		names:   names,
+		Cmd: &Cmd{
+			context: context,
+		},
+		names: names,
 	}
 }
 
 type RepoRemoveCmd struct {
-	context Context
-	names   []string
+	*Cmd
+	names []string
 }
 
 func (cmd *RepoRemoveCmd) Do(ctx context.Context) error {
-	if err := setContextDir(); err != nil {
+	if err := cmd.setContextDir(); err != nil {
 		return err
 	}
 
