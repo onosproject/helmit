@@ -12,13 +12,13 @@ import (
 	"github.com/onosproject/onos-lib-go/pkg/grpc/retry"
 
 	"github.com/onosproject/helmit/pkg/job"
-	"github.com/onosproject/helmit/pkg/registry"
 	"google.golang.org/grpc"
 )
 
 // newCoordinator returns a new test coordinator
-func newCoordinator(config *Config) (*Coordinator, error) {
+func newCoordinator(suites map[string]TestingSuite, config *Config) (*Coordinator, error) {
 	return &Coordinator{
+		suites: suites,
 		config: config,
 		runner: job.NewNamespace(config.Namespace),
 	}, nil
@@ -26,6 +26,7 @@ func newCoordinator(config *Config) (*Coordinator, error) {
 
 // Coordinator coordinates workers for suites of tests
 type Coordinator struct {
+	suites map[string]TestingSuite
 	config *Config
 	runner *job.Runner
 }
@@ -36,7 +37,9 @@ func (c *Coordinator) Run() (int, error) {
 	for iteration := 1; iteration <= c.config.Iterations || c.config.Iterations < 0; iteration++ {
 		suites := c.config.Suites
 		if len(suites) == 0 || suites[0] == "" {
-			suites = registry.GetTestSuites()
+			for name := range c.suites {
+				suites = append(suites, name)
+			}
 		}
 		returnCode = 0
 		for _, suite := range suites {

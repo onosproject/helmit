@@ -21,10 +21,6 @@ build-helmit:
 build-helmit-tests:
 	go build -o build/helmit-tests/_output/bin/onos-tests ./cmd/onos-tests
 
-generate: # @HELP generate k8s client interfaces and implementations
-generate:
-	go run github.com/onosproject/helmit/cmd/helmit-generate ./build/helmit-generate/generate.yaml ./pkg/kubernetes
-
 test: # @HELP run the unit tests and source code validation
 test: linters license build deps
 	go test github.com/onosproject/helmit/...

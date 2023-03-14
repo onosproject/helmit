@@ -6,7 +6,6 @@ package job
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
@@ -68,12 +67,7 @@ func isReady() bool {
 
 // LoadConfig returns the job configuration
 func LoadConfig(config interface{}) error {
-	file, err := os.Open(filepath.Join(configPath, configFile))
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	bytes, err := ioutil.ReadAll(file)
+	bytes, err := os.ReadFile(filepath.Join(configPath, configFile))
 	if err != nil {
 		return err
 	}

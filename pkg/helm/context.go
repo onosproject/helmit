@@ -4,44 +4,23 @@
 
 package helm
 
-import "path/filepath"
-
-var context = &Context{}
-
-// SetContext sets the Helm context
-func SetContext(ctx *Context) error {
-	ctxWorkDir := ctx.WorkDir
-	if ctxWorkDir != "" {
-		absDir, err := filepath.Abs(ctxWorkDir)
-		if err != nil {
-			return err
-		}
-		ctxWorkDir = absDir
-	}
-
-	ctxValueFiles := make(map[string][]string)
-	for release, valueFiles := range ctx.ValueFiles {
-		cleanValueFiles := make([]string, 0)
-		for _, valueFile := range valueFiles {
-			absPath, err := filepath.Abs(valueFile)
-			if err != nil {
-				return err
-			}
-			cleanValueFiles = append(cleanValueFiles, absPath)
-		}
-		ctxValueFiles[release] = cleanValueFiles
-	}
-
-	context = &Context{
-		WorkDir:    ctxWorkDir,
-		Values:     ctx.Values,
-		ValueFiles: ctxValueFiles,
-	}
-	return nil
-}
+import (
+	"encoding/csv"
+	"fmt"
+	"github.com/iancoleman/strcase"
+	"helm.sh/helm/v3/pkg/chart"
+	"helm.sh/helm/v3/pkg/cli/values"
+	"helm.sh/helm/v3/pkg/getter"
+	"path/filepath"
+	"reflect"
+	"strings"
+)
 
 // Context is a Helm context
 type Context struct {
+	// Namespace is the Helm namespace
+	Namespace string
+
 	// WorkDir is the Helm working directory
 	WorkDir string
 
@@ -52,19 +31,149 @@ type Context struct {
 	ValueFiles map[string][]string
 }
 
-// Release returns the context for the given release
-func (c *Context) Release(name string) *ReleaseContext {
-	return &ReleaseContext{
-		Values:     c.Values[name],
-		ValueFiles: c.ValueFiles[name],
+func (c *Context) getReleaseValues(release string, defaultValues map[string]any, defaultFiles []string) (map[string]any, error) {
+	var valueFiles []string
+	for _, valueFile := range append(c.ValueFiles[release], defaultFiles...) {
+		absPath, err := filepath.Abs(valueFile)
+		if err != nil {
+			return nil, err
+		}
+		valueFiles = append(valueFiles, absPath)
 	}
+
+	opts := &values.Options{
+		ValueFiles: valueFiles,
+		Values:     c.Values[release],
+	}
+	overrides, err := opts.MergeValues(getter.All(settings))
+	if err != nil {
+		return nil, err
+	}
+	overrides = mergeValues(defaultValues, overrides)
+	return overrides, nil
 }
 
-// ReleaseContext is a Helm release context
-type ReleaseContext struct {
-	// ValueFiles is the release value files
-	ValueFiles []string
+func mergeValues(a, b map[string]any) map[string]any {
+	return mergeMaps(normalize[map[string]any](a), b)
+}
 
-	// Values is the release values
-	Values []string
+func mergeMaps(a, b map[string]any) map[string]any {
+	out := make(map[string]any, len(a))
+	for k, v := range a {
+		out[k] = v
+	}
+	for k, v := range b {
+		if v, ok := v.(map[string]any); ok {
+			if bv, ok := out[k]; ok {
+				if bv, ok := bv.(map[string]any); ok {
+					out[k] = mergeMaps(bv, v)
+					continue
+				}
+			}
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// setKey sets a key in a map
+func setKey(config map[string]any, path []string, value any) {
+	names, key := getPathAndKey(path)
+	parent := getMapRef(config, names)
+	parent[key] = value
+}
+
+// getMapRef gets the given map reference
+func getMapRef(parent map[string]any, path []string) map[string]any {
+	if len(path) == 0 {
+		return parent
+	}
+	child, ok := parent[path[0]]
+	if !ok {
+		child = make(map[string]any)
+		parent[path[0]] = child
+	}
+	return getMapRef(child.(map[string]any), path[1:])
+}
+
+func getPathNames(path string) []string {
+	r := csv.NewReader(strings.NewReader(path))
+	r.Comma = '.'
+	names, err := r.Read()
+	if err != nil {
+		panic(err)
+	}
+	return names
+}
+
+func getPathAndKey(path []string) ([]string, string) {
+	return path[:len(path)-1], path[len(path)-1]
+}
+
+func normalize[T any](value T) T {
+	return normalizeAny(value).(T)
+}
+
+func normalizeAny(value any) any {
+	kind := reflect.ValueOf(value).Kind()
+	if kind == reflect.Struct {
+		return normalizeStruct(value.(struct{}))
+	} else if kind == reflect.Map {
+		return normalizeMap(value.(map[string]any))
+	} else if kind == reflect.Slice {
+		return normalizeSlice(value.([]any))
+	}
+	return value
+}
+
+func normalizeStruct(value struct{}) any {
+	elem := reflect.ValueOf(value).Elem()
+	elemType := elem.Type()
+	normalized := make(map[string]any)
+	for i := 0; i < elem.NumField(); i++ {
+		key := normalizeField(elemType.Field(i))
+		value := normalize(elem.Field(i).Interface())
+		normalized[key] = value
+	}
+	return normalized
+}
+
+func normalizeMap(values map[string]any) any {
+	normalized := make(map[string]any)
+	for key, value := range values {
+		normalized[key] = normalize(value)
+	}
+	return normalized
+}
+
+func normalizeSlice(values []any) any {
+	normalized := make([]any, len(values))
+	for i, value := range values {
+		normalized[i] = normalize(value)
+	}
+	return normalized
+}
+
+func normalizeField(field reflect.StructField) string {
+	tag := field.Tag.Get("yaml")
+	if tag != "" {
+		return strings.Split(tag, ",")[0]
+	}
+	return strcase.ToLowerCamel(field.Name)
+}
+
+func isChartInstallable(ch *chart.Chart) (bool, error) {
+	switch ch.Metadata.Type {
+	case "", "application":
+		return true, nil
+	}
+	return false, fmt.Errorf("%s charts are not installable", ch.Metadata.Type)
+}
+
+func isChartUpgradable(ch *chart.Chart) (bool, error) {
+	switch ch.Metadata.Type {
+	case "", "application":
+		return true, nil
+	}
+	return false, fmt.Errorf("%s charts are not upgradable", ch.Metadata.Type)
 }

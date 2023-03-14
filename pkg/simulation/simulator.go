@@ -8,109 +8,107 @@ import (
 	"context"
 	"fmt"
 	"github.com/onosproject/helmit/pkg/helm"
-	"github.com/onosproject/helmit/pkg/registry"
 	"github.com/onosproject/helmit/pkg/util/logging"
-	"google.golang.org/grpc"
 	"math/rand"
-	"net"
-	"strconv"
 	"sync"
 	"time"
 )
 
 // SimulatingSuite is a suite of simulators
-type SimulatingSuite interface{}
+type SimulatingSuite interface {
+	SetS(s *S)
+	S() *S
+	SetHelm(helm *helm.Helm)
+	Helm() *helm.Helm
+	SetContext(ctx context.Context)
+	Context() context.Context
+}
 
-// Suite is an identifier interface for simulation suites
-type Suite struct{}
+// Suite is the base for a benchmark suite
+type Suite struct {
+	s    *S
+	helm *helm.Helm
+	ctx  context.Context
+}
+
+func (suite *Suite) Namespace() string {
+	return suite.helm.Namespace()
+}
+
+func (suite *Suite) SetS(s *S) {
+	suite.s = s
+}
+
+func (suite *Suite) S() *S {
+	return suite.s
+}
+
+func (suite *Suite) SetHelm(helm *helm.Helm) {
+	suite.helm = helm
+}
+
+func (suite *Suite) Helm() *helm.Helm {
+	return suite.helm
+}
+
+func (suite *Suite) SetContext(ctx context.Context) {
+	suite.ctx = ctx
+}
+
+func (suite *Suite) Context() context.Context {
+	return suite.ctx
+}
 
 // ScheduleSimulator is an interface for scheduling operations for a simulation
 type ScheduleSimulator interface {
-	ScheduleSimulator(s *Simulator)
+	ScheduleSimulator()
 }
 
 // SetupSimulation is an interface for setting up a suite of simulators
 type SetupSimulation interface {
-	SetupSimulation(s *Simulator) error
+	SetupSimulation() error
 }
 
 // TearDownSimulation is an interface for tearing down a suite of simulators
 type TearDownSimulation interface {
-	TearDownSimulation(s *Simulator) error
+	TearDownSimulation() error
 }
 
 // SetupSimulator is an interface for executing code before every simulator
 type SetupSimulator interface {
-	SetupSimulator(s *Simulator) error
+	SetupSimulator() error
 }
 
 // TearDownSimulator is an interface for executing code after every simulator
 type TearDownSimulator interface {
-	TearDownSimulator(s *Simulator) error
-}
-
-// Arg is a simulator argument
-type Arg struct {
-	value string
-}
-
-// Int returns the argument as an int
-func (a *Arg) Int(def int) int {
-	if a.value == "" {
-		return def
-	}
-	i, err := strconv.Atoi(a.value)
-	if err != nil {
-		panic(err)
-	}
-	return i
-}
-
-// String returns the argument as a string
-func (a *Arg) String(def string) string {
-	if a.value == "" {
-		return def
-	}
-	return a.value
+	TearDownSimulator() error
 }
 
 // newSimulator returns a new simulation instance
-func newSimulator(name string, process int, suite SimulatingSuite, args map[string]string, config *Config) *Simulator {
-	return &Simulator{
+func newSimulator(name string, process int, suite SimulatingSuite, config *Config) *S {
+	return &S{
 		Name:    name,
 		Process: process,
 		suite:   suite,
-		args:    args,
 		config:  config,
 		ops:     make(map[string]*operation),
 	}
 }
 
-// Simulator is a simulator runner
-type Simulator struct {
+// S is a simulator runner
+type S struct {
 	// Name is the name of the simulation
 	Name string
 	// Process is the unique identifier of the simulator process
 	Process int
 	config  *Config
 	suite   SimulatingSuite
-	args    map[string]string
 	ops     map[string]*operation
 	mu      sync.Mutex
 }
 
-// Arg gets a simulator argument
-func (s *Simulator) Arg(name string) *Arg {
-	if value, ok := s.args[name]; ok {
-		return &Arg{
-			value: value,
-		}
-	}
-	return &Arg{}
-}
-
 // Schedule schedules an operation
-func (s *Simulator) Schedule(name string, f func(*Simulator) error, rate time.Duration, jitter float64) {
+func (s *S) Schedule(name string, f func(*S) error, rate time.Duration, jitter float64) {
 	if override, ok := s.config.Rates[name]; ok {
 		rate = override
 	}
@@ -128,61 +126,61 @@ func (s *Simulator) Schedule(name string, f func(*Simulator) error, rate time.Du
 }
 
 // lock locks the simulation
-func (s *Simulator) lock() {
+func (s *S) lock() {
 	s.mu.Lock()
 }
 
 // unlock unlocks the simulator
-func (s *Simulator) unlock() {
+func (s *S) unlock() {
 	s.mu.Unlock()
 }
 
 // setupSimulation sets up the simulation
-func (s *Simulator) setupSimulation() error {
+func (s *S) setupSimulation() error {
 	if setupSuite, ok := s.suite.(SetupSimulation); ok {
-		return setupSuite.SetupSimulation(s)
+		return setupSuite.SetupSimulation()
 	}
 	return nil
 }
 
 // teardownSimulation tears down the simulation
-func (s *Simulator) teardownSimulation() error {
+func (s *S) teardownSimulation() error {
 	if tearDownSuite, ok := s.suite.(TearDownSimulation); ok {
-		return tearDownSuite.TearDownSimulation(s)
+		return tearDownSuite.TearDownSimulation()
 	}
 	return nil
 }
 
 // setupSimulator sets up the simulator
-func (s *Simulator) setupSimulator() error {
+func (s *S) setupSimulator() error {
 	if setupSuite, ok := s.suite.(SetupSimulator); ok {
-		if err := setupSuite.SetupSimulator(s); err != nil {
+		if err := setupSuite.SetupSimulator(); err != nil {
 			return err
 		}
 	}
 	if setupSuite, ok := s.suite.(ScheduleSimulator); ok {
-		setupSuite.ScheduleSimulator(s)
+		setupSuite.ScheduleSimulator()
 	}
 	return nil
 }
 
 // teardownSimulator tears down the simulator
-func (s *Simulator) teardownSimulator() error {
+func (s *S) teardownSimulator() error {
 	if tearDownSuite, ok := s.suite.(TearDownSimulator); ok {
-		return tearDownSuite.TearDownSimulator(s)
+		return tearDownSuite.TearDownSimulator()
 	}
 	return nil
 }
 
 // start starts the simulator
-func (s *Simulator) start() {
+func (s *S) start() {
 	for _, op := range s.ops {
 		go op.start()
 	}
 }
 
 // stop stops the simulator
-func (s *Simulator) stop() {
+func (s *S) stop() {
 	for _, op := range s.ops {
 		op.stop()
 	}
@@ -201,10 +199,10 @@ func waitJitter(duration time.Duration, maxFactor float64) <-chan time.Time {
 // operation is a simulator operation
 type operation struct {
 	name      string
-	f         func(*Simulator) error
+	f         func(*S) error
 	rate      time.Duration
 	jitter    float64
-	simulator *Simulator
+	simulator *S
 	stopCh    chan error
 }
 
@@ -236,153 +234,4 @@ func (o *operation) run() {
 // stop stops the operation simulator
 func (o *operation) stop() {
 	close(o.stopCh)
-}
-
-// newSimulatorServer returns a new simulator server
-func newSimulatorServer(config *Config) (*simulatorServer, error) {
-	return &simulatorServer{
-		config:      config,
-		simulations: make(map[string]*Simulator),
-	}, nil
-}
-
-// simulatorServer listens for simulator requests
-type simulatorServer struct {
-	config      *Config
-	simulations map[string]*Simulator
-}
-
-// Run runs a simulation
-func (s *simulatorServer) Run() error {
-	err := helm.SetContext(&helm.Context{
-		WorkDir:    s.config.Context,
-		Values:     s.config.Values,
-		ValueFiles: s.config.ValueFiles,
-	})
-	if err != nil {
-		return err
-	}
-
-	lis, err := net.Listen("tcp", ":5000")
-	if err != nil {
-		return err
-	}
-	server := grpc.NewServer()
-	RegisterSimulatorServiceServer(server, s)
-	return server.Serve(lis)
-}
-
-func (s *simulatorServer) getSimulation(name string, args map[string]string) (*Simulator, error) {
-	if simulation, ok := s.simulations[name]; ok {
-		return simulation, nil
-	}
-	suite := registry.GetSimulationSuite(name)
-	if suite != nil {
-		simulation := newSimulator(name, getSimulatorID(), suite, args, s.config)
-		s.simulations[name] = simulation
-		return simulation, nil
-	}
-	return nil, fmt.Errorf("unknown simulation %s", name)
-}
-
-// SetupSimulation sets up a simulation suite
-func (s *simulatorServer) SetupSimulation(ctx context.Context, request *SimulationLifecycleRequest) (*SimulationLifecycleResponse, error) {
-	step := logging.NewStep(fmt.Sprintf("%s/%d", request.Simulation, getSimulatorID()), "SetupSimulation %s", request.Simulation)
-	step.Start()
-
-	simulation, err := s.getSimulation(request.Simulation, request.Args)
-	if err != nil {
-		step.Fail(err)
-		return nil, err
-	}
-	if err := simulation.setupSimulation(); err != nil {
-		step.Fail(err)
-		return nil, err
-	}
-	step.Complete()
-	return &SimulationLifecycleResponse{}, nil
-}
-
-// TearDownSimulation tears down a simulation suite
-func (s *simulatorServer) TearDownSimulation(ctx context.Context, request *SimulationLifecycleRequest) (*SimulationLifecycleResponse, error) {
-	step := logging.NewStep(fmt.Sprintf("%s/%d", request.Simulation, getSimulatorID()), "TearDownSimulation %s", request.Simulation)
-	step.Start()
-
-	simulation, err := s.getSimulation(request.Simulation, request.Args)
-	if err != nil {
-		step.Fail(err)
-		return nil, err
-	}
-	if err := simulation.teardownSimulation(); err != nil {
-		step.Fail(err)
-		return nil, err
-	}
-	step.Complete()
-	return &SimulationLifecycleResponse{}, nil
-}
-
-func (s *simulatorServer) SetupSimulator(ctx context.Context, request *SimulationLifecycleRequest) (*SimulationLifecycleResponse, error) {
-	step := logging.NewStep(fmt.Sprintf("%s/%d", request.Simulation, getSimulatorID()), "SetupSimulator %s", request.Simulation)
-	step.Start()
-
-	simulation, err := s.getSimulation(request.Simulation, request.Args)
-	if err != nil {
-		step.Fail(err)
-		return nil, err
-	}
-	if err := simulation.setupSimulator(); err != nil {
-		step.Fail(err)
-		return nil, err
-	}
-	step.Complete()
-	return &SimulationLifecycleResponse{}, nil
-}
-
-func (s *simulatorServer) TearDownSimulator(ctx context.Context, request *SimulationLifecycleRequest) (*SimulationLifecycleResponse, error) {
-	step := logging.NewStep(fmt.Sprintf("%s/%d", request.Simulation, getSimulatorID()), "TearDownSimulator %s", request.Simulation)
-	step.Start()
-
-	simulation, err := s.getSimulation(request.Simulation, request.Args)
-	if err != nil {
-		step.Fail(err)
-		return nil, err
-	}
-	if err := simulation.teardownSimulator(); err != nil {
-		step.Fail(err)
-		return nil, err
-	}
-	step.Complete()
-	return &SimulationLifecycleResponse{}, nil
-}
-
-func (s *simulatorServer) StartSimulator(ctx context.Context, request *SimulatorRequest) (*SimulatorResponse, error) {
-	step := logging.NewStep(fmt.Sprintf("%s/%d", request.Simulation, getSimulatorID()), "StartSimulator %s", request.Simulation)
-	step.Start()
-
-	simulation, ok := s.simulations[request.Simulation]
-	if !ok {
-		err := fmt.Errorf("unknown simulation %s", request.Simulation)
-		step.Fail(err)
-		return nil, err
-	}
-
-	go simulation.start()
-	step.Complete()
-	return &SimulatorResponse{}, nil
-}
-
-func (s *simulatorServer) StopSimulator(ctx context.Context, request *SimulatorRequest) (*SimulatorResponse, error) {
-	step := logging.NewStep(fmt.Sprintf("%s/%d", request.Simulation, getSimulatorID()), "StopSimulator %s", request.Simulation)
-	step.Start()
-
-	simulation, ok := s.simulations[request.Simulation]
-	if !ok {
-		err := fmt.Errorf("unknown simulation %s", request.Simulation)
-		step.Fail(err)
-		return nil, err
-	}
-
-	simulation.stop()
-	step.Complete()
-	return &SimulatorResponse{}, nil
 }

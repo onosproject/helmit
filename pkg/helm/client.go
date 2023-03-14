@@ -1,47 +1,46 @@
-// SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
-//
-// SPDX-License-Identifier: Apache-2.0
-
-// nolint
 package helm
 
 import (
-	"log"
-
-	"github.com/onosproject/helmit/pkg/kubernetes/config"
+	"context"
 	"helm.sh/helm/v3/pkg/action"
-	"k8s.io/client-go/kubernetes"
+	"helm.sh/helm/v3/pkg/cli"
+	"log"
 )
 
-var clients = make(map[string]HelmClient)
+var settings = cli.New()
 
-// Namespace returns the Helm namespace
-func Namespace() string {
-	return config.GetNamespaceFromEnv()
+type Cmd[T any] interface {
+	Do(ctx context.Context) error
 }
 
-// Client returns the Helm client
-func Client() HelmClient {
-	return getClient(Namespace())
-}
-
-// getClient returns the client for the given namespace
-func getClient(namespace string) HelmClient {
-	client, ok := clients[namespace]
-	if !ok {
-		configuration, err := getConfig(namespace)
-		if err != nil {
-			panic(err)
-		}
-		client = &helmClient{
-			namespace: namespace,
-			client:    kubernetes.NewForConfigOrDie(config.GetRestConfigOrDie()),
-			charts:    make(map[string]*HelmChart),
-			config:    configuration,
-		}
-		clients[namespace] = client
+func NewClient(context Context) *Helm {
+	return &Helm{
+		context: context,
 	}
-	return client
+}
+
+type Helm struct {
+	context Context
+}
+
+func (h *Helm) Namespace() string {
+	return h.context.Namespace
+}
+
+func (h *Helm) Repo() *RepoCmd {
+	return newRepo(h.context)
+}
+
+func (h *Helm) Install(release string, chart string) *InstallCmd {
+	return newInstall(h.context, release, chart)
+}
+
+func (h *Helm) Upgrade(release string, chart string) *UpgradeCmd {
+	return newUpgrade(h.context, release, chart)
+}
+
+func (h *Helm) Uninstall(release string) *UninstallCmd {
+	return newUninstall(h.context, release)
 }
 
 // getConfig gets the Helm configuration for the given namespace
@@ -51,65 +50,4 @@ func getConfig(namespace string) (*action.Configuration, error) {
 		return nil, err
 	}
 	return config, nil
-}
-
-// HelmClient is a Helm client
-type HelmClient interface {
-	HelmChartClient
-	HelmReleaseClient
-
-	// Namespace returns the client for the given namespace
-	Namespace(namespace string) HelmClient
-}
-
-// helmClient is an implementation of the HelmClient interface
-type helmClient struct {
-	namespace string
-	client    *kubernetes.Clientset
-	charts    map[string]*HelmChart
-	config    *action.Configuration
-}
-
-func (c *helmClient) Namespace(namespace string) HelmClient {
-	return getClient(namespace)
-}
-
-// Charts returns a list of charts in the cluster
-func (c *helmClient) Charts() []*HelmChart {
-	charts := make([]*HelmChart, 0, len(c.charts))
-	for _, chart := range c.charts {
-		charts = append(charts, chart)
-	}
-	return charts
-}
-
-// HelmChart returns a chart
-func (c *helmClient) Chart(name string, repository ...string) *HelmChart {
-	chart, ok := c.charts[name]
-	if !ok {
-		chart = newChart(name, repository, c.namespace, c.client, c.config)
-		c.charts[name] = chart
-	}
-	return chart
-}
-
-// Releases returns a list of releases
-func (c *helmClient) Releases() []*HelmRelease {
-	releases := make([]*HelmRelease, 0)
-	for _, chart := range c.charts {
-		releases = append(releases, chart.Releases()...)
-	}
-	return releases
-}
-
-// Release returns the release with the given name
-func (c *helmClient) Release(name string) *HelmRelease {
-	for _, chart := range c.charts {
-		for _, release := range chart.Releases() {
-			if release.Name() == name {
-				return release
-			}
-		}
-	}
-	return nil
 }

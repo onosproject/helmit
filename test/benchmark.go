@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/onosproject/helmit/pkg/benchmark"
-	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/input"
 )
 
@@ -18,34 +17,33 @@ type ChartBenchmarkSuite struct {
 	value input.Source
 }
 
-// SetupSuite :: benchmark
-func (s *ChartBenchmarkSuite) SetupSuite(b *input.Context) error {
-	atomix := helm.Chart("kubernetes-controller").
-		Release("atomix-controller").
-		Set("scope", "Namespace")
-
-	err := atomix.Install(true)
-	if err != nil {
-		return err
-	}
-
-	err = atomix.Uninstall()
+func (s *ChartBenchmarkSuite) SetupSuite() error {
+	err := s.Helm().Install("atomix-controller", "./controller/chart").
+		Wait().
+		Do(s.Context())
 	if err != nil {
 		return err
 	}
 	return nil
-
 }
 
-// SetupWorker :: benchmark
-func (s *ChartBenchmarkSuite) SetupWorker(b *input.Context) error {
+func (s *ChartBenchmarkSuite) SetupWorker() error {
 	s.value = input.RandomString(8)
 	return nil
 }
 
-// BenchmarkTest :: benchmark
-func (s *ChartBenchmarkSuite) BenchmarkTest(b *benchmark.Benchmark) error {
+func (s *ChartBenchmarkSuite) BenchmarkTest() error {
 	println(s.value.Next().String())
 	time.Sleep(time.Second)
 	return nil
+}
+
+func (s *ChartBenchmarkSuite) TearDownSuite() error {
+	err := s.Helm().Uninstall("atomix-controller").
+		Wait().
+		Do(s.Context())
+	if err != nil {
+		return err
+	}
+	return err
 }

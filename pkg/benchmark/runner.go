@@ -74,17 +74,17 @@ func Run(config *Config) error {
 	return jobs.Run(job)
 }
 
-// Main runs a test
-func Main() {
-	if err := run(); err != nil {
-		println("Benchmark failed " + err.Error())
+// Main runs a benchmark
+func Main(suites map[string]BenchmarkingSuite) {
+	if err := run(suites); err != nil {
+		println("B failed " + err.Error())
 		os.Exit(1)
 	}
 	os.Exit(0)
 }
 
 // run runs a benchmark
-func run() error {
+func run(suites map[string]BenchmarkingSuite) error {
 	config := &Config{}
 	if err := jobs.Bootstrap(config); err != nil {
 		return err
@@ -95,7 +95,7 @@ func run() error {
 	case benchmarkTypeCoordinator:
 		return runCoordinator(config)
 	case benchmarkTypeWorker:
-		return runWorker(config)
+		return runWorker(suites, config)
 	}
 	return nil
 }
@@ -115,8 +115,8 @@ func runCoordinator(config *Config) error {
 }
 
 // runWorker runs a test image in the worker context
-func runWorker(config *Config) error {
-	worker, err := newWorker(config)
+func runWorker(suites map[string]BenchmarkingSuite, config *Config) error {
+	worker, err := newWorker(suites, config)
 	if err != nil {
 		return err
 	}

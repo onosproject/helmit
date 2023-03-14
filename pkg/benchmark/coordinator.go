@@ -16,8 +16,6 @@ import (
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 
 	"github.com/onosproject/helmit/pkg/job"
-	"github.com/onosproject/helmit/pkg/kubernetes/config"
-	"github.com/onosproject/helmit/pkg/registry"
 	"github.com/onosproject/helmit/pkg/util/async"
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
@@ -25,8 +23,9 @@ import (
 )
 
 // newCoordinator returns a new benchmark coordinator
-func newCoordinator(config *Config) (*Coordinator, error) {
+func newCoordinator(suites map[string]BenchmarkingSuite, config *Config) (*Coordinator, error) {
 	return &Coordinator{
+		suites: suites,
 		config: config,
 		runner: job.NewNamespace(config.Namespace),
 	}, nil
@@ -34,6 +33,7 @@ func newCoordinator(config *Config) (*Coordinator, error) {
 
 // Coordinator coordinates workers for suites of benchmarks
 type Coordinator struct {
+	suites map[string]BenchmarkingSuite
 	config *Config
 	runner *job.Runner
 }
@@ -42,7 +42,9 @@ type Coordinator struct {
 func (c *Coordinator) Run() (int, error) {
 	var suites []string
 	if c.config.Suite == "" {
-		suites = registry.GetBenchmarkSuites()
+		for name := range c.suites {
+			suites = append(suites, name)
+		}
 	} else {
 		suites = []string{c.config.Suite}
 	}
@@ -79,6 +81,7 @@ func (c *Coordinator) Run() (int, error) {
 			NoTeardown:  c.config.Config.NoTeardown,
 		}
 		task := &WorkerTask{
+			suites: c.suites,
 			runner: c.runner,
 			config: config,
 		}
@@ -99,6 +102,7 @@ func newJobID(testID, suite string) string {
 
 // WorkerTask manages a single test job for a test worker
 type WorkerTask struct {
+	suites  map[string]BenchmarkingSuite
 	runner  *job.Runner
 	config  *Config
 	workers []WorkerServiceClient
@@ -142,7 +146,6 @@ func (t *WorkerTask) createWorker(worker int) error {
 	if env == nil {
 		env = make(map[string]string)
 	}
-	env[config.NamespaceEnv] = t.config.ID
 	env[benchmarkTypeEnv] = string(benchmarkTypeWorker)
 	env[benchmarkWorkerEnv] = fmt.Sprintf("%d", worker)
 	env[benchmarkJobEnv] = t.config.ID
@@ -327,7 +330,7 @@ func (t *WorkerTask) runBenchmarks() error {
 	} else {
 		suiteStep := logging.NewStep(t.config.ID, "Run benchmark suite %s", t.config.Suite)
 		suiteStep.Start()
-		suite := registry.GetBenchmarkSuite(t.config.Suite)
+		suite := t.suites[t.config.Suite]
 		benchmarks := getBenchmarks(suite)
 		for _, benchmark := range benchmarks {
 			benchmarkSuite := logging.NewStep(t.config.ID, "Run benchmark %s", benchmark)

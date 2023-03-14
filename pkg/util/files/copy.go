@@ -9,11 +9,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/onosproject/helmit/pkg/kubernetes"
+	"github.com/onosproject/helmit/pkg/util/k8s"
 	"io"
 	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 	"os"
@@ -21,57 +22,37 @@ import (
 	"strings"
 )
 
-// Copy returns a new copier
-func Copy(client kubernetes.Client) *CopyOptions {
-	return &CopyOptions{
-		client:    client,
-		namespace: client.Namespace(),
-	}
-}
-
 // CopyOptions is options for copying files from a source to a destination
 type CopyOptions struct {
-	client    kubernetes.Client
-	source    string
-	dest      string
-	namespace string
-	pod       string
-	container string
-}
-
-// From sets the copy source
-func (c *CopyOptions) From(src string) *CopyOptions {
-	c.source = src
-	return c
-}
-
-// To sets the copy destination path
-func (c *CopyOptions) To(dest string) *CopyOptions {
-	c.dest = dest
-	return c
-}
-
-// On sets the copy destination pod
-func (c *CopyOptions) On(pod string, container ...string) *CopyOptions {
-	c.pod = pod
-	if len(container) > 0 {
-		c.container = container[0]
-	}
-	return c
+	From      string
+	To        string
+	Namespace string
+	Pod       string
+	Container string
 }
 
 // Do executes the copy to the pod
-func (c *CopyOptions) Do() error {
-	if c.source == "" || c.pod == "" {
+func (c *CopyOptions) Do(ctx context.Context) error {
+	if c.From == "" || c.Pod == "" {
 		return errors.New("source and destination cannot be empty")
 	}
 
-	pod, err := c.client.Clientset().CoreV1().Pods(c.client.Namespace()).Get(context.Background(), c.pod, metav1.GetOptions{})
+	config, err := k8s.GetConfig()
 	if err != nil {
 		return err
 	}
 
-	containerName := c.container
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	pod, err := client.CoreV1().Pods(c.Namespace).Get(ctx, c.Pod, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	containerName := c.Container
 	if len(containerName) == 0 {
 		if len(pod.Spec.Containers) > 1 {
 			return errors.New("destination container is ambiguous")
@@ -81,32 +62,32 @@ func (c *CopyOptions) Do() error {
 
 	reader, writer := io.Pipe()
 
-	if c.dest == "" {
-		c.dest = c.source
+	if c.To == "" {
+		c.To = c.From
 	}
 
 	// strip trailing slash (if any)
-	if c.source != "/" && strings.HasSuffix(string(c.source[len(c.source)-1]), "/") {
-		c.source = c.source[:len(c.source)-1]
+	if c.From != "/" && strings.HasSuffix(string(c.From[len(c.From)-1]), "/") {
+		c.From = c.From[:len(c.From)-1]
 	}
-	if c.dest != "/" && strings.HasSuffix(string(c.dest[len(c.dest)-1]), "/") {
-		c.dest = c.dest[:len(c.dest)-1]
+	if c.To != "/" && strings.HasSuffix(string(c.To[len(c.To)-1]), "/") {
+		c.To = c.To[:len(c.To)-1]
 	}
 
 	go func() {
 		defer writer.Close()
-		err := makeTar(c.source, c.dest, writer)
+		err := makeTar(c.From, c.To, writer)
 		if err != nil {
 			fmt.Println(err)
 		}
 	}()
 
 	cmd := []string{"tar", "-xf", "-"}
-	req := c.client.Clientset().CoreV1().RESTClient().
+	req := client.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
-		Name(c.pod).
-		Namespace(c.namespace).
+		Name(c.Pod).
+		Namespace(c.Namespace).
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
 			Container: containerName,
@@ -117,7 +98,7 @@ func (c *CopyOptions) Do() error {
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(c.client.Config(), "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {
 		return err
 	}

@@ -8,8 +8,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/onosproject/helmit/pkg/helm"
-	"github.com/onosproject/helmit/pkg/input"
-	"github.com/onosproject/helmit/pkg/registry"
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
 	"net"
@@ -18,30 +16,21 @@ import (
 )
 
 // newWorker returns a new benchmark worker
-func newWorker(config *Config) (*Worker, error) {
+func newWorker(suites map[string]BenchmarkingSuite, config *Config) (*Worker, error) {
 	return &Worker{
+		suites: suites,
 		config: config,
-		suites: make(map[string]BenchmarkingSuite),
 	}, nil
 }
 
 // Worker runs a benchmark job
 type Worker struct {
-	config *Config
 	suites map[string]BenchmarkingSuite
+	config *Config
 }
 
 // Run runs a benchmark
 func (w *Worker) Run() error {
-	err := helm.SetContext(&helm.Context{
-		WorkDir:    w.config.Context,
-		Values:     w.config.Values,
-		ValueFiles: w.config.ValueFiles,
-	})
-	if err != nil {
-		return err
-	}
-
 	lis, err := net.Listen("tcp", ":5000")
 	if err != nil {
 		return err
@@ -55,11 +44,11 @@ func (w *Worker) getSuite(name string) (BenchmarkingSuite, error) {
 	if suite, ok := w.suites[name]; ok {
 		return suite, nil
 	}
-	if suite := registry.GetBenchmarkSuite(name); suite != nil {
-		w.suites[name] = suite
-		return suite, nil
+	suite, ok := w.suites[name]
+	if !ok {
+		return nil, fmt.Errorf("unknown benchmark suite %s", name)
 	}
-	return nil, fmt.Errorf("unknown benchmark suite %s", name)
+	return suite, nil
 }
 
 // SetupSuite sets up a benchmark suite
@@ -73,8 +62,22 @@ func (w *Worker) SetupSuite(ctx context.Context, request *SuiteRequest) (*SuiteR
 		return nil, err
 	}
 
+	suite.SetHelm(helm.NewClient(helm.Context{
+		Namespace:  w.config.Namespace,
+		WorkDir:    w.config.Context,
+		Values:     w.config.Values,
+		ValueFiles: w.config.ValueFiles,
+	}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), w.config.Timeout)
+	defer cancel()
+	for key, value := range request.Args {
+		ctx = context.WithValue(ctx, key, value)
+	}
+	suite.SetContext(ctx)
+
 	if setupSuite, ok := suite.(SetupSuite); ok {
-		if err := setupSuite.SetupSuite(input.NewContext(request.Suite, request.Args)); err != nil {
+		if err := setupSuite.SetupSuite(); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -95,8 +98,15 @@ func (w *Worker) TearDownSuite(ctx context.Context, request *SuiteRequest) (*Sui
 		return nil, err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), w.config.Timeout)
+	defer cancel()
+	for key, value := range request.Args {
+		ctx = context.WithValue(ctx, key, value)
+	}
+	suite.SetContext(ctx)
+
 	if tearDownSuite, ok := suite.(TearDownSuite); ok {
-		if err := tearDownSuite.TearDownSuite(input.NewContext(request.Suite, request.Args)); err != nil {
+		if err := tearDownSuite.TearDownSuite(); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -117,8 +127,15 @@ func (w *Worker) SetupWorker(ctx context.Context, request *SuiteRequest) (*Suite
 		return nil, err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), w.config.Timeout)
+	defer cancel()
+	for key, value := range request.Args {
+		ctx = context.WithValue(ctx, key, value)
+	}
+	suite.SetContext(ctx)
+
 	if setupWorker, ok := suite.(SetupWorker); ok {
-		if err := setupWorker.SetupWorker(input.NewContext(request.Suite, request.Args)); err != nil {
+		if err := setupWorker.SetupWorker(); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -139,8 +156,15 @@ func (w *Worker) TearDownWorker(ctx context.Context, request *SuiteRequest) (*Su
 		return nil, err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), w.config.Timeout)
+	defer cancel()
+	for key, value := range request.Args {
+		ctx = context.WithValue(ctx, key, value)
+	}
+	suite.SetContext(ctx)
+
 	if tearDownWorker, ok := suite.(TearDownWorker); ok {
-		if err := tearDownWorker.TearDownWorker(input.NewContext(request.Suite, request.Args)); err != nil {
+		if err := tearDownWorker.TearDownWorker(); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -161,9 +185,15 @@ func (w *Worker) SetupBenchmark(ctx context.Context, request *BenchmarkRequest) 
 		return nil, err
 	}
 
-	context := input.NewContext(request.Benchmark, request.Args)
+	ctx, cancel := context.WithTimeout(context.Background(), w.config.Timeout)
+	defer cancel()
+	for key, value := range request.Args {
+		ctx = context.WithValue(ctx, key, value)
+	}
+	suite.SetContext(ctx)
+
 	if setupBenchmark, ok := suite.(SetupBenchmark); ok {
-		if err := setupBenchmark.SetupBenchmark(context); err != nil {
+		if err := setupBenchmark.SetupBenchmark(request.Suite, request.Benchmark); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -171,7 +201,7 @@ func (w *Worker) SetupBenchmark(ctx context.Context, request *BenchmarkRequest) 
 
 	methods := reflect.TypeOf(suite)
 	if method, ok := methods.MethodByName("Setup" + request.Benchmark); ok {
-		method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(context)})
+		method.Func.Call([]reflect.Value{reflect.ValueOf(suite)})
 	}
 
 	step.Complete()
@@ -189,9 +219,15 @@ func (w *Worker) TearDownBenchmark(ctx context.Context, request *BenchmarkReques
 		return nil, err
 	}
 
-	context := input.NewContext(request.Benchmark, request.Args)
+	ctx, cancel := context.WithTimeout(context.Background(), w.config.Timeout)
+	defer cancel()
+	for key, value := range request.Args {
+		ctx = context.WithValue(ctx, key, value)
+	}
+	suite.SetContext(ctx)
+
 	if tearDownBenchmark, ok := suite.(TearDownBenchmark); ok {
-		if err := tearDownBenchmark.TearDownBenchmark(context); err != nil {
+		if err := tearDownBenchmark.TearDownBenchmark(request.Suite, request.Benchmark); err != nil {
 			step.Fail(err)
 			return nil, err
 		}
@@ -199,7 +235,7 @@ func (w *Worker) TearDownBenchmark(ctx context.Context, request *BenchmarkReques
 
 	methods := reflect.TypeOf(suite)
 	if method, ok := methods.MethodByName("TearDown" + request.Benchmark); ok {
-		method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(context)})
+		method.Func.Call([]reflect.Value{reflect.ValueOf(suite)})
 	}
 
 	step.Complete()
@@ -217,8 +253,14 @@ func (w *Worker) RunBenchmark(ctx context.Context, request *RunRequest) (*RunRes
 		return nil, err
 	}
 
-	context := input.NewContext(request.Benchmark, request.Args)
-	benchmark := newBenchmark(int(request.Requests), request.Duration, int(request.Parallelism), request.MaxLatency, context)
+	ctx, cancel := context.WithTimeout(context.Background(), w.config.Timeout)
+	defer cancel()
+	for key, value := range request.Args {
+		ctx = context.WithValue(ctx, key, value)
+	}
+	suite.SetContext(ctx)
+
+	benchmark := newBenchmark(request.Benchmark, int(request.Requests), request.Duration, int(request.Parallelism), request.MaxLatency)
 	result, err := benchmark.run(suite)
 	if err != nil {
 		return nil, err
@@ -229,7 +271,7 @@ func (w *Worker) RunBenchmark(ctx context.Context, request *RunRequest) (*RunRes
 
 // benchmarkFilter filters benchmark method names
 func benchmarkFilter(name string) (bool, error) {
-	if ok, _ := regexp.MatchString("^Benchmark", name); !ok {
+	if ok, _ := regexp.MatchString("^B", name); !ok {
 		return false, nil
 	}
 	return true, nil

@@ -6,7 +6,6 @@ package main
 
 import (
 	"github.com/onosproject/helmit/pkg/benchmark"
-	"github.com/onosproject/helmit/pkg/registry"
 	"github.com/onosproject/helmit/pkg/simulation"
 	"github.com/onosproject/helmit/pkg/test"
 	tests "github.com/onosproject/helmit/test"
@@ -17,13 +16,16 @@ func main() {
 	jobType := os.Getenv("JOB_TYPE")
 	switch jobType {
 	case "test":
-		registry.RegisterTestSuite("chart", &tests.ChartTestSuite{})
-		test.Main()
+		test.Main(map[string]test.TestingSuite{
+			"chart": &tests.ChartTestSuite{},
+		})
 	case "benchmark":
-		registry.RegisterBenchmarkSuite("chart", &tests.ChartBenchmarkSuite{})
-		benchmark.Main()
+		benchmark.Main(map[string]benchmark.BenchmarkingSuite{
+			"chart": &tests.ChartBenchmarkSuite{},
+		})
 	case "simulation":
-		registry.RegisterSimulationSuite("chart", &tests.ChartSimulationSuite{})
-		simulation.Main()
+		simulation.Main(map[string]simulation.SimulatingSuite{
+			"chart": &tests.ChartSimulationSuite{},
+		})
 	}
 }

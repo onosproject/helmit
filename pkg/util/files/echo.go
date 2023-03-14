@@ -8,71 +8,47 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/onosproject/helmit/pkg/util/k8s"
+	"k8s.io/client-go/kubernetes"
 	"os"
 
-	"github.com/onosproject/helmit/pkg/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 )
 
-// Echo returns a new echo client
-func Echo(client kubernetes.Client) *EchoOptions {
-	return &EchoOptions{
-		client:    client,
-		namespace: client.Namespace(),
-	}
-}
-
 // EchoOptions is options for echoing output to a file
 type EchoOptions struct {
-	client    kubernetes.Client
-	namespace string
-	pod       string
-	container string
-	file      string
-	bytes     []byte
-}
-
-// Bytes sets the bytes to echo
-func (o *EchoOptions) Bytes(bytes []byte) *EchoOptions {
-	o.bytes = bytes
-	return o
-}
-
-// Contents sets the contents to echo
-func (o *EchoOptions) String(s string) *EchoOptions {
-	return o.Bytes([]byte(s))
-}
-
-// To configures the file to which to echo
-func (o *EchoOptions) To(filename string) *EchoOptions {
-	o.file = filename
-	return o
-}
-
-// On configures the copy destination pod
-func (o *EchoOptions) On(pod string, container ...string) *EchoOptions {
-	o.pod = pod
-	if len(container) > 0 {
-		o.container = container[0]
-	}
-	return o
+	Namespace string
+	Pod       string
+	Container string
+	File      string
+	Bytes     []byte
 }
 
 // Do executes the copy to the pod
-func (o *EchoOptions) Do() error {
-	if o.pod == "" || o.file == "" {
+func (o *EchoOptions) Do(ctx context.Context) error {
+	if o.Pod == "" || o.File == "" {
 		return errors.New("target file cannot be empty")
 	}
 
-	pod, err := o.client.Clientset().CoreV1().Pods(o.client.Namespace()).Get(context.Background(), o.pod, metav1.GetOptions{})
+	config, err := k8s.GetConfig()
 	if err != nil {
 		return err
 	}
 
-	containerName := o.container
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	pod, err := client.CoreV1().Pods(o.Namespace).Get(context.Background(), o.Pod, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	containerName := o.Container
 	if len(containerName) == 0 {
 		if len(pod.Spec.Containers) > 1 {
 			return errors.New("destination container is ambiguous")
@@ -80,12 +56,12 @@ func (o *EchoOptions) Do() error {
 		containerName = pod.Spec.Containers[0].Name
 	}
 
-	cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo \"%s\" > %s", string(o.bytes), o.file)}
-	req := o.client.Clientset().CoreV1().RESTClient().
+	cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo \"%s\" > %s", string(o.Bytes), o.File)}
+	req := client.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
-		Name(o.pod).
-		Namespace(o.namespace).
+		Name(o.Pod).
+		Namespace(o.Namespace).
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
 			Container: containerName,
@@ -96,7 +72,7 @@ func (o *EchoOptions) Do() error {
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(o.client.Config(), "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {
 		return err
 	}

@@ -1,194 +1,143 @@
-// SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
-//
-// SPDX-License-Identifier: Apache-2.0
-
-// nolint
 package helm
 
 import (
-	"bytes"
-	"encoding/csv"
-	"fmt"
-	"os"
-	"reflect"
-	"strings"
-	"time"
-
-	"github.com/iancoleman/strcase"
+	"context"
 	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
-	"helm.sh/helm/v3/pkg/cli/values"
 	"helm.sh/helm/v3/pkg/downloader"
 	"helm.sh/helm/v3/pkg/getter"
-	helm "helm.sh/helm/v3/pkg/kube"
-	"helm.sh/helm/v3/pkg/release"
-	"k8s.io/client-go/kubernetes"
+	"os"
+	"path/filepath"
+	"time"
 )
 
-var settings = cli.New()
+const defaultTimeout = 10 * time.Minute
 
-// HelmReleaseClient is a Helm release client
-type HelmReleaseClient interface {
-	// Releases returns a list of releases in the namespace
-	Releases() []*HelmRelease
-
-	// Release gets a chart release in the namespace
-	Release(name string) *HelmRelease
-}
-
-// Release returns a Helm chart release
-func Release(name string) *HelmRelease {
-	return Client().Release(name)
-}
-
-// Releases returns a list of Helm chart releases
-func Releases() []*HelmRelease {
-	return Client().Releases()
-}
-
-func newRelease(name string, namespace string, client *kubernetes.Clientset, chart *HelmChart, config *action.Configuration) *HelmRelease {
-	ctx := context.Release(name)
-	opts := &values.Options{
-		ValueFiles: ctx.ValueFiles,
-		Values:     ctx.Values,
-	}
-	values, err := opts.MergeValues(getter.All(settings))
-	if err != nil {
-		panic(err)
-	}
-
-	return &HelmRelease{
-		namespace: namespace,
-		client:    client,
+func newInstall(context Context, release string, chart string) *InstallCmd {
+	return &InstallCmd{
+		context:   context,
+		namespace: context.Namespace,
+		release:   release,
 		chart:     chart,
-		config:    config,
-		context:   ctx,
-		name:      name,
-		values:    make(map[string]interface{}),
-		overrides: values,
-		timeout:   5 * time.Minute,
+		values:    make(map[string]any),
+		timeout:   defaultTimeout,
 	}
 }
 
-// HelmRelease is a Helm chart release
-type HelmRelease struct {
-	namespace string
-	client    *kubernetes.Clientset
-	chart     *HelmChart
-	config    *action.Configuration
-	context   *ReleaseContext
-	name      string
-	values    map[string]interface{}
-	overrides map[string]interface{}
-	skipCRDs  bool
-	release   *release.Release
-	userName  string
-	password  string
-	timeout   time.Duration
+type InstallCmd struct {
+	context    Context
+	namespace  string
+	release    string
+	chart      string
+	version    string
+	repoURL    string
+	username   string
+	password   string
+	skipCRDs   bool
+	atomic     bool
+	verify     bool
+	dryRun     bool
+	wait       bool
+	timeout    time.Duration
+	values     map[string]any
+	valueFiles []string
 }
 
-// Namespace returns the release namespace
-func (r *HelmRelease) Namespace() string {
-	return r.namespace
+func (cmd *InstallCmd) Namespace(namespace string) *InstallCmd {
+	cmd.namespace = namespace
+	return cmd
 }
 
-// Name returns the release name
-func (r *HelmRelease) Name() string {
-	return r.name
+func (cmd *InstallCmd) Version(version string) *InstallCmd {
+	cmd.version = version
+	return cmd
+}
+
+func (cmd *InstallCmd) Username(username string) *InstallCmd {
+	cmd.username = username
+	return cmd
+}
+
+func (cmd *InstallCmd) Password(password string) *InstallCmd {
+	cmd.password = password
+	return cmd
+}
+
+func (cmd *InstallCmd) RepoURL(repoURL string) *InstallCmd {
+	cmd.repoURL = repoURL
+	return cmd
+}
+
+func (cmd *InstallCmd) SkipCRDs() *InstallCmd {
+	cmd.skipCRDs = true
+	return cmd
+}
+
+func (cmd *InstallCmd) Atomic() *InstallCmd {
+	cmd.atomic = true
+	return cmd
+}
+
+func (cmd *InstallCmd) Verify() *InstallCmd {
+	cmd.verify = true
+	return cmd
+}
+
+func (cmd *InstallCmd) DryRun() *InstallCmd {
+	cmd.dryRun = true
+	return cmd
+}
+
+func (cmd *InstallCmd) Wait() *InstallCmd {
+	cmd.wait = true
+	return cmd
+}
+
+func (cmd *InstallCmd) Timeout(timeout time.Duration) *InstallCmd {
+	cmd.timeout = timeout
+	return cmd
 }
 
 // Set sets a value
-func (r *HelmRelease) Set(path string, value interface{}) *HelmRelease {
-	setKey(r.values, getPathNames(path), value)
-	return r
+func (cmd *InstallCmd) Set(path string, value interface{}) *InstallCmd {
+	setKey(cmd.values, getPathNames(path), value)
+	return cmd
 }
 
-// Get gets a value
-func (r *HelmRelease) Get(path string) interface{} {
-	return getValue(r.Values(), getPathNames(path))
+// Values adds values files to the release
+func (cmd *InstallCmd) Values(files ...string) *InstallCmd {
+	cmd.valueFiles = append(cmd.valueFiles, files...)
+	return cmd
 }
 
-// SetUsername sets the authentication user name
-func (r *HelmRelease) SetUsername(userName string) *HelmRelease {
-	r.userName = userName
-	return r
-}
-
-// SetPassword sets the authentication password
-func (r *HelmRelease) SetPassword(password string) *HelmRelease {
-	r.password = password
-	return r
-}
-
-// WithTimeout specifies the maximum time to allow for an install operation to complete
-func (r *HelmRelease) WithTimeout(timeout time.Duration) *HelmRelease {
-	r.timeout = timeout
-	return r
-}
-
-// Timeout returns the maximum time to allow for an install operation to complete
-func (r *HelmRelease) Timeout() time.Duration {
-	return r.timeout
-}
-
-// Values is the release's values
-func (r *HelmRelease) Values() map[string]interface{} {
-	if r.release == nil {
-		return mergeMaps(normalize(r.values).(map[string]interface{}), r.overrides)
-	}
-	return mergeMaps(r.release.Chart.Values, r.release.Config)
-}
-
-// SetSkipCRDs sets whether to skip CRDs
-func (r *HelmRelease) SetSkipCRDs(skipCRDs bool) *HelmRelease {
-	r.skipCRDs = skipCRDs
-	return r
-}
-
-// SkipCRDs returns whether CRDs are skipped in the release
-func (r *HelmRelease) SkipCRDs() bool {
-	return r.skipCRDs
-}
-
-// GetResources returns a list of chart resources
-func (r *HelmRelease) GetResources() (helm.ResourceList, error) {
-	resources, err := r.config.KubeClient.Build(bytes.NewBufferString(r.release.Manifest), true)
-	if err != nil {
-		return nil, err
-	}
-	return resources, nil
-}
-
-// setContextDir sets the directory to the context dir
-func (r *HelmRelease) setContextDir() error {
-	if context.WorkDir != "" {
-		if err := os.Chdir(context.WorkDir); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Install installs the Helm chart
-func (r *HelmRelease) Install(wait bool) error {
-	if err := r.setContextDir(); err != nil {
+// Do installs the Helm chart
+func (cmd *InstallCmd) Do(ctx context.Context) error {
+	if err := setContextDir(); err != nil {
 		return err
 	}
 
-	install := action.NewInstall(r.config)
-	install.Namespace = r.Namespace()
-	install.Username = r.userName
-	install.Password = r.password
-	install.SkipCRDs = r.SkipCRDs()
-	install.RepoURL = r.chart.Repository()
-	install.ReleaseName = r.Name()
-	install.Wait = wait
-	install.Timeout = r.Timeout()
+	config, err := getConfig(cmd.namespace)
+	if err != nil {
+		return err
+	}
+
+	install := action.NewInstall(config)
+	install.Namespace = cmd.namespace
+	install.Version = cmd.version
+	install.Username = cmd.username
+	install.Password = cmd.password
+	install.SkipCRDs = cmd.skipCRDs
+	install.RepoURL = cmd.repoURL
+	install.ReleaseName = cmd.release
+	install.Atomic = cmd.atomic
+	install.Wait = cmd.wait
+	install.Verify = cmd.verify
+	install.DryRun = cmd.dryRun
+	install.Timeout = cmd.timeout
 
 	// Locate the chart path
-	path, err := install.ChartPathOptions.LocateChart(r.chart.Name(), settings)
+	path, err := install.ChartPathOptions.LocateChart(cmd.chart, settings)
 	if err != nil {
 		return err
 	}
@@ -228,149 +177,253 @@ func (r *HelmRelease) Install(wait bool) error {
 		}
 	}
 
-	release, err := install.Run(chart, r.Values())
+	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
 	if err != nil {
 		return err
 	}
-	r.release = release
+	if _, err := install.RunWithContext(ctx, chart, values); err != nil {
+		return err
+	}
 	return nil
 }
 
-// Uninstall uninstalls the Helm chart
-func (r *HelmRelease) Uninstall() error {
-	if err := r.setContextDir(); err != nil {
+func newUpgrade(context Context, release string, chart string) *UpgradeCmd {
+	return &UpgradeCmd{
+		context:   context,
+		namespace: context.Namespace,
+		release:   release,
+		chart:     chart,
+		values:    make(map[string]any),
+		timeout:   defaultTimeout,
+	}
+}
+
+type UpgradeCmd struct {
+	context    Context
+	namespace  string
+	release    string
+	chart      string
+	version    string
+	install    bool
+	repoURL    string
+	username   string
+	password   string
+	skipCRDs   bool
+	atomic     bool
+	wait       bool
+	timeout    time.Duration
+	verify     bool
+	dryRun     bool
+	values     map[string]any
+	valueFiles []string
+}
+
+func (cmd *UpgradeCmd) Namespace(namespace string) *UpgradeCmd {
+	cmd.namespace = namespace
+	return cmd
+}
+
+func (cmd *UpgradeCmd) Install() *UpgradeCmd {
+	cmd.install = true
+	return cmd
+}
+
+func (cmd *UpgradeCmd) Version(version string) *UpgradeCmd {
+	cmd.version = version
+	return cmd
+}
+
+func (cmd *UpgradeCmd) Username(username string) *UpgradeCmd {
+	cmd.username = username
+	return cmd
+}
+
+func (cmd *UpgradeCmd) Password(password string) *UpgradeCmd {
+	cmd.password = password
+	return cmd
+}
+
+func (cmd *UpgradeCmd) RepoURL(repoURL string) *UpgradeCmd {
+	cmd.repoURL = repoURL
+	return cmd
+}
+
+func (cmd *UpgradeCmd) SkipCRDs() *UpgradeCmd {
+	cmd.skipCRDs = true
+	return cmd
+}
+
+func (cmd *UpgradeCmd) Atomic() *UpgradeCmd {
+	cmd.atomic = true
+	return cmd
+}
+
+func (cmd *UpgradeCmd) Verify() *UpgradeCmd {
+	cmd.verify = true
+	return cmd
+}
+
+func (cmd *UpgradeCmd) DryRun() *UpgradeCmd {
+	cmd.dryRun = true
+	return cmd
+}
+
+func (cmd *UpgradeCmd) Wait() *UpgradeCmd {
+	cmd.wait = true
+	return cmd
+}
+
+func (cmd *UpgradeCmd) Timeout(timeout time.Duration) *UpgradeCmd {
+	cmd.timeout = timeout
+	return cmd
+}
+
+// Set sets a value
+func (cmd *UpgradeCmd) Set(path string, value interface{}) *UpgradeCmd {
+	setKey(cmd.values, getPathNames(path), value)
+	return cmd
+}
+
+// Values adds values files to the release
+func (cmd *UpgradeCmd) Values(files ...string) *UpgradeCmd {
+	cmd.valueFiles = append(cmd.valueFiles, files...)
+	return cmd
+}
+
+// Do installs the Helm chart
+func (cmd *UpgradeCmd) Do(ctx context.Context) error {
+	if err := setContextDir(); err != nil {
 		return err
 	}
 
-	uninstall := action.NewUninstall(r.config)
-	_, err := uninstall.Run(r.Name())
+	config, err := getConfig(cmd.namespace)
+	if err != nil {
+		return err
+	}
+
+	upgrade := action.NewUpgrade(config)
+	upgrade.Namespace = cmd.namespace
+	upgrade.Install = cmd.install
+	upgrade.Version = cmd.version
+	upgrade.Username = cmd.username
+	upgrade.Password = cmd.password
+	upgrade.SkipCRDs = cmd.skipCRDs
+	upgrade.RepoURL = cmd.repoURL
+	upgrade.Atomic = cmd.atomic
+	upgrade.DryRun = cmd.dryRun
+	upgrade.Verify = cmd.verify
+	upgrade.Wait = cmd.wait
+	upgrade.Timeout = cmd.timeout
+
+	// Locate the chart path
+	path, err := upgrade.ChartPathOptions.LocateChart(cmd.chart, settings)
+	if err != nil {
+		return err
+	}
+
+	// Check chart dependencies to make sure all are present in /charts
+	chart, err := loader.Load(path)
+	if err != nil {
+		return err
+	}
+
+	valid, err := isChartUpgradable(chart)
+	if !valid {
+		return err
+	}
+
+	if req := chart.Metadata.Dependencies; req != nil {
+		// If CheckDependencies returns an error, we have unfulfilled dependencies.
+		// As of Helm 2.4.0, this is treated as a stopping condition:
+		// https://github.com/helm/helm/issues/2209
+		if err := action.CheckDependencies(chart, req); err != nil {
+			if upgrade.DependencyUpdate {
+				man := &downloader.Manager{
+					Out:              os.Stdout,
+					ChartPath:        path,
+					Keyring:          upgrade.ChartPathOptions.Keyring,
+					SkipUpdate:       false,
+					Getters:          getter.All(cli.New()),
+					RepositoryConfig: settings.RepositoryConfig,
+					RepositoryCache:  settings.RepositoryCache,
+				}
+				if err := man.Update(); err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		}
+	}
+
+	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
+	if err != nil {
+		return err
+	}
+	if _, err := upgrade.RunWithContext(ctx, cmd.release, chart, values); err != nil {
+		return err
+	}
+	return nil
+}
+
+func newUninstall(context Context, release string) *UninstallCmd {
+	return &UninstallCmd{
+		context:   context,
+		namespace: context.Namespace,
+		release:   release,
+		timeout:   defaultTimeout,
+	}
+}
+
+type UninstallCmd struct {
+	context   Context
+	namespace string
+	release   string
+	wait      bool
+	timeout   time.Duration
+}
+
+func (cmd *UninstallCmd) Namespace(namespace string) *UninstallCmd {
+	cmd.namespace = namespace
+	return cmd
+}
+
+func (cmd *UninstallCmd) Wait() *UninstallCmd {
+	cmd.wait = true
+	return cmd
+}
+
+func (cmd *UninstallCmd) Timeout(timeout time.Duration) *UninstallCmd {
+	cmd.timeout = timeout
+	return cmd
+}
+
+func (cmd *UninstallCmd) Do(ctx context.Context) error {
+	if err := setContextDir(); err != nil {
+		return err
+	}
+
+	config, err := getConfig(cmd.namespace)
+	if err != nil {
+		return err
+	}
+
+	uninstall := action.NewUninstall(config)
+	uninstall.Wait = cmd.wait
+	uninstall.Timeout = cmd.timeout
+	_, err = uninstall.Run(cmd.release)
 	return err
 }
 
-func mergeMaps(a, b map[string]interface{}) map[string]interface{} {
-	out := make(map[string]interface{}, len(a))
-	for k, v := range a {
-		out[k] = v
-	}
-	for k, v := range b {
-		if v, ok := v.(map[string]interface{}); ok {
-			if bv, ok := out[k]; ok {
-				if bv, ok := bv.(map[string]interface{}); ok {
-					out[k] = mergeMaps(bv, v)
-					continue
-				}
-			}
+// setContextDir sets the directory to the context dir
+func setContextDir() error {
+	dir := getContext().WorkDir
+	if dir != "" {
+		if absDir, err := filepath.Abs(dir); err != nil {
+			return err
+		} else if err := os.Chdir(absDir); err != nil {
+			return err
 		}
-		out[k] = v
 	}
-	return out
-}
-
-// getValue gets the value for the given path
-func getValue(config map[string]interface{}, path []string) interface{} {
-	names, key := getPathAndKey(path)
-	parent := getMap(config, names)
-	return parent[key]
-}
-
-// getMap gets the map at the given path
-func getMap(parent map[string]interface{}, path []string) map[string]interface{} {
-	if len(path) == 0 {
-		return parent
-	}
-	child, ok := parent[path[0]]
-	if !ok {
-		return make(map[string]interface{})
-	}
-	return getMap(child.(map[string]interface{}), path[1:])
-}
-
-// setKey sets a key in a map
-func setKey(config map[string]interface{}, path []string, value interface{}) {
-	names, key := getPathAndKey(path)
-	parent := getMapRef(config, names)
-	parent[key] = value
-}
-
-// getMapRef gets the given map reference
-func getMapRef(parent map[string]interface{}, path []string) map[string]interface{} {
-	if len(path) == 0 {
-		return parent
-	}
-	child, ok := parent[path[0]]
-	if !ok {
-		child = make(map[string]interface{})
-		parent[path[0]] = child
-	}
-	return getMapRef(child.(map[string]interface{}), path[1:])
-}
-
-func getPathNames(path string) []string {
-	r := csv.NewReader(strings.NewReader(path))
-	r.Comma = '.'
-	names, err := r.Read()
-	if err != nil {
-		panic(err)
-	}
-	return names
-}
-
-func getPathAndKey(path []string) ([]string, string) {
-	return path[:len(path)-1], path[len(path)-1]
-}
-
-func normalize(value interface{}) interface{} {
-	kind := reflect.ValueOf(value).Kind()
-	if kind == reflect.Struct {
-		return normalizeStruct(value.(struct{}))
-	} else if kind == reflect.Map {
-		return normalizeMap(value.(map[string]interface{}))
-	} else if kind == reflect.Slice {
-		return normalizeSlice(value.([]interface{}))
-	}
-	return value
-}
-
-func normalizeStruct(value struct{}) interface{} {
-	elem := reflect.ValueOf(value).Elem()
-	elemType := elem.Type()
-	normalized := make(map[string]interface{})
-	for i := 0; i < elem.NumField(); i++ {
-		key := normalizeField(elemType.Field(i))
-		value := normalize(elem.Field(i).Interface())
-		normalized[key] = value
-	}
-	return normalized
-}
-
-func normalizeMap(values map[string]interface{}) interface{} {
-	normalized := make(map[string]interface{})
-	for key, value := range values {
-		normalized[key] = normalize(value)
-	}
-	return normalized
-}
-
-func normalizeSlice(values []interface{}) interface{} {
-	normalized := make([]interface{}, len(values))
-	for i, value := range values {
-		normalized[i] = normalize(value)
-	}
-	return normalized
-}
-
-func normalizeField(field reflect.StructField) string {
-	tag := field.Tag.Get("yaml")
-	if tag != "" {
-		return strings.Split(tag, ",")[0]
-	}
-	return strcase.ToLowerCamel(field.Name)
-}
-
-func isChartInstallable(ch *chart.Chart) (bool, error) {
-	switch ch.Metadata.Type {
-	case "", "application":
-		return true, nil
-	}
-	return false, fmt.Errorf("%s charts are not installable", ch.Metadata.Type)
+	return nil
 }

@@ -13,16 +13,15 @@ import (
 	"github.com/onosproject/onos-lib-go/pkg/grpc/retry"
 
 	"github.com/onosproject/helmit/pkg/job"
-	"github.com/onosproject/helmit/pkg/kubernetes/config"
-	"github.com/onosproject/helmit/pkg/registry"
 	"github.com/onosproject/helmit/pkg/util/async"
 	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
 )
 
 // newCoordinator returns a new simulation coordinator
-func newCoordinator(config *Config) (*Coordinator, error) {
+func newCoordinator(suites map[string]SimulatingSuite, config *Config) (*Coordinator, error) {
 	return &Coordinator{
+		suites: suites,
 		config: config,
 		runner: job.NewNamespace(config.Namespace),
 	}, nil
@@ -30,6 +29,7 @@ func newCoordinator(config *Config) (*Coordinator, error) {
 
 // Coordinator coordinates workers for suites of simulators
 type Coordinator struct {
+	suites map[string]SimulatingSuite
 	config *Config
 	runner *job.Runner
 }
@@ -38,7 +38,9 @@ type Coordinator struct {
 func (c *Coordinator) Run() (int, error) {
 	var suites []string
 	if c.config.Simulation == "" {
-		suites = registry.GetSimulationSuites()
+		for name := range c.suites {
+			suites = append(suites, name)
+		}
 	} else {
 		suites = []string{c.config.Simulation}
 	}
@@ -136,7 +138,6 @@ func (t *WorkerTask) createWorker(worker int) error {
 	if env == nil {
 		env = make(map[string]string)
 	}
-	env[config.NamespaceEnv] = t.config.ID
 	env[simulationTypeEnv] = string(simulationTypeWorker)
 	env[simulationWorkerEnv] = fmt.Sprintf("%d", worker)
 	env[simulationJobEnv] = t.config.ID

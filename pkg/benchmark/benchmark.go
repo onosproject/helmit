@@ -5,8 +5,9 @@
 package benchmark
 
 import (
+	"context"
 	"fmt"
-	"github.com/onosproject/helmit/pkg/input"
+	"github.com/onosproject/helmit/pkg/helm"
 	"math"
 	"reflect"
 	"sort"
@@ -18,45 +19,84 @@ const warmUpDuration = 30 * time.Second
 const aggBatchSize = 100
 
 // BenchmarkingSuite is a suite of benchmarks
-type BenchmarkingSuite interface{}
+type BenchmarkingSuite interface {
+	SetB(b *B)
+	B() *B
+	SetHelm(helm *helm.Helm)
+	Helm() *helm.Helm
+	SetContext(ctx context.Context)
+	Context() context.Context
+}
 
-// Suite is an identifier interface for benchmark suites
-type Suite struct{}
+// Suite is the base for a benchmark suite
+type Suite struct {
+	b    *B
+	helm *helm.Helm
+	ctx  context.Context
+}
+
+func (suite *Suite) Namespace() string {
+	return suite.helm.Namespace()
+}
+
+func (suite *Suite) SetB(b *B) {
+	suite.b = b
+}
+
+func (suite *Suite) B() *B {
+	return suite.b
+}
+
+func (suite *Suite) SetHelm(helm *helm.Helm) {
+	suite.helm = helm
+}
+
+func (suite *Suite) Helm() *helm.Helm {
+	return suite.helm
+}
+
+func (suite *Suite) SetContext(ctx context.Context) {
+	suite.ctx = ctx
+}
+
+func (suite *Suite) Context() context.Context {
+	return suite.ctx
+}
 
 // SetupSuite is an interface for setting up a suite of benchmarks
 type SetupSuite interface {
-	SetupSuite(c *input.Context) error
+	SetupSuite() error
 }
 
 // TearDownSuite is an interface for tearing down a suite of benchmarks
 type TearDownSuite interface {
-	TearDownSuite(c *input.Context) error
+	TearDownSuite() error
 }
 
 // SetupWorker is an interface for setting up individual benchmarks
 type SetupWorker interface {
-	SetupWorker(c *input.Context) error
+	SetupWorker() error
 }
 
 // TearDownWorker is an interface for tearing down individual benchmarks
 type TearDownWorker interface {
-	TearDownWorker(c *input.Context) error
+	TearDownWorker() error
 }
 
 // SetupBenchmark is an interface for executing code before every benchmark
 type SetupBenchmark interface {
-	SetupBenchmark(c *input.Context) error
+	SetupBenchmark(suite string, name string) error
 }
 
 // TearDownBenchmark is an interface for executing code after every benchmark
 type TearDownBenchmark interface {
-	TearDownBenchmark(c *input.Context) error
+	TearDownBenchmark(suite string, name string) error
 }
 
 // newBenchmark creates a new benchmark
-func newBenchmark(requests int, duration *time.Duration, parallelism int, maxLatency *time.Duration, context *input.Context) *Benchmark {
-	return &Benchmark{
-		Context:     context,
+func newBenchmark(name string, requests int, duration *time.Duration, parallelism int, maxLatency *time.Duration) *B {
+	return &B{
+		Name:        name,
 		requests:    requests,
 		duration:    duration,
 		maxLatency:  maxLatency,
@@ -64,10 +104,9 @@ func newBenchmark(requests int, duration *time.Duration, parallelism int, maxLat
 	}
 }
 
-// Benchmark is a benchmark runner
-type Benchmark struct {
-	*input.Context
-
+// B is a benchmark runner
+type B struct {
+	Name        string
 	requests    int
 	duration    *time.Duration
 	parallelism int
@@ -75,12 +114,12 @@ type Benchmark struct {
 }
 
 // Run runs the benchmark with the given parameters
-func (b *Benchmark) run(suite BenchmarkingSuite) (*RunResponse, error) {
+func (b *B) run(suite BenchmarkingSuite) (*RunResponse, error) {
 	var f func() error
 	methods := reflect.TypeOf(suite)
 	if method, ok := methods.MethodByName(b.Name); ok {
 		f = func() error {
-			values := method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(b)})
+			values := method.Func.Call([]reflect.Value{reflect.ValueOf(suite)})
 			if len(values) == 0 {
 				return nil
 			} else if values[0].Interface() == nil {
@@ -123,7 +162,7 @@ func (b *Benchmark) run(suite BenchmarkingSuite) (*RunResponse, error) {
 }
 
 // warm warms up the benchmark
-func (b *Benchmark) warmRequests(f func() error) {
+func (b *B) warmRequests(f func() error) {
 	// Create an iteration channel and wait group and create a goroutine for each client
 	wg := &sync.WaitGroup{}
 	requestCh := make(chan struct{}, b.parallelism)
@@ -149,7 +188,7 @@ func (b *Benchmark) warmRequests(f func() error) {
 }
 
 // run runs the benchmark
-func (b *Benchmark) runRequests(f func() error) (int, time.Duration, []time.Duration) {
+func (b *B) runRequests(f func() error) (int, time.Duration, []time.Duration) {
 	// Create an iteration channel and wait group and create a goroutine for each client
 	wg := &sync.WaitGroup{}
 	requestCh := make(chan struct{}, b.parallelism)

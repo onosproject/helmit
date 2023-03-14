@@ -68,8 +68,8 @@ func Run(config *Config) error {
 }
 
 // Main runs a test
-func Main() {
-	if err := run(); err != nil {
+func Main(suites map[string]TestingSuite) {
+	if err := run(suites); err != nil {
 		println("Test run failed " + err.Error())
 		os.Exit(1)
 	}
@@ -77,7 +77,7 @@ func Main() {
 }
 
 // run runs a test
-func run() error {
+func run(suites map[string]TestingSuite) error {
 	config := &Config{}
 	if err := jobs.Bootstrap(config); err != nil {
 		return err
@@ -86,16 +86,16 @@ func run() error {
 	testType := getTestType()
 	switch testType {
 	case testTypeCoordinator:
-		return runCoordinator(config)
+		return runCoordinator(suites, config)
 	case testTypeWorker:
-		return runWorker(config)
+		return runWorker(suites, config)
 	}
 	return nil
 }
 
 // runCoordinator runs a test image in the coordinator context
-func runCoordinator(config *Config) error {
-	coordinator, err := newCoordinator(config)
+func runCoordinator(suites map[string]TestingSuite, config *Config) error {
+	coordinator, err := newCoordinator(suites, config)
 	if err != nil {
 		return err
 	}
@@ -108,8 +108,8 @@ func runCoordinator(config *Config) error {
 }
 
 // runWorker runs a test image in the worker context
-func runWorker(config *Config) error {
-	worker, err := newWorker(config)
+func runWorker(suites map[string]TestingSuite, config *Config) error {
+	worker, err := newWorker(suites, config)
 	if err != nil {
 		return err
 	}

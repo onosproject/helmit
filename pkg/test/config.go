@@ -12,13 +12,13 @@ import (
 type testType string
 
 const (
-	testTypeEnv = "TEST_TYPE"
-	testJobType = "test"
+	testTypeCoordinator testType = "coordinator"
+	testTypeWorker      testType = "worker"
 )
 
 const (
-	testTypeCoordinator testType = "coordinator"
-	testTypeWorker      testType = "worker"
+	testTypeEnv = "TEST_TYPE"
+	testJobType = "test"
 )
 
 // Config is a test configuration
