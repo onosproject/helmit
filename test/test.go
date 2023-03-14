@@ -28,15 +28,16 @@ func (s *ChartTestSuite) TestLocalInstall() {
 
 // TestRemoteInstall tests a remote chart installation
 func (s *ChartTestSuite) TestRemoteInstall() {
-	err := s.Helm().Install("kafka", "http://storage.googleapis.com/kubernetes-charts-incubator").
-		Set("replicas", 1).
-		Set("zookeeper.replicaCount", 1).
+	err := s.Helm().Install("redis", "redis").
+		RepoURL("https://charts.bitnami.com/bitnami").
+		Set("architecture", "standalone").
+		Set("auth.enabled", false).
 		Wait().
 		Do(s.Context())
 	s.NoError(err)
 
 	err = s.Helm().
-		Uninstall("kafka").
+		Uninstall("redis").
 		Do(s.Context())
 	s.NoError(err)
 }

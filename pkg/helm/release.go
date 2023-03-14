@@ -15,9 +15,7 @@ const defaultTimeout = 10 * time.Minute
 
 func newInstall(context Context, release string, chart string) *InstallCmd {
 	return &InstallCmd{
-		Cmd: &Cmd{
-			context: context,
-		},
+		context:   context,
 		namespace: context.Namespace,
 		release:   release,
 		chart:     chart,
@@ -27,7 +25,7 @@ func newInstall(context Context, release string, chart string) *InstallCmd {
 }
 
 type InstallCmd struct {
-	*Cmd
+	context    Context
 	namespace  string
 	release    string
 	chart      string
@@ -114,10 +112,6 @@ func (cmd *InstallCmd) Values(files ...string) *InstallCmd {
 
 // Do installs the Helm chart
 func (cmd *InstallCmd) Do(ctx context.Context) error {
-	if err := cmd.setContextDir(); err != nil {
-		return err
-	}
-
 	config, err := getConfig(cmd.namespace)
 	if err != nil {
 		return err
@@ -190,9 +184,7 @@ func (cmd *InstallCmd) Do(ctx context.Context) error {
 
 func newUpgrade(context Context, release string, chart string) *UpgradeCmd {
 	return &UpgradeCmd{
-		Cmd: &Cmd{
-			context: context,
-		},
+		context:   context,
 		namespace: context.Namespace,
 		release:   release,
 		chart:     chart,
@@ -202,7 +194,7 @@ func newUpgrade(context Context, release string, chart string) *UpgradeCmd {
 }
 
 type UpgradeCmd struct {
-	*Cmd
+	context    Context
 	namespace  string
 	release    string
 	chart      string
@@ -295,10 +287,6 @@ func (cmd *UpgradeCmd) Values(files ...string) *UpgradeCmd {
 
 // Do installs the Helm chart
 func (cmd *UpgradeCmd) Do(ctx context.Context) error {
-	if err := cmd.setContextDir(); err != nil {
-		return err
-	}
-
 	config, err := getConfig(cmd.namespace)
 	if err != nil {
 		return err
@@ -371,9 +359,7 @@ func (cmd *UpgradeCmd) Do(ctx context.Context) error {
 
 func newUninstall(context Context, release string) *UninstallCmd {
 	return &UninstallCmd{
-		Cmd: &Cmd{
-			context: context,
-		},
+		context:   context,
 		namespace: context.Namespace,
 		release:   release,
 		timeout:   defaultTimeout,
@@ -381,7 +367,7 @@ func newUninstall(context Context, release string) *UninstallCmd {
 }
 
 type UninstallCmd struct {
-	*Cmd
+	context   Context
 	namespace string
 	release   string
 	wait      bool
@@ -404,10 +390,6 @@ func (cmd *UninstallCmd) Timeout(timeout time.Duration) *UninstallCmd {
 }
 
 func (cmd *UninstallCmd) Do(ctx context.Context) error {
-	if err := cmd.setContextDir(); err != nil {
-		return err
-	}
-
 	config, err := getConfig(cmd.namespace)
 	if err != nil {
 		return err

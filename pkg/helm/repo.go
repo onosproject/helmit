@@ -16,14 +16,12 @@ import (
 
 func newRepo(context Context) *RepoCmd {
 	return &RepoCmd{
-		Cmd: &Cmd{
-			context: context,
-		},
+		context: context,
 	}
 }
 
 type RepoCmd struct {
-	*Cmd
+	context Context
 }
 
 func (repo *RepoCmd) Add(name string, url string) *RepoAddCmd {
@@ -36,16 +34,14 @@ func (repo *RepoCmd) Remove(name string) *RepoRemoveCmd {
 
 func newRepoAdd(context Context, name string, url string) *RepoAddCmd {
 	return &RepoAddCmd{
-		Cmd: &Cmd{
-			context: context,
-		},
-		name: name,
-		url:  url,
+		context: context,
+		name:    name,
+		url:     url,
 	}
 }
 
 type RepoAddCmd struct {
-	*Cmd
+	context  Context
 	name     string
 	url      string
 	username string
@@ -63,10 +59,6 @@ func (cmd *RepoAddCmd) Password(password string) *RepoAddCmd {
 }
 
 func (cmd *RepoAddCmd) Do(ctx context.Context) error {
-	if err := cmd.setContextDir(); err != nil {
-		return err
-	}
-
 	repoFile := settings.RepositoryConfig
 
 	// Ensure the file directory exists as it is required for file locking
@@ -134,23 +126,17 @@ func (cmd *RepoAddCmd) Do(ctx context.Context) error {
 
 func newRepoRemove(context Context, names ...string) *RepoRemoveCmd {
 	return &RepoRemoveCmd{
-		Cmd: &Cmd{
-			context: context,
-		},
-		names: names,
+		context: context,
+		names:   names,
 	}
 }
 
 type RepoRemoveCmd struct {
-	*Cmd
-	names []string
+	context Context
+	names   []string
 }
 
 func (cmd *RepoRemoveCmd) Do(ctx context.Context) error {
-	if err := cmd.setContextDir(); err != nil {
-		return err
-	}
-
 	repoFile := settings.RepositoryConfig
 	repoCache := settings.RepositoryCache
 
