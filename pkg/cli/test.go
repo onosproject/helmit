@@ -181,28 +181,50 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 }
 
 func buildBinary(pkgPath, binPath string) error {
-	workDir, err := os.Getwd()
-	if err != nil {
+	if err := importPackage(pkgPath); err != nil {
 		return err
 	}
 
-	pkg, err := build.Import(pkgPath, workDir, build.ImportComment)
-	if err != nil {
-		return err
-	}
+	step := logging.NewStep(pkgPath, "Build executable %s", binPath)
+	step.Start()
 
-	if !pkg.IsCommand() {
-		return errors.New("test package must be a command")
-	}
-
-	// Build the command
 	build := exec.Command("go", "build", "-o", binPath, pkgPath)
 	build.Stderr = os.Stderr
 	build.Stdout = os.Stdout
 	env := os.Environ()
 	env = append(env, "GOOS=linux", "CGO_ENABLED=0")
 	build.Env = env
-	return build.Run()
+	if err := build.Run(); err != nil {
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+	return nil
+}
+
+func importPackage(pkgPath string) error {
+	step := logging.NewStep(pkgPath, "Import package %s", pkgPath)
+	step.Start()
+
+	workDir, err := os.Getwd()
+	if err != nil {
+		step.Fail(err)
+		return err
+	}
+
+	pkg, err := build.Import(pkgPath, workDir, build.ImportComment)
+	if err != nil {
+		step.Fail(err)
+		return err
+	}
+
+	if !pkg.IsCommand() {
+		err = errors.New("main not found in package")
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+	return nil
 }
 
 func parseFiles(files []string) (map[string][]string, error) {
