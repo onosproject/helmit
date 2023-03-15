@@ -21,6 +21,7 @@ type Logger struct {
 	writer     io.Writer
 	writerMu   sync.Mutex
 	bufferPool *bufferPool
+	tasks      map[string]*Task
 }
 
 // Log logs a message

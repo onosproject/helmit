@@ -41,27 +41,33 @@ func TestTask(t *testing.T) {
 		wg.Done()
 	}()
 
-	/*
-		sub1 := task2.Sub()
-		wg.Add(1)
-		go func() {
-			time.Sleep(1500 * time.Millisecond)
-			sub1.Log("foobar")
-			time.Sleep(200 * time.Millisecond)
-			sub1.Close()
-			wg.Done()
-		}()
+	sub1 := task1.SubTask()
+	wg.Add(1)
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		sub1.Log("foobar")
+		time.Sleep(200 * time.Millisecond)
+		sub1.Log("barbaz")
+		time.Sleep(200 * time.Millisecond)
+		sub1.Log("bazfoo")
+		time.Sleep(200 * time.Millisecond)
+		sub1.Close()
+		wg.Done()
+	}()
 
-		sub2 := task2.Sub()
-		wg.Add(1)
-		go func() {
-			time.Sleep(500 * time.Millisecond)
-			sub2.Log("barbaz")
-			time.Sleep(500 * time.Millisecond)
-			sub2.Close()
-			wg.Done()
-		}()
-	*/
+	sub2 := task1.SubTask()
+	wg.Add(1)
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		sub2.Log("bazbar")
+		time.Sleep(300 * time.Millisecond)
+		sub2.Log("barfoo")
+		time.Sleep(300 * time.Millisecond)
+		sub2.Log("foobaz")
+		time.Sleep(300 * time.Millisecond)
+		sub2.Close()
+		wg.Done()
+	}()
 
 	wg.Wait()
 	task.Complete()
@@ -75,4 +81,41 @@ func TestTask(t *testing.T) {
 	task.Start()
 	time.Sleep(time.Second)
 	task.Fail(errors.New("fail"))
+}
+
+func TestSubTask(t *testing.T) {
+	log := NewLogger(os.Stdout)
+	log.Log("Hello world!")
+
+	task := log.Task("Hello")
+	task.Start()
+	time.Sleep(2 * time.Second)
+
+	wg := &sync.WaitGroup{}
+
+	foo := task.Task("foo")
+	wg.Add(1)
+	go func() {
+		foo.Start()
+		time.Sleep(time.Second)
+		foo.Complete()
+		wg.Done()
+	}()
+
+	sub := foo.SubTask()
+	wg.Add(1)
+	go func() {
+		time.Sleep(1500 * time.Millisecond)
+		sub.Log("foobar")
+		time.Sleep(200 * time.Millisecond)
+		sub.Log("barbaz")
+		time.Sleep(200 * time.Millisecond)
+		sub.Log("bazfoo")
+		time.Sleep(200 * time.Millisecond)
+		sub.Close()
+		wg.Done()
+	}()
+
+	wg.Wait()
+	task.Complete()
 }

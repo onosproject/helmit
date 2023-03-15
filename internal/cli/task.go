@@ -30,7 +30,7 @@ var spinnerCharSet = []string{
 	"⠊⠁",
 }
 
-const spinnerSpeed = 150 * time.Millisecond
+const spinnerSpeed = 1000 * time.Millisecond
 
 var (
 	taskMsgColor      = color.New(color.FgBlue)
@@ -57,17 +57,6 @@ func (t *Task) Start() {
 	t.spinner.Start()
 }
 
-func (t *Task) Sub() *SubTask {
-	t.spinner.Lock()
-	index := t.index
-	t.index++
-	t.spinner.Unlock()
-	return &SubTask{
-		task:  t,
-		index: index,
-	}
-}
-
 func (t *Task) Task(desc string) *Task {
 	t.spinner.Lock()
 	index := t.index
@@ -92,6 +81,30 @@ func (t *Task) Task(desc string) *Task {
 		lines:   make(map[int]string),
 		closer: func(task *Task) {
 			t.lines[index] = task.spinner.FinalMSG
+			t.update()
+			t.wg.Done()
+		},
+	}
+}
+
+func (t *Task) SubTask() *SubTask {
+	t.spinner.Lock()
+	index := t.index
+	t.index++
+	t.spinner.Unlock()
+
+	t.wg.Add(1)
+	return &SubTask{
+		logger: func(msg string, args ...any) {
+			t.spinner.Lock()
+			defer t.spinner.Unlock()
+			t.lines[index] = t.spinner.Prefix + msg
+			t.update()
+		},
+		closer: func(task *SubTask) {
+			t.spinner.Lock()
+			defer t.spinner.Unlock()
+			delete(t.lines, index)
 			t.update()
 			t.wg.Done()
 		},
@@ -149,9 +162,6 @@ func (t *Task) Fail(err error) {
 }
 
 func (t *Task) update() {
-	if t.done.Load() {
-		return
-	}
 	lines := append([]string{taskMsgColor.Sprintf(" %s", t.header)}, t.children()...)
 	t.spinner.Suffix = fmt.Sprintf("%s\n", strings.Join(lines, "\n"))
 }
@@ -172,37 +182,25 @@ func (t *Task) children() []string {
 	return lines
 }
 
-func (t *Task) log(id int, msg string) {
-	t.spinner.Lock()
-	defer t.spinner.Unlock()
-	t.lines[id] = msg
-	t.update()
-}
-
-func (t *Task) close(id int) {
-	t.spinner.Lock()
-	defer t.spinner.Unlock()
-	delete(t.lines, id)
-	t.update()
-}
-
 // SubTask is a sub Task logger
 type SubTask struct {
-	task  *Task
-	index int
+	logger func(msg string, args ...any)
+	closer func(*SubTask)
 }
 
 // Log logs a message to the Task
 func (s *SubTask) Log(msg string) {
-	s.task.log(s.index, msg)
+	s.logger(msg)
 }
 
 // Logf logs a formatted message to the Task
 func (s *SubTask) Logf(msg string, args ...any) {
-	s.task.log(s.index, fmt.Sprintf(msg, args...))
+	s.logger(msg, args...)
 }
 
 // Close closes the logger
 func (s *SubTask) Close() {
-	s.task.close(s.index)
+	if s.closer != nil {
+		s.closer(s)
+	}
 }
