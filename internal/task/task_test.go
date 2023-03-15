@@ -1,4 +1,4 @@
-package cli
+package task
 
 import (
 	"errors"
@@ -9,15 +9,16 @@ import (
 )
 
 func TestTask(t *testing.T) {
-	log := NewLogger(os.Stdout)
-	log.Log("Hello world!")
+	manager := NewManager(os.Stdout)
+	manager.Start()
+	defer manager.Stop()
 
-	task := log.Task("Hello")
+	task := manager.Task("Hello")
 	task.Start()
 	time.Sleep(2 * time.Second)
 	task.Done()
 
-	task = log.Task("world!")
+	task = manager.Task("world!")
 	task.Start()
 	time.Sleep(1 * time.Second)
 
@@ -51,7 +52,7 @@ func TestTask(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		sub1.Log("bazfoo")
 		time.Sleep(200 * time.Millisecond)
-		sub1.Close()
+		sub1.Done()
 		wg.Done()
 	}()
 
@@ -65,29 +66,30 @@ func TestTask(t *testing.T) {
 		time.Sleep(300 * time.Millisecond)
 		sub2.Log("foobaz")
 		time.Sleep(300 * time.Millisecond)
-		sub2.Close()
+		sub2.Done()
 		wg.Done()
 	}()
 
 	wg.Wait()
 	task.Done()
 
-	task = log.Task("Hello world!")
+	task = manager.Task("Hello world!")
 	task.Start()
 	time.Sleep(time.Second)
 	task.Warn(errors.New("caution"))
 
-	task = log.Task("Hello world again!")
+	task = manager.Task("Hello world again!")
 	task.Start()
 	time.Sleep(time.Second)
 	task.Error(errors.New("fail"))
 }
 
 func TestSubTask(t *testing.T) {
-	log := NewLogger(os.Stdout)
-	log.Log("Hello world!")
+	manager := NewManager(os.Stdout)
+	manager.Start()
+	defer manager.Stop()
 
-	task := log.Task("Hello")
+	task := manager.Task("Hello")
 	task.Start()
 	time.Sleep(2 * time.Second)
 
@@ -112,7 +114,7 @@ func TestSubTask(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		sub.Log("bazfoo")
 		time.Sleep(200 * time.Millisecond)
-		sub.Close()
+		sub.Done()
 		wg.Done()
 	}()
 
