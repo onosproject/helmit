@@ -7,200 +7,256 @@ import (
 	"github.com/fatih/color"
 	"sort"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 )
 
 var spinnerCharSet = []string{
-	"⠈⠁",
-	"⠈⠑",
-	"⠈⠱",
-	"⠈⡱",
-	"⢀⡱",
-	"⢄⡱",
-	"⢄⡱",
-	"⢆⡱",
-	"⢎⡱",
-	"⢎⡰",
-	"⢎⡠",
-	"⢎⡀",
-	"⢎⠁",
-	"⠎⠁",
-	"⠊⠁",
+	"⠈⠁ ",
+	"⠈⠑ ",
+	"⠈⠱ ",
+	"⠈⡱ ",
+	"⢀⡱ ",
+	"⢄⡱ ",
+	"⢄⡱ ",
+	"⢆⡱ ",
+	"⢎⡱ ",
+	"⢎⡰ ",
+	"⢎⡠ ",
+	"⢎⡀ ",
+	"⢎⠁ ",
+	"⠎⠁ ",
+	"⠊⠁ ",
 }
 
-const spinnerSpeed = 1000 * time.Millisecond
+const spinnerSpeed = 150 * time.Millisecond
 
 var (
-	taskMsgColor      = color.New(color.FgBlue)
-	completeMsgColor  = color.New(color.FgGreen)
-	cautionMsgColor   = color.New(color.FgHiYellow, color.Bold)
-	cautionErrorColor = color.New(color.FgHiYellow, color.Italic)
-	failMsgColor      = color.New(color.FgRed, color.Bold)
-	failErrorColor    = color.New(color.FgRed, color.Italic)
+	taskMsgColor   = color.New(color.FgBlue)
+	doneMsgColor   = color.New(color.FgGreen)
+	warnMsgColor   = color.New(color.FgHiYellow, color.Bold)
+	warnErrorColor = color.New(color.FgHiYellow, color.Italic)
+	errorMsgColor  = color.New(color.FgRed, color.Bold)
+	errorErrColor  = color.New(color.FgRed, color.Italic)
 )
 
-// Task logs progress of a task associated with a logger
-type Task struct {
-	spinner *spinner.Spinner
-	header  string
-	lines   map[int]string
-	index   int
-	done    atomic.Bool
-	closer  func(*Task)
-	wg      sync.WaitGroup
+type Node interface {
+	fmt.Stringer
+	Root() Node
+	Parent() (Node, bool)
+	string(level int) string
 }
 
-// Start marks the start of the request
-func (t *Task) Start() {
-	t.spinner.Start()
+type Branch interface {
+	Node
+	AddChild(node Node) int
+	RemoveChild(index int)
+	Children() []Node
 }
 
-func (t *Task) Task(desc string) *Task {
-	t.spinner.Lock()
-	index := t.index
-	t.index++
-	t.spinner.Unlock()
+type Leaf interface {
+	Node
+}
 
-	buf := &bytes.Buffer{}
-	spin := spinner.New(spinnerCharSet, spinnerSpeed, spinner.WithWriter(buf))
-	_ = spin.Color("blue", "bold")
-	spin.Prefix = t.spinner.Prefix + "   "
-	spin.PostUpdate = func(spin *spinner.Spinner) {
-		t.spinner.Lock()
-		defer t.spinner.Unlock()
-		t.lines[index] = fmt.Sprintf("%s %s", buf.String(), taskMsgColor.Sprint(desc))
-		buf.Reset()
-		t.update()
+func newNode(parent Branch, child Node, log *Logger) *node {
+	var index int
+	if parent != nil {
+		index = parent.AddChild(child)
 	}
-	t.wg.Add(1)
-	return &Task{
-		spinner: spin,
-		header:  desc,
-		lines:   make(map[int]string),
-		closer: func(task *Task) {
-			t.lines[index] = task.spinner.FinalMSG
-			t.update()
-			t.wg.Done()
-		},
+	return &node{
+		Node:   child,
+		log:    log,
+		parent: parent,
+		index:  index,
 	}
 }
 
-func (t *Task) SubTask() *SubTask {
-	t.spinner.Lock()
-	index := t.index
-	t.index++
-	t.spinner.Unlock()
+type node struct {
+	Node
+	log        *Logger
+	parent     Branch
+	index      int
+	lastOutput string
+}
 
-	t.wg.Add(1)
-	return &SubTask{
-		logger: func(msg string, args ...any) {
-			t.spinner.Lock()
-			defer t.spinner.Unlock()
-			t.lines[index] = t.spinner.Prefix + msg
-			t.update()
-		},
-		closer: func(task *SubTask) {
-			t.spinner.Lock()
-			defer t.spinner.Unlock()
-			delete(t.lines, index)
-			t.update()
-			t.wg.Done()
-		},
+func (n *node) Root() Node {
+	var root Node = n
+	parent, ok := root.Parent()
+	for ok {
+		root = parent
+		parent, ok = root.Parent()
+	}
+	return root
+}
+
+func (n *node) Parent() (Node, bool) {
+	if n.parent == nil {
+		return nil, false
+	}
+	return n.parent, true
+}
+
+func (n *node) delete() {
+	if n.parent != nil {
+		n.parent.RemoveChild(n.index)
 	}
 }
 
-func (t *Task) Complete() {
-	if t.done.CompareAndSwap(false, true) {
-		t.wg.Wait()
-		t.spinner.Lock()
-		lines := append([]string{
-			completeMsgColor.Sprintf(" ✔ %s", t.header)},
-			t.children()...)
-		t.spinner.FinalMSG = fmt.Sprintf("%s\n", strings.Join(lines, "\n"))
-		t.spinner.Unlock()
-		t.spinner.Stop()
-		if t.closer != nil {
-			t.closer(t)
-		}
+func (n *node) String() string {
+	return n.string(0)
+}
+
+func newBranch(parent Branch, node Node, log *Logger) *branch {
+	return &branch{
+		node:     newNode(parent, node, log),
+		children: make(map[int]Node),
 	}
 }
 
-func (t *Task) Caution(err error) {
-	if t.done.CompareAndSwap(false, true) {
-		t.wg.Wait()
-		t.spinner.Lock()
-		lines := append([]string{
-			cautionMsgColor.Sprintf(" ✘ %s", t.header),
-			cautionErrorColor.Sprintf("   %s", err.Error())},
-			t.children()...)
-		t.spinner.FinalMSG = fmt.Sprintf("%s\n", strings.Join(lines, "\n"))
-		t.spinner.Unlock()
-		t.spinner.Stop()
-		if t.closer != nil {
-			t.closer(t)
-		}
-	}
+type branch struct {
+	*node
+	children map[int]Node
+	index    int
 }
 
-func (t *Task) Fail(err error) {
-	if t.done.CompareAndSwap(false, true) {
-		t.wg.Wait()
-		t.spinner.Lock()
-		lines := append([]string{
-			failMsgColor.Sprintf(" ✘ %s", t.header),
-			failErrorColor.Sprintf("   %s", err.Error())},
-			t.children()...)
-		t.spinner.FinalMSG = fmt.Sprintf("%s\n", strings.Join(lines, "\n"))
-		t.spinner.Unlock()
-		t.spinner.Stop()
-		if t.closer != nil {
-			t.closer(t)
-		}
-	}
+func (b *branch) AddChild(child Node) int {
+	index := b.index
+	b.children[index] = child
+	b.index++
+	return index
 }
 
-func (t *Task) update() {
-	lines := append([]string{taskMsgColor.Sprintf(" %s", t.header)}, t.children()...)
-	t.spinner.Suffix = fmt.Sprintf("%s\n", strings.Join(lines, "\n"))
+func (b *branch) RemoveChild(index int) {
+	delete(b.children, index)
 }
 
-func (t *Task) children() []string {
-	ids := make([]int, 0, len(t.lines))
-	for sid := range t.lines {
+func (b *branch) Children() []Node {
+	ids := make([]int, 0, len(b.children))
+	for sid := range b.children {
 		ids = append(ids, sid)
 	}
 	sort.Slice(ids, func(i, j int) bool {
 		return ids[i] < ids[j]
 	})
 
-	lines := make([]string, 0, len(t.lines))
+	children := make([]Node, 0, len(b.children))
 	for _, sid := range ids {
-		lines = append(lines, fmt.Sprintf("   %s", strings.Trim(t.lines[sid], "\n")))
+		children = append(children, b.children[sid])
 	}
-	return lines
+	return children
+}
+
+func newTask(parent Branch, desc string, log *Logger) *Task {
+	task := &Task{
+		desc:    desc,
+		spinner: spinner.New(spinnerCharSet, spinnerSpeed, spinner.WithSuffix(desc)),
+	}
+	task.branch = newBranch(parent, task, log)
+	return task
+}
+
+type Task struct {
+	*branch
+	desc    string
+	buf     *bytes.Buffer
+	spinner *spinner.Spinner
+	value   atomic.Pointer[string]
+	done    atomic.Bool
+}
+
+func (t *Task) Task(desc string) *Task {
+	return newTask(t, desc, t.log)
+}
+
+func (t *Task) SubTask() *SubTask {
+	return newSubTask(t, t.log)
+}
+
+func (t *Task) print() {
+	value := t.buf.String()
+	t.buf.Reset()
+	t.value.Store(&value)
+	t.log.output(t)
+}
+
+func (t *Task) Start() {
+	t.buf = &bytes.Buffer{}
+	t.spinner.Writer = t.buf
+	t.spinner.PostUpdate = func(s *spinner.Spinner) {
+		t.print()
+	}
+	t.spinner.Start()
+}
+
+func (t *Task) Done() {
+	if t.done.CompareAndSwap(false, true) {
+		t.spinner.FinalMSG = doneMsgColor.Sprintf(" ✔ %s", t.desc)
+		t.spinner.Stop()
+		t.print()
+	}
+}
+
+func (t *Task) Warn(err error) {
+	if t.done.CompareAndSwap(false, true) {
+		t.spinner.FinalMSG = fmt.Sprint(warnMsgColor.Sprintf(" ✘ %s: ", t.desc), warnErrorColor.Sprint(err.Error()))
+		t.spinner.Stop()
+		t.print()
+	}
+}
+
+func (t *Task) Error(err error) {
+	if t.done.CompareAndSwap(false, true) {
+		t.spinner.FinalMSG = fmt.Sprint(errorMsgColor.Sprintf(" ✘ %s: ", t.desc), errorErrColor.Sprint(err.Error()))
+		t.spinner.Stop()
+		t.print()
+	}
+}
+
+func (t *Task) string(level int) string {
+	var lines []string
+	value := t.value.Load()
+	if value != nil {
+		lines = append(lines, *value)
+	}
+	for _, child := range t.Children() {
+		lines = append(lines, child.string(level+1))
+	}
+	return fmt.Sprintf("%*s", level*2, strings.Join(lines, "\n"))
+}
+
+func newSubTask(parent Branch, log *Logger) *SubTask {
+	task := &SubTask{}
+	task.node = newNode(parent, task, log)
+	return task
 }
 
 // SubTask is a sub Task logger
 type SubTask struct {
-	logger func(msg string, args ...any)
-	closer func(*SubTask)
+	*node
+	value atomic.Pointer[string]
 }
 
 // Log logs a message to the Task
-func (s *SubTask) Log(msg string) {
-	s.logger(msg)
+func (t *SubTask) Log(msg string) {
+	t.value.Store(&msg)
+	t.log.output(t)
 }
 
 // Logf logs a formatted message to the Task
-func (s *SubTask) Logf(msg string, args ...any) {
-	s.logger(msg, args...)
+func (t *SubTask) Logf(msg string, args ...any) {
+	t.Log(fmt.Sprintf(msg, args...))
+	t.log.output(t)
 }
 
 // Close closes the logger
-func (s *SubTask) Close() {
-	if s.closer != nil {
-		s.closer(s)
+func (t *SubTask) Close() {
+	t.delete()
+}
+
+func (t *SubTask) string(level int) string {
+	value := t.value.Load()
+	if value == nil {
+		return ""
 	}
+	return fmt.Sprintf("%*s", level*2, *value)
 }

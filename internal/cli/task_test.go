@@ -15,7 +15,7 @@ func TestTask(t *testing.T) {
 	task := log.Task("Hello")
 	task.Start()
 	time.Sleep(2 * time.Second)
-	task.Complete()
+	task.Done()
 
 	task = log.Task("world!")
 	task.Start()
@@ -28,7 +28,7 @@ func TestTask(t *testing.T) {
 	go func() {
 		task1.Start()
 		time.Sleep(time.Second)
-		task1.Complete()
+		task1.Done()
 		wg.Done()
 	}()
 
@@ -37,7 +37,7 @@ func TestTask(t *testing.T) {
 	go func() {
 		task2.Start()
 		time.Sleep(2 * time.Second)
-		task2.Complete()
+		task2.Done()
 		wg.Done()
 	}()
 
@@ -70,17 +70,17 @@ func TestTask(t *testing.T) {
 	}()
 
 	wg.Wait()
-	task.Complete()
+	task.Done()
 
 	task = log.Task("Hello world!")
 	task.Start()
 	time.Sleep(time.Second)
-	task.Caution(errors.New("caution"))
+	task.Warn(errors.New("caution"))
 
 	task = log.Task("Hello world again!")
 	task.Start()
 	time.Sleep(time.Second)
-	task.Fail(errors.New("fail"))
+	task.Error(errors.New("fail"))
 }
 
 func TestSubTask(t *testing.T) {
@@ -98,7 +98,7 @@ func TestSubTask(t *testing.T) {
 	go func() {
 		foo.Start()
 		time.Sleep(time.Second)
-		foo.Complete()
+		foo.Done()
 		wg.Done()
 	}()
 
@@ -117,5 +117,5 @@ func TestSubTask(t *testing.T) {
 	}()
 
 	wg.Wait()
-	task.Complete()
+	task.Done()
 }
