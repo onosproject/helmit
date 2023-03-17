@@ -10,8 +10,8 @@ RUN addgroup -S helmit && adduser -S helmit -G helmit
 
 USER helmit
 
-ADD _output/bin/helmit-tests /usr/local/bin/helmit-tests
+ADD _output/bin/helmit-test /usr/local/bin/helmit-test
 
 WORKDIR /home/helmit
 
-ENTRYPOINT ["helmit-tests"]
+ENTRYPOINT ["helmit-test"]

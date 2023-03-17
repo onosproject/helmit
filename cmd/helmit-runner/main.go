@@ -6,7 +6,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,11 +41,7 @@ func isReady() bool {
 
 // getBinaryFile returns the binary file name
 func getBinaryFile() (string, error) {
-	file, err := os.Open(readyFile)
-	if err != nil {
-		return "", err
-	}
-	bytes, err := ioutil.ReadAll(file)
+	bytes, err := os.ReadFile(readyFile)
 	if err != nil {
 		return "", err
 	}
