@@ -6,7 +6,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/onosproject/helmit/pkg/cli"
+	"github.com/onosproject/helmit/internal/cli"
 	"os"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
