@@ -53,8 +53,8 @@ const benchExamples = `
 
 func getBenchCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "benchmark",
-		Aliases: []string{"benchmarks", "bench"},
+		Use:     "bench",
+		Aliases: []string{"benchmark", "benchmarks"},
 		Short:   "Run benchmarks on Kubernetes",
 		Example: benchExamples,
 		Args:    cobra.MaximumNArgs(1),
