@@ -185,10 +185,9 @@ func (w *benchWorker) StartBenchmark(ctx context.Context, request *api.StartBenc
 	}
 
 	suite.SetB(&B{
-		Suite:  request.Suite,
-		Name:   request.Benchmark,
-		Worker: getBenchmarkWorker(),
-		out:    os.Stdout,
+		Suite: request.Suite,
+		Name:  request.Benchmark,
+		out:   os.Stdout,
 	})
 
 	timeout, err := types.DurationFromProto(request.Timeout)

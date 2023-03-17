@@ -33,7 +33,7 @@ const defaultRoleName = "cluster-admin"
 const helmitSecretsName = "helmit-secrets"
 
 // NewManager returns a new job manager
-func NewManager[C any]() *Manager[C] {
+func NewManager[C any](jobType Type) *Manager[C] {
 	config, err := k8s.GetConfig()
 	if err != nil {
 		panic(err)
@@ -43,12 +43,14 @@ func NewManager[C any]() *Manager[C] {
 		panic(err)
 	}
 	return &Manager[C]{
+		Type:   jobType,
 		client: client,
 	}
 }
 
 // Manager manages test jobs within a namespace
 type Manager[C any] struct {
+	Type   Type
 	client *kubernetes.Clientset
 }
 
@@ -258,6 +260,10 @@ func (m *Manager[C]) createJob(job Job[C]) error {
 			Value: value,
 		})
 	}
+	env = append(env, corev1.EnvVar{
+		Name:  typeEnv,
+		Value: string(m.Type),
+	})
 	env = append(env, corev1.EnvVar{
 		Name:  "SERVICE_NAMESPACE",
 		Value: job.Namespace,

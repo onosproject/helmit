@@ -191,7 +191,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	manager := job.NewManager[bench.Config]()
+	manager := job.NewManager[bench.Config](job.ExecutorType)
 	job := job.Job[bench.Config]{
 		Spec: job.Spec{
 			ID:              benchID,

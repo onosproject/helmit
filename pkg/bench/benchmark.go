@@ -13,8 +13,6 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-const aggBatchSize = 100
-
 // BenchmarkingSuite is a suite of benchmarks
 type BenchmarkingSuite interface {
 	SetB(b *B)

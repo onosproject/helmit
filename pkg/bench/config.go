@@ -6,21 +6,7 @@ package bench
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	"os"
-	"strconv"
 	"time"
-)
-
-type BenchmarkType string
-
-const (
-	benchmarkTypeEnv   = "BENCHMARK_TYPE"
-	benchmarkWorkerEnv = "BENCHMARK_WORKER"
-)
-
-const (
-	benchTypeExecutor BenchmarkType = "executor"
-	benchTypeWorker   BenchmarkType = "worker"
 )
 
 // Config is a benchmark configuration
@@ -42,26 +28,4 @@ type WorkerConfig struct {
 	Image           string            `json:"workerImage"`
 	ImagePullPolicy corev1.PullPolicy `json:"WorkerImagePullPolicy"`
 	Env             map[string]string `json:"env"`
-}
-
-// getBenchmarkType returns the current benchmark type
-func getBenchmarkType() BenchmarkType {
-	context := os.Getenv(benchmarkTypeEnv)
-	if context != "" {
-		return BenchmarkType(context)
-	}
-	return benchTypeExecutor
-}
-
-// getBenchmarkWorker returns the current benchmark worker number
-func getBenchmarkWorker() int {
-	worker := os.Getenv(benchmarkWorkerEnv)
-	if worker == "" {
-		return 0
-	}
-	i, err := strconv.Atoi(worker)
-	if err != nil {
-		panic(err)
-	}
-	return i
 }

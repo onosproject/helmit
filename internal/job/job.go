@@ -17,7 +17,19 @@ const (
 	specFile   = "spec.json"
 	configFile = "config.json"
 	readyFile  = "/tmp/job-ready"
+	typeEnv    = "JOB_TYPE"
 )
+
+type Type string
+
+const (
+	ExecutorType Type = "executor"
+	WorkerType   Type = "worker"
+)
+
+func GetType() Type {
+	return Type(os.Getenv(typeEnv))
+}
 
 // Job is a job specification
 type Job[C any] struct {
@@ -46,15 +58,16 @@ type Spec struct {
 }
 
 // Bootstrap bootstraps the job
-func Bootstrap[C any](job *Job[C]) error {
+func Bootstrap[C any]() (Job[C], error) {
+	var job Job[C]
 	awaitReady()
 	if err := loadSpec(&job.Spec); err != nil {
-		return err
+		return job, err
 	}
 	if err := loadConfig(&job.Config); err != nil {
-		return err
+		return job, err
 	}
-	return nil
+	return job, nil
 }
 
 // awaitReady waits for the job to become ready

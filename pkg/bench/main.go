@@ -17,7 +17,7 @@ import (
 // Main runs a benchmark
 func Main(suites map[string]BenchmarkingSuite) {
 	if err := run(suites); err != nil {
-		println("B failed " + err.Error())
+		println("Benchmark failed " + err.Error())
 		os.Exit(1)
 	}
 	os.Exit(0)
@@ -25,11 +25,10 @@ func Main(suites map[string]BenchmarkingSuite) {
 
 // run runs a benchmark
 func run(suites map[string]BenchmarkingSuite) error {
-	benchType := getBenchmarkType()
-	switch benchType {
-	case benchTypeExecutor:
+	switch jobs.GetType() {
+	case jobs.ExecutorType:
 		return runExecutor()
-	case benchTypeWorker:
+	case jobs.WorkerType:
 		return runWorker(suites)
 	}
 	return nil
@@ -40,10 +39,7 @@ func runExecutor() error {
 	context := console.NewContext(os.Stdout)
 	defer context.Close()
 
-	var job jobs.Job[Config]
-	err := context.Run("Bootstrapping benchmark executor", func(task *console.Task) error {
-		return jobs.Bootstrap[Config](&job)
-	})
+	job, err := jobs.Bootstrap[Config]()
 	if err != nil {
 		return err
 	}
@@ -62,8 +58,8 @@ func runExecutor() error {
 
 // runWorker runs a test image in the worker context
 func runWorker(suites map[string]BenchmarkingSuite) error {
-	var job jobs.Job[WorkerConfig]
-	if err := jobs.Bootstrap[WorkerConfig](&job); err != nil {
+	job, err := jobs.Bootstrap[WorkerConfig]()
+	if err != nil {
 		return err
 	}
 

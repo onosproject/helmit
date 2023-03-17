@@ -21,11 +21,13 @@ import (
 	"time"
 )
 
+const managementPort = 5000
+
 // newExecutor returns a new benchmark job
 func newExecutor(spec job.Spec) (*benchExecutor, error) {
 	return &benchExecutor{
 		spec: spec,
-		jobs: job.NewManager[WorkerConfig](),
+		jobs: job.NewManager[WorkerConfig](job.WorkerType),
 	}, nil
 }
 
@@ -53,7 +55,7 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 	workers := make(map[int]api.BenchmarkerClient)
 	for i := 0; i < config.Workers; i++ {
 		worker, err := grpc.Dial(
-			fmt.Sprintf("%s:5000", newWorkerName(e.spec.ID, config.Suite, i)),
+			fmt.Sprintf("%s:%d", newWorkerName(e.spec.ID, config.Suite, i), managementPort),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithUnaryInterceptor(
 				grpc_retry.UnaryClientInterceptor(
@@ -313,18 +315,12 @@ func newWorkerName(jobID string, suite string, worker int) string {
 }
 
 func (e *benchExecutor) getWorkerAddress(config Config, worker int) string {
-	return fmt.Sprintf("%s:5000", newWorkerName(e.spec.ID, config.Suite, worker))
+	return fmt.Sprintf("%s:%d", newWorkerName(e.spec.ID, config.Suite, worker), managementPort)
 }
 
 // createWorker creates the given worker
 func (e *benchExecutor) createWorker(config Config, worker int, task *console.Task) error {
 	jobID := newWorkerName(e.spec.ID, config.Suite, worker)
-	env := config.WorkerConfig.Env
-	if env == nil {
-		env = make(map[string]string)
-	}
-	env[benchmarkTypeEnv] = string(benchTypeWorker)
-	env[benchmarkWorkerEnv] = fmt.Sprintf("%d", worker)
 	return e.jobs.Start(job.Job[WorkerConfig]{
 		Spec: job.Spec{
 			ID:              jobID,
@@ -338,11 +334,11 @@ func (e *benchExecutor) createWorker(config Config, worker int, task *console.Ta
 			Context:         e.spec.Context,
 			Values:          e.spec.Values,
 			ValueFiles:      e.spec.ValueFiles,
-			Env:             env,
+			Env:             e.spec.Env,
 			Timeout:         e.spec.Timeout,
 			NoTeardown:      e.spec.NoTeardown,
 			Secrets:         e.spec.Secrets,
-			ManagementPort:  5000,
+			ManagementPort:  managementPort,
 		},
 	}, task)
 }
