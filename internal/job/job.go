@@ -46,16 +46,15 @@ type Spec struct {
 }
 
 // Bootstrap bootstraps the job
-func Bootstrap[C any]() (Job[C], error) {
+func Bootstrap[C any](job *Job[C]) error {
 	awaitReady()
-	var job Job[C]
 	if err := loadSpec(&job.Spec); err != nil {
-		return job, err
+		return err
 	}
 	if err := loadConfig(&job.Config); err != nil {
-		return job, err
+		return err
 	}
-	return job, nil
+	return nil
 }
 
 // awaitReady waits for the job to become ready
