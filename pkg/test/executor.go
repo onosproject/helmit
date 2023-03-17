@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"path"
 	"time"
 )
 
@@ -282,6 +283,27 @@ func (e *testExecutor) createWorker(config Config, worker int, context *console.
 }
 
 func (e *testExecutor) newJob(id string, config Config) job.Job[WorkerConfig] {
+	valueFiles := make(map[string][]string)
+	if e.spec.ValueFiles != nil {
+		for release, files := range e.spec.ValueFiles {
+			releaseFiles := make([]string, 0, len(files))
+			for _, file := range files {
+				releaseFiles = append(releaseFiles, path.Base(file))
+			}
+			valueFiles[release] = releaseFiles
+		}
+	}
+
+	var executable string
+	if e.spec.Executable != "" {
+		executable = path.Base(e.spec.Executable)
+	}
+
+	var context string
+	if e.spec.Context != "" {
+		context = path.Base(e.spec.Context)
+	}
+
 	return job.Job[WorkerConfig]{
 		Spec: job.Spec{
 			ID:              id,
@@ -291,10 +313,10 @@ func (e *testExecutor) newJob(id string, config Config) job.Job[WorkerConfig] {
 			Annotations:     e.spec.Annotations,
 			Image:           config.WorkerConfig.Image,
 			ImagePullPolicy: config.WorkerConfig.ImagePullPolicy,
-			Executable:      e.spec.Executable,
-			Context:         e.spec.Context,
+			Executable:      executable,
+			Context:         context,
 			Values:          e.spec.Values,
-			ValueFiles:      e.spec.ValueFiles,
+			ValueFiles:      valueFiles,
 			Env:             e.spec.Env,
 			Timeout:         e.spec.Timeout,
 			NoTeardown:      e.spec.NoTeardown,

@@ -2,6 +2,7 @@ package console
 
 import (
 	"errors"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
@@ -59,6 +60,15 @@ func TestRootRun(t *testing.T) {
 			status.Report("finished")
 			return nil
 		}))
+	assert.NoError(t, err)
+
+	err = context.Run(func(status *Status) error {
+		fmt.Fprintln(status.Writer(), "Hello")
+		time.Sleep(time.Second)
+		fmt.Fprintln(status.Writer(), "world!")
+		time.Sleep(time.Second)
+		return nil
+	}).Wait()
 	assert.NoError(t, err)
 }
 

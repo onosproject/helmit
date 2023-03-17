@@ -122,7 +122,10 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 
 	// Either a command package or image must be specified
 	if pkgPath == "" && image == "" {
-		return errors.New("must specify either a benchmark package or --image to run")
+		return errors.New("must specify either a test package or --image to run")
+	}
+	if image == "" {
+		image = defaultRunnerImage
 	}
 
 	// If a context was provided, convert the context to its absolute path
@@ -149,7 +152,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Generate a unique benchmark ID
+	// Generate a unique test ID
 	benchID := petname.Generate(2, "-")
 
 	var executable string
@@ -216,30 +219,18 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	err = context.Fork("Starting benchmark", func(context *console.Context) error {
-		return manager.Start(job, context)
-	}).Join()
-	if err != nil {
+	if err := manager.Start(job, context); err != nil {
 		return err
 	}
 
-	err = context.Fork("Running benchmark", func(context *console.Context) error {
-		return manager.Run(job, context)
-	}).Join()
-	if err != nil {
+	if err := manager.Run(job, context); err != nil {
 		return err
 	}
 
-	err = context.Fork("Terminating benchmark", func(context *console.Context) error {
-		code, err := manager.Stop(job)
-		if err != nil {
-			return err
-		}
-		os.Exit(code)
-		return nil
-	}).Join()
+	code, err := manager.Stop(job)
 	if err != nil {
 		return err
 	}
+	os.Exit(code)
 	return nil
 }

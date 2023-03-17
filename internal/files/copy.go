@@ -19,7 +19,6 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	"os"
 	"path"
-	"strings"
 )
 
 // CopyOptions is options for copying files from a source to a destination
@@ -66,14 +65,6 @@ func (c *CopyOptions) Do(ctx context.Context) error {
 		c.To = c.From
 	}
 
-	// strip trailing slash (if any)
-	if c.From != "/" && strings.HasSuffix(string(c.From[len(c.From)-1]), "/") {
-		c.From = c.From[:len(c.From)-1]
-	}
-	if c.To != "/" && strings.HasSuffix(string(c.To[len(c.To)-1]), "/") {
-		c.To = c.To[:len(c.To)-1]
-	}
-
 	go func() {
 		defer writer.Close()
 		err := makeTar(c.From, c.To, writer)
@@ -118,13 +109,12 @@ func makeTar(srcPath, destPath string, writer io.Writer) error {
 	// TODO: use compression here?
 	tarWriter := tar.NewWriter(writer)
 	defer tarWriter.Close()
-
 	srcPath = path.Clean(srcPath)
 	destPath = path.Clean(destPath)
-	return recursiveTar(path.Dir(srcPath), path.Base(srcPath), path.Dir(destPath), path.Base(destPath), tarWriter)
+	return recursiveTar(path.Dir(srcPath), path.Base(srcPath), path.Base(destPath), tarWriter)
 }
 
-func recursiveTar(srcBase, srcFile, destBase, destFile string, tw *tar.Writer) error {
+func recursiveTar(srcBase, srcFile, destFile string, tw *tar.Writer) error {
 	filepath := path.Join(srcBase, srcFile)
 	stat, err := os.Lstat(filepath)
 	if err != nil {
@@ -144,7 +134,7 @@ func recursiveTar(srcBase, srcFile, destBase, destFile string, tw *tar.Writer) e
 			}
 		}
 		for _, f := range files {
-			if err := recursiveTar(srcBase, path.Join(srcFile, f.Name()), destBase, path.Join(destFile, f.Name()), tw); err != nil {
+			if err := recursiveTar(srcBase, path.Join(srcFile, f.Name()), path.Join(destFile, f.Name()), tw); err != nil {
 				return err
 			}
 		}

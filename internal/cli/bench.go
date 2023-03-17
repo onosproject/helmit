@@ -130,6 +130,9 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	if pkgPath == "" && image == "" {
 		return errors.New("must specify either a benchmark package or --image to run")
 	}
+	if image == "" {
+		image = defaultRunnerImage
+	}
 
 	// If a context was provided, convert the context to its absolute path
 	if contextPath != "" {

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"math"
+	"path"
 	"text/tabwriter"
 	"time"
 )
@@ -323,26 +324,8 @@ func (e *benchExecutor) getWorkerAddress(config Config, worker int) string {
 // createWorker creates the given worker
 func (e *benchExecutor) createWorker(config Config, worker int, context *console.Context) error {
 	jobID := newWorkerName(e.spec.ID, config.Suite, worker)
-	return e.jobs.Start(job.Job[WorkerConfig]{
-		Spec: job.Spec{
-			ID:              jobID,
-			Namespace:       e.spec.Namespace,
-			ServiceAccount:  e.spec.ServiceAccount,
-			Labels:          e.spec.Labels,
-			Annotations:     e.spec.Annotations,
-			Image:           config.WorkerConfig.Image,
-			ImagePullPolicy: config.WorkerConfig.ImagePullPolicy,
-			Executable:      e.spec.Executable,
-			Context:         e.spec.Context,
-			Values:          e.spec.Values,
-			ValueFiles:      e.spec.ValueFiles,
-			Env:             e.spec.Env,
-			Timeout:         e.spec.Timeout,
-			NoTeardown:      e.spec.NoTeardown,
-			Secrets:         e.spec.Secrets,
-			ManagementPort:  managementPort,
-		},
-	}, context)
+	job := e.newJob(jobID, config)
+	return e.jobs.Start(job, context)
 }
 
 func (e *benchExecutor) newContext(config Config) context.Context {
@@ -351,4 +334,48 @@ func (e *benchExecutor) newContext(config Config) context.Context {
 		ctx = context.WithValue(ctx, key, value)
 	}
 	return ctx
+}
+
+func (e *benchExecutor) newJob(id string, config Config) job.Job[WorkerConfig] {
+	valueFiles := make(map[string][]string)
+	if e.spec.ValueFiles != nil {
+		for release, files := range e.spec.ValueFiles {
+			releaseFiles := make([]string, 0, len(files))
+			for _, file := range files {
+				releaseFiles = append(releaseFiles, path.Base(file))
+			}
+			valueFiles[release] = releaseFiles
+		}
+	}
+
+	var executable string
+	if e.spec.Executable != "" {
+		executable = path.Base(e.spec.Executable)
+	}
+
+	var context string
+	if e.spec.Context != "" {
+		context = path.Base(e.spec.Context)
+	}
+
+	return job.Job[WorkerConfig]{
+		Spec: job.Spec{
+			ID:              id,
+			Namespace:       e.spec.Namespace,
+			ServiceAccount:  e.spec.ServiceAccount,
+			Labels:          e.spec.Labels,
+			Annotations:     e.spec.Annotations,
+			Image:           config.WorkerConfig.Image,
+			ImagePullPolicy: config.WorkerConfig.ImagePullPolicy,
+			Executable:      executable,
+			Context:         context,
+			Values:          e.spec.Values,
+			ValueFiles:      valueFiles,
+			Env:             e.spec.Env,
+			Timeout:         e.spec.Timeout,
+			NoTeardown:      e.spec.NoTeardown,
+			Secrets:         e.spec.Secrets,
+			ManagementPort:  managementPort,
+		},
+	}
 }

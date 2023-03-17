@@ -82,9 +82,14 @@ func (c *Context) Run(f func(status *Status) error) Waiter {
 	go func() {
 		defer close(ch)
 		if err := f(status); err != nil {
+			value := report.value.Load()
+			if value != nil {
+				report.Update(errorErrColor.Sprintf(" %s ← %s", *value, err.Error()))
+			}
 			ch <- err
+		} else {
+			report.Done()
 		}
-		report.Done()
 	}()
 	return newChannelWaiter(ch)
 }

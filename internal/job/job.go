@@ -89,7 +89,7 @@ func isReady() bool {
 
 // loadSpec loads the job specification
 func loadSpec(spec *Spec) error {
-	bytes, err := os.ReadFile(filepath.Join(configPath, configFile))
+	bytes, err := os.ReadFile(filepath.Join(configPath, specFile))
 	if err != nil {
 		return err
 	}

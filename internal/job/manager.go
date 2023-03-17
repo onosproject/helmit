@@ -88,7 +88,6 @@ func (m *Manager[C]) streamLogs(job Job[C], writer io.Writer) error {
 		return err
 	}
 	defer reader.Close()
-
 	_, err = io.Copy(writer, reader)
 	return err
 }
@@ -96,7 +95,8 @@ func (m *Manager[C]) streamLogs(job Job[C], writer io.Writer) error {
 // Stop stops the job and waits for it to exit
 func (m *Manager[C]) Stop(job Job[C]) (int, error) {
 	_, status, err := m.getStatus(job)
-	_ = m.finishJob(job)
+	// FIXME: Make sure you uncomment this again!
+	//_ = m.finishJob(job)
 	if err != nil {
 		return 0, err
 	}
@@ -217,25 +217,29 @@ func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 
 	err = context.Fork("Starting job", func(context *console.Context) error {
 		var waiters []console.Waiter
-		waiters = append(waiters, context.Run(func(status *console.Status) error {
-			status.Report("Copying binaries")
-			return m.copyBinary(job)
-		}))
-		waiters = append(waiters, context.Run(func(status *console.Status) error {
-			status.Report("Copying context")
-			return m.copyContext(job)
-		}))
-		if len(job.ValueFiles) != 0 {
+		if job.Executable != "" {
 			waiters = append(waiters, context.Run(func(status *console.Status) error {
-				for _, valueFiles := range job.ValueFiles {
-					for _, valueFile := range valueFiles {
-						if err := m.copyValuesFile(job, valueFile); err != nil {
-							return err
-						}
-					}
-				}
-				return nil
+				status.Reportf("Copying %s", job.Executable)
+				return m.copyBinary(job)
 			}))
+		}
+		if job.Context != "" {
+			waiters = append(waiters, context.Run(func(status *console.Status) error {
+				status.Reportf("Copying %s", job.Context)
+				return m.copyContext(job)
+			}))
+		}
+		if len(job.ValueFiles) != 0 {
+			for _, valueFiles := range job.ValueFiles {
+				for _, valueFile := range valueFiles {
+					waiters = append(waiters, func(file string) console.Waiter {
+						return context.Run(func(status *console.Status) error {
+							status.Reportf("Copying %s", file)
+							return m.copyValuesFile(job, valueFile)
+						})
+					}(valueFile))
+				}
+			}
 		}
 		err := console.Wait(waiters...)
 		if err != nil {
@@ -243,7 +247,7 @@ func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 		}
 
 		context.Run(func(status *console.Status) error {
-			status.Report("Running job")
+			status.Report("Waiting for ready")
 			if err := m.runBinary(job); err != nil {
 				return err
 			}
@@ -255,6 +259,9 @@ func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 			}
 			return nil
 		})
+		if err != nil {
+			return err
+		}
 		return nil
 	}).Join()
 	if err != nil {
@@ -347,15 +354,12 @@ func (m *Manager[C]) createJob(job Job[C]) error {
 	}
 
 	var containerPorts []corev1.ContainerPort
+	var readinessProbe *corev1.Probe
 	if job.ManagementPort != 0 {
 		containerPorts = append(containerPorts, corev1.ContainerPort{
 			Name:          "management",
 			ContainerPort: int32(job.ManagementPort),
 		})
-	}
-
-	var readinessProbe *corev1.Probe
-	if job.ManagementPort != 0 {
 		readinessProbe = &corev1.Probe{
 			ProbeHandler: corev1.ProbeHandler{
 				TCPSocket: &corev1.TCPSocketAction{
@@ -480,7 +484,8 @@ func (m *Manager[C]) createJob(job Job[C]) error {
 	if job.ManagementPort != 0 {
 		svc := &corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: job.ID,
+				Name:      job.ID,
+				Namespace: job.Namespace,
 				Labels: map[string]string{
 					"job": job.ID,
 				},
@@ -561,7 +566,7 @@ func (m *Manager[C]) copyBinary(job Job[C]) error {
 	copy := files.CopyOptions{
 		Namespace: job.Namespace,
 		From:      job.Executable,
-		To:        job.Executable,
+		To:        path.Base(job.Executable),
 		Pod:       pod.Name,
 		Container: "job",
 	}
@@ -659,7 +664,8 @@ func (m *Manager[C]) createSecrets(job Job[C]) error {
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: helmitSecretsName,
+			Name:      helmitSecretsName,
+			Namespace: job.Namespace,
 			Labels: map[string]string{
 				"job": job.ID,
 			},
