@@ -6,6 +6,7 @@ package bench
 
 import (
 	"fmt"
+	"github.com/onosproject/helmit/internal/console"
 	jobs "github.com/onosproject/helmit/internal/job"
 	"os"
 )
@@ -27,7 +28,7 @@ func run(suites map[string]BenchmarkingSuite) error {
 	benchType := getBenchmarkType()
 	switch benchType {
 	case benchTypeExecutor:
-		return runExecutor(suites)
+		return runExecutor()
 	case benchTypeWorker:
 		return runWorker(suites)
 	}
@@ -35,22 +36,24 @@ func run(suites map[string]BenchmarkingSuite) error {
 }
 
 // runExecutor runs a test image in the executor context
-func runExecutor(suites map[string]BenchmarkingSuite) error {
-	status := console.NewReporter(os.Stdout)
-	status.Start()
-	defer status.Stop()
+func runExecutor() error {
+	context := console.NewContext(os.Stdout)
+	defer context.Close()
 
-	job, err := jobs.Bootstrap[Config]()
+	var job jobs.Job[Config]
+	err := context.Run("Bootstrapping benchmark executor", func(task *console.Task) error {
+		return jobs.Bootstrap[Config](&job)
+	})
 	if err != nil {
 		return err
 	}
 
-	executor, err := newExecutor(job.Spec, suites, console.NewContextManager(status))
+	executor, err := newExecutor(job.Spec)
 	if err != nil {
 		return err
 	}
 
-	if err := executor.run(job.Config); err != nil {
+	if err := executor.run(job.Config, context); err != nil {
 		fmt.Println(err)
 		return err
 	}
@@ -59,8 +62,8 @@ func runExecutor(suites map[string]BenchmarkingSuite) error {
 
 // runWorker runs a test image in the worker context
 func runWorker(suites map[string]BenchmarkingSuite) error {
-	job, err := jobs.Bootstrap[Config]()
-	if err != nil {
+	var job jobs.Job[WorkerConfig]
+	if err := jobs.Bootstrap[WorkerConfig](&job); err != nil {
 		return err
 	}
 
@@ -68,5 +71,5 @@ func runWorker(suites map[string]BenchmarkingSuite) error {
 	if err != nil {
 		return err
 	}
-	return worker.Run()
+	return worker.run()
 }

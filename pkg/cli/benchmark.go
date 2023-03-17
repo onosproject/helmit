@@ -6,14 +6,15 @@ package cli
 
 import (
 	"errors"
+	petname "github.com/dustinkirkland/golang-petname"
+	"github.com/onosproject/helmit/internal/console"
+	"github.com/onosproject/helmit/pkg/bench"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/onosproject/helmit/pkg/job"
+	"github.com/onosproject/helmit/internal/job"
 
-	"github.com/onosproject/helmit/pkg/benchmark"
-	"github.com/onosproject/helmit/pkg/util/random"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -75,15 +76,26 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().IntP("iterations", "", 0, "the number of iterations to run")
 	cmd.Flags().DurationP("max-latency", "m", 0, "maximum latency allowed")
 	cmd.Flags().DurationP("duration", "d", 0, "the duration for which to run the test")
+	cmd.Flags().DurationP("report-interval", "r", 5*time.Second, "the interval at which to report benchmark results")
 	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named benchmark arguments")
 	cmd.Flags().Duration("timeout", 10*time.Minute, "benchmark timeout")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following benchmarks")
 	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
+	_ = cmd.MarkFlagRequired("suite")
+	_ = cmd.MarkFlagRequired("benchmark")
 	return cmd
 }
 
 func runBenchCommand(cmd *cobra.Command, args []string) error {
-	setupCommand(cmd)
+	verbose, _ := cmd.Flags().GetBool("verbose")
+
+	var opts []console.Option
+	if verbose {
+		opts = append(opts, console.WithVerbose())
+	}
+
+	context := console.NewContext(cmd.OutOrStdout(), opts...)
+	defer context.Close()
 
 	pkgPath := ""
 	if len(args) > 0 {
@@ -94,7 +106,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	serviceAccount, _ := cmd.Flags().GetString("service-account")
 	labels, _ := cmd.Flags().GetStringToString("labels")
 	annotations, _ := cmd.Flags().GetStringToString("annotations")
-	context, _ := cmd.Flags().GetString("context")
+	contextPath, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	suite, _ := cmd.Flags().GetString("suite")
 	benchmarkName, _ := cmd.Flags().GetString("benchmark")
@@ -102,6 +114,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	parallelism, _ := cmd.Flags().GetInt("parallel")
 	iterations, _ := cmd.Flags().GetInt("iterations")
 	duration, _ := cmd.Flags().GetDuration("duration")
+	reportInterval, _ := cmd.Flags().GetDuration("report-interval")
 	files, _ := cmd.Flags().GetStringArray("values")
 	sets, _ := cmd.Flags().GetStringArray("set")
 	benchArgs, _ := cmd.Flags().GetStringToString("args")
@@ -121,37 +134,13 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		return errors.New("must specify either a benchmark package or --image to run")
 	}
 
-	// Generate a unique benchmark ID
-	benchID := random.NewPetName(2)
-
-	// If a command package was provided, build a binary and update the image tag
-	var executable string
-	if pkgPath != "" {
-		executable = filepath.Join(os.TempDir(), "helmit", benchID)
-		err := buildBinary(pkgPath, executable)
-		if err != nil {
-			cmd.SilenceUsage = true
-			cmd.SilenceErrors = true
-			return err
-		}
-		if image == "" {
-			image = "onosproject/helmit-runner:latest"
-		}
-	}
-
 	// If a context was provided, convert the context to its absolute path
-	if context != "" {
-		path, err := filepath.Abs(context)
+	if contextPath != "" {
+		path, err := filepath.Abs(contextPath)
 		if err != nil {
 			return err
 		}
-		context = path
-	}
-
-	var maxLatency *time.Duration
-	if cmd.Flags().Changed("max-latency") {
-		d, _ := cmd.Flags().GetDuration("max-latency")
-		maxLatency = &d
+		contextPath = path
 	}
 
 	valueFiles, err := parseFiles(files)
@@ -174,8 +163,37 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	config := &benchmark.Config{
-		Config: &job.Config{
+	// Generate a unique benchmark ID
+	benchID := petname.Generate(2, "-")
+
+	var executable string
+	if pkgPath != "" {
+		executable = filepath.Join(os.TempDir(), "helmit", benchID)
+		if image == "" {
+			image = "onosproject/helmit-runner:latest"
+		}
+		err := context.Run("Preparing artifacts", func(task *console.Task) error {
+			task.Reportf("Validating package path %s", pkgPath)
+			if err := validatePackage(pkgPath); err != nil {
+				return err
+			}
+
+			task.Reportf("Building %s", executable)
+			if err := buildBinary(pkgPath, executable); err != nil {
+				cmd.SilenceUsage = true
+				cmd.SilenceErrors = true
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	manager := job.NewManager[bench.Config]()
+	job := job.Job[bench.Config]{
+		Spec: job.Spec{
 			ID:              benchID,
 			Namespace:       namespace,
 			ServiceAccount:  serviceAccount,
@@ -184,22 +202,56 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 			Executable:      executable,
 			Image:           image,
 			ImagePullPolicy: pullPolicy,
-			Context:         context,
+			Context:         contextPath,
 			ValueFiles:      valueFiles,
 			Values:          values,
 			Timeout:         timeout,
 			NoTeardown:      noTeardown,
 			Secrets:         secrets,
 		},
-		Suite:       suite,
-		Benchmark:   benchmarkName,
-		Workers:     workers,
-		Parallelism: parallelism,
-		Iterations:  iterations,
-		Duration:    d,
-		Args:        benchArgs,
-		MaxLatency:  maxLatency,
-		NoTeardown:  noTeardown,
+		Config: bench.Config{
+			WorkerConfig: bench.WorkerConfig{
+				Image:           image,
+				ImagePullPolicy: pullPolicy,
+				// TODO: Add environment variables?
+				// Env: ...
+			},
+			Suite:          suite,
+			Benchmark:      benchmarkName,
+			Workers:        workers,
+			Parallelism:    parallelism,
+			Iterations:     iterations,
+			Duration:       d,
+			ReportInterval: reportInterval,
+			Args:           benchArgs,
+			NoTeardown:     noTeardown,
+		},
 	}
-	return benchmark.Run(config)
+
+	err = context.Run("Starting benchmark", func(task *console.Task) error {
+		return manager.Start(job, task)
+	})
+	if err != nil {
+		return err
+	}
+
+	err = context.Run("Running benchmark", func(task *console.Task) error {
+		return manager.Run(job, task)
+	})
+	if err != nil {
+		return err
+	}
+
+	err = context.Run("Terminating benchmark", func(task *console.Task) error {
+		code, err := manager.Stop(job)
+		if err != nil {
+			return err
+		}
+		os.Exit(code)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }

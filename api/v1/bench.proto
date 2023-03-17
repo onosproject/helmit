@@ -1,0 +1,133 @@
+/*
+ * SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+syntax = "proto3";
+
+package helmit.v1;
+
+import "google/protobuf/duration.proto";
+
+// Benchmarker is a benchmark worker service
+service Benchmarker {
+    rpc SetupBenchmarkSuite (SetupBenchmarkSuiteRequest) returns (SetupBenchmarkSuiteResponse);
+    rpc TearDownBenchmarkSuite (TearDownBenchmarkSuiteRequest) returns (TearDownBenchmarkSuiteResponse);
+    rpc SetupBenchmarkWorker (SetupBenchmarkWorkerRequest) returns (SetupBenchmarkWorkerResponse);
+    rpc TearDownBenchmarkWorker (TearDownBenchmarkWorkerRequest) returns (TearDownBenchmarkWorkerResponse);
+    rpc SetupBenchmark (SetupBenchmarkRequest) returns (SetupBenchmarkResponse);
+    rpc TearDownBenchmark (TearDownBenchmarkRequest) returns (TearDownBenchmarkResponse);
+    rpc StartBenchmark (StartBenchmarkRequest) returns (StartBenchmarkResponse);
+    rpc StopBenchmark (StopBenchmarkRequest) returns (StopBenchmarkResponse);
+    rpc ReportBenchmark (ReportBenchmarkRequest) returns (ReportBenchmarkResponse);
+}
+
+message SetupBenchmarkSuiteRequest {
+    string suite = 1;
+}
+
+message SetupBenchmarkSuiteResponse {
+
+}
+
+message TearDownBenchmarkSuiteRequest {
+    string suite = 1;
+}
+
+message TearDownBenchmarkSuiteResponse {
+
+}
+
+message SetupBenchmarkWorkerRequest {
+    string suite = 1;
+}
+
+message SetupBenchmarkWorkerResponse {
+
+}
+
+message TearDownBenchmarkWorkerRequest {
+    string suite = 1;
+}
+
+message TearDownBenchmarkWorkerResponse {
+
+}
+
+message SetupBenchmarkRequest {
+    string suite = 1;
+    string benchmark = 2;
+}
+
+message SetupBenchmarkResponse {
+
+}
+
+message TearDownBenchmarkRequest {
+    string suite = 1;
+    string benchmark = 2;
+}
+
+message TearDownBenchmarkResponse {
+
+}
+
+message StartBenchmarkRequest {
+    // The benchmark suite to start
+    string suite = 1;
+
+    // The benchmark method to start
+    string benchmark = 2;
+
+    // The number of threads to start
+    uint32 parallelism = 3;
+
+    // The call timeout
+    google.protobuf.Duration timeout = 4;
+}
+
+message StartBenchmarkResponse {
+
+}
+
+message StopBenchmarkRequest {
+    // The benchmark suite to stop
+    string suite = 1;
+
+    // The benchmark method to stop
+    string benchmark = 2;
+}
+
+message StopBenchmarkResponse {
+
+}
+
+message ReportBenchmarkRequest {
+    // The benchmark suite to report
+    string suite = 1;
+
+    // The benchmark method to report
+    string benchmark = 2;
+}
+
+message ReportBenchmarkResponse {
+    BenchmarkReport report = 1;
+}
+
+message BenchmarkReport {
+    // iterations is the number of iterations over the given duration
+    uint64 iterations = 1;
+
+    // duration is the duration of the test run
+    google.protobuf.Duration duration = 2;
+
+    // mean_latency is the mean latency
+    google.protobuf.Duration mean_latency = 3;
+
+    // latency* are latency percentiles
+    google.protobuf.Duration p50_latency = 4;
+    google.protobuf.Duration p75_latency = 5;
+    google.protobuf.Duration p95_latency = 6;
+    google.protobuf.Duration p99_latency = 7;
+}

@@ -6,20 +6,19 @@ package cli
 
 import (
 	"errors"
+	petname "github.com/dustinkirkland/golang-petname"
 	"go/build"
 	"math/rand"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/onosproject/helmit/pkg/job"
-
-	"github.com/onosproject/helmit/pkg/util/logging"
+	"github.com/onosproject/helmit/internal/job"
 
 	"github.com/onosproject/helmit/pkg/test"
-	"github.com/onosproject/helmit/pkg/util/random"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -82,7 +81,12 @@ func getTestCommand() *cobra.Command {
 }
 
 func runTestCommand(cmd *cobra.Command, args []string) error {
-	setupCommand(cmd)
+	status := console.NewReporter(cmd.OutOrStdout())
+	status.Start()
+	defer status.Stop()
+
+	tasks := console.NewContextManager(status)
+
 	pkgPath := ""
 	if len(args) > 0 {
 		pkgPath = args[0]
@@ -110,21 +114,32 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Generate a unique test ID
-	testID := random.NewPetName(2)
+	testID := petname.Generate(2, "-")
 
 	// If a command package was provided, build a binary and update the image tag
 	var executable string
 	if pkgPath != "" {
-		executable = filepath.Join(os.TempDir(), "helmit", testID)
-		err := buildBinary(pkgPath, executable)
-		if err != nil {
-			cmd.SilenceUsage = true
-			cmd.SilenceErrors = true
-			return err
-		}
-		if image == "" {
-			image = "onosproject/helmit-runner:latest"
-		}
+		task := tasks.New("Building executable")
+		task.Run(func(log console.Logger) error {
+			log.Logf("Validating package path %s", pkgPath)
+			if err := validatePackage(pkgPath); err != nil {
+				return err
+			}
+
+			// TODO: Ensure temporary directory is deleted after use
+			executable = filepath.Join(os.TempDir(), "helmit", testID)
+			log.Logf("Building %s", executable)
+			if err := buildBinary(pkgPath, executable); err != nil {
+				cmd.SilenceUsage = true
+				cmd.SilenceErrors = true
+				return err
+			}
+			if image == "" {
+				image = "onosproject/helmit-runner:latest"
+			}
+			return nil
+		})
+		task.Wait()
 	}
 
 	// If a context was provided, convert the context to its absolute path
@@ -173,57 +188,88 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		Suites:     suites,
 		Tests:      testNames,
 		Iterations: iterations,
-		Verbose:    logging.GetVerbose(),
+		Verbose:    os.Getenv("VERBOSE_LOGGING") != "",
 		NoTeardown: noTeardown,
 		Args:       testArgs,
 	}
-	return test.Run(config)
+	return runTest(config)
+}
+
+// runTest runs the test
+func runTest(config *test.Config) error {
+	configValueFiles := make(map[string][]string)
+	if config.ValueFiles != nil {
+		for release, valueFiles := range config.ValueFiles {
+			configReleaseFiles := make([]string, 0)
+			for _, valueFile := range valueFiles {
+				configReleaseFiles = append(configReleaseFiles, path.Base(valueFile))
+			}
+			configValueFiles[release] = configReleaseFiles
+		}
+	}
+
+	configExecutable := ""
+	if config.Executable != "" {
+		configExecutable = path.Base(config.Executable)
+	}
+
+	configContext := ""
+	if config.Context != "" {
+		configContext = path.Base(config.Context)
+	}
+	return job.Run(&job.Job{
+		Config: config.Config,
+		JobConfig: &test.Config{
+			Config: &job.Config{
+				ID:              config.ID,
+				Namespace:       config.Namespace,
+				ServiceAccount:  config.ServiceAccount,
+				Image:           config.Image,
+				ImagePullPolicy: config.ImagePullPolicy,
+				Executable:      configExecutable,
+				Context:         configContext,
+				Values:          config.Values,
+				ValueFiles:      configValueFiles,
+				Args:            config.Config.Args,
+				Env:             config.Env,
+				Timeout:         config.Timeout,
+				NoTeardown:      config.NoTeardown,
+				Secrets:         config.Secrets,
+			},
+			Suites:     config.Suites,
+			Tests:      config.Tests,
+			Iterations: config.Iterations,
+			Verbose:    config.Verbose,
+			Args:       config.Args,
+		},
+		Type: job.TestType,
+	})
 }
 
 func buildBinary(pkgPath, binPath string) error {
-	if err := importPackage(pkgPath); err != nil {
-		return err
-	}
-
-	step := logging.NewStep(pkgPath, "Build executable %s", binPath)
-	step.Start()
-
 	build := exec.Command("go", "build", "-o", binPath, pkgPath)
 	build.Stderr = os.Stderr
 	build.Stdout = os.Stdout
 	env := os.Environ()
 	env = append(env, "GOOS=linux", "CGO_ENABLED=0")
 	build.Env = env
-	if err := build.Run(); err != nil {
-		step.Fail(err)
-		return err
-	}
-	step.Complete()
-	return nil
+	return build.Run()
 }
 
-func importPackage(pkgPath string) error {
-	step := logging.NewStep(pkgPath, "Import package %s", pkgPath)
-	step.Start()
-
+func validatePackage(pkgPath string) error {
 	workDir, err := os.Getwd()
 	if err != nil {
-		step.Fail(err)
 		return err
 	}
 
 	pkg, err := build.Import(pkgPath, workDir, build.ImportComment)
 	if err != nil {
-		step.Fail(err)
 		return err
 	}
 
 	if !pkg.IsCommand() {
-		err = errors.New("main not found in package")
-		step.Fail(err)
-		return err
+		return errors.New("main not found in package")
 	}
-	step.Complete()
 	return nil
 }
 

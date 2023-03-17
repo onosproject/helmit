@@ -25,15 +25,16 @@ const (
 
 // Config is a benchmark configuration
 type Config struct {
-	WorkerConfig `json:"workerConfig"`
-	Suite        string            `json:"suite,omitempty"`
-	Benchmark    string            `json:"benchmark,omitempty"`
-	Workers      int               `json:"workers,omitempty"`
-	Parallelism  int               `json:"parallelism,omitempty"`
-	Iterations   int               `json:"iterations,omitempty"`
-	Duration     *time.Duration    `json:"duration,omitempty"`
-	Args         map[string]string `json:"args,omitempty"`
-	NoTeardown   bool              `json:"verbose,omitempty"`
+	WorkerConfig   `json:"workerConfig"`
+	Suite          string            `json:"suite,omitempty"`
+	Benchmark      string            `json:"benchmark,omitempty"`
+	Workers        int               `json:"workers,omitempty"`
+	Parallelism    int               `json:"parallelism,omitempty"`
+	Iterations     int               `json:"iterations,omitempty"`
+	Duration       *time.Duration    `json:"duration,omitempty"`
+	ReportInterval time.Duration     `json:"reportInterval"`
+	Args           map[string]string `json:"args,omitempty"`
+	NoTeardown     bool              `json:"verbose,omitempty"`
 }
 
 // WorkerConfig is a benchmark worker configuration

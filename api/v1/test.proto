@@ -1,0 +1,84 @@
+/*
+ * SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+syntax = "proto3";
+
+package helmit.v1;
+
+// Tester is a test worker service
+service Tester {
+    rpc GetTestSuites (GetTestSuitesRequest) returns (GetTestSuitesResponse);
+    rpc SetupTestSuite (SetupTestSuiteRequest) returns (SetupTestSuiteResponse);
+    rpc TearDownTestSuite (TearDownTestSuiteRequest) returns (TearDownTestSuiteResponse);
+    rpc SetupTest (SetupTestRequest) returns (SetupTestResponse);
+    rpc TearDownTest (TearDownTestRequest) returns (TearDownTestResponse);
+    rpc RunTest (RunTestRequest) returns (RunTestResponse);
+}
+
+message GetTestSuitesRequest {
+
+}
+
+message GetTestSuitesResponse {
+    repeated TestSuite suites = 1;
+}
+
+message TestSuite {
+    string name = 1;
+    repeated Test tests = 2;
+}
+
+message Test {
+    string name = 1;
+}
+
+message SetupTestSuiteRequest {
+    string suite = 1;
+}
+
+message SetupTestSuiteResponse {
+
+}
+
+message TearDownTestSuiteRequest {
+    string suite = 1;
+}
+
+message TearDownTestSuiteResponse {
+
+}
+
+message SetupTestRequest {
+    string suite = 1;
+    string test = 2;
+}
+
+message SetupTestResponse {
+
+}
+
+message TearDownTestRequest {
+    string suite = 1;
+    string test = 2;
+}
+
+message TearDownTestResponse {
+
+}
+
+// RunTestRequest is a test request
+message RunTestRequest {
+    // suite is the test suite to run
+    string suite = 1;
+
+    // test is the test to run
+    string test = 2;
+}
+
+// RunTestResponse is a test response
+message RunTestResponse {
+
+}

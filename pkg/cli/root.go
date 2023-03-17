@@ -5,14 +5,10 @@
 package cli
 
 import (
-	"fmt"
 	"math/rand"
-	"os"
 	"time"
 
-	"github.com/onosproject/helmit/pkg/util/logging"
 	"github.com/spf13/cobra"
-	"github.com/spf13/cobra/doc"
 )
 
 func init() {
@@ -28,23 +24,6 @@ func GetRootCommand() *cobra.Command {
 	}
 	cmd.AddCommand(getTestCommand())
 	cmd.AddCommand(getBenchCommand())
-	cmd.AddCommand(getSimulateCommand())
-	cmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
+	cmd.PersistentFlags().BoolP("verbose", "v", false, "enable verbose output")
 	return cmd
-}
-
-// GenerateCliDocs generate markdown files for helmit commands
-func GenerateCliDocs() {
-	cmd := GetRootCommand()
-	err := doc.GenMarkdownTree(cmd, "docs/cli")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-}
-
-func setupCommand(cmd *cobra.Command) {
-	verbose, _ := cmd.Flags().GetBool("verbose")
-	logging.SetVerbose(verbose)
 }

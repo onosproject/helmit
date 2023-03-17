@@ -18,28 +18,31 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"regexp"
-	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // newWorker returns a new benchmark worker
-func newWorker(spec job.Spec, suites map[string]BenchmarkingSuite) (*Worker, error) {
-	return &Worker{
+func newWorker(spec job.Spec, suites map[string]BenchmarkingSuite) (*benchWorker, error) {
+	return &benchWorker{
 		spec:   spec,
 		suites: suites,
 	}, nil
 }
 
-// Worker runs a benchmark job
-type Worker struct {
-	spec   job.Spec
-	suites map[string]BenchmarkingSuite
+// benchWorker runs a benchmark job
+type benchWorker struct {
+	spec    job.Spec
+	suites  map[string]BenchmarkingSuite
+	start   time.Time
+	calls   []time.Duration
+	stopped atomic.Bool
+	mu      sync.Mutex
 }
 
-// Run runs a benchmark
-func (w *Worker) Run() error {
+// run runs a benchmark
+func (w *benchWorker) run() error {
 	lis, err := net.Listen("tcp", ":5000")
 	if err != nil {
 		return err
@@ -50,7 +53,7 @@ func (w *Worker) Run() error {
 }
 
 // SetupBenchmarkSuite sets up a benchmark suite
-func (w *Worker) SetupBenchmarkSuite(ctx context.Context, request *api.SetupBenchmarkSuiteRequest) (*api.SetupBenchmarkSuiteResponse, error) {
+func (w *benchWorker) SetupBenchmarkSuite(ctx context.Context, request *api.SetupBenchmarkSuiteRequest) (*api.SetupBenchmarkSuiteResponse, error) {
 	suite, ok := w.suites[request.Suite]
 	if !ok {
 		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
@@ -80,7 +83,7 @@ func (w *Worker) SetupBenchmarkSuite(ctx context.Context, request *api.SetupBenc
 }
 
 // TearDownBenchmarkSuite tears down a benchmark suite
-func (w *Worker) TearDownBenchmarkSuite(ctx context.Context, request *api.TearDownBenchmarkSuiteRequest) (*api.TearDownBenchmarkSuiteResponse, error) {
+func (w *benchWorker) TearDownBenchmarkSuite(ctx context.Context, request *api.TearDownBenchmarkSuiteRequest) (*api.TearDownBenchmarkSuiteResponse, error) {
 	suite, ok := w.suites[request.Suite]
 	if !ok {
 		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
@@ -97,7 +100,7 @@ func (w *Worker) TearDownBenchmarkSuite(ctx context.Context, request *api.TearDo
 }
 
 // SetupBenchmarkWorker sets up a benchmark worker
-func (w *Worker) SetupBenchmarkWorker(ctx context.Context, request *api.SetupBenchmarkWorkerRequest) (*api.SetupBenchmarkWorkerResponse, error) {
+func (w *benchWorker) SetupBenchmarkWorker(ctx context.Context, request *api.SetupBenchmarkWorkerRequest) (*api.SetupBenchmarkWorkerResponse, error) {
 	suite, ok := w.suites[request.Suite]
 	if !ok {
 		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
@@ -114,7 +117,7 @@ func (w *Worker) SetupBenchmarkWorker(ctx context.Context, request *api.SetupBen
 }
 
 // TearDownBenchmarkWorker tears down a benchmark worker
-func (w *Worker) TearDownBenchmarkWorker(ctx context.Context, request *api.TearDownBenchmarkWorkerRequest) (*api.TearDownBenchmarkWorkerResponse, error) {
+func (w *benchWorker) TearDownBenchmarkWorker(ctx context.Context, request *api.TearDownBenchmarkWorkerRequest) (*api.TearDownBenchmarkWorkerResponse, error) {
 	suite, ok := w.suites[request.Suite]
 	if !ok {
 		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
@@ -131,7 +134,7 @@ func (w *Worker) TearDownBenchmarkWorker(ctx context.Context, request *api.TearD
 }
 
 // SetupBenchmark sets up a benchmark
-func (w *Worker) SetupBenchmark(ctx context.Context, request *api.SetupBenchmarkRequest) (*api.SetupBenchmarkResponse, error) {
+func (w *benchWorker) SetupBenchmark(ctx context.Context, request *api.SetupBenchmarkRequest) (*api.SetupBenchmarkResponse, error) {
 	suite, ok := w.suites[request.Suite]
 	if !ok {
 		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
@@ -153,7 +156,7 @@ func (w *Worker) SetupBenchmark(ctx context.Context, request *api.SetupBenchmark
 }
 
 // TearDownBenchmark tears down a benchmark
-func (w *Worker) TearDownBenchmark(ctx context.Context, request *api.TearDownBenchmarkRequest) (*api.TearDownBenchmarkResponse, error) {
+func (w *benchWorker) TearDownBenchmark(ctx context.Context, request *api.TearDownBenchmarkRequest) (*api.TearDownBenchmarkResponse, error) {
 	suite, ok := w.suites[request.Suite]
 	if !ok {
 		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
@@ -174,8 +177,8 @@ func (w *Worker) TearDownBenchmark(ctx context.Context, request *api.TearDownBen
 	return &api.TearDownBenchmarkResponse{}, nil
 }
 
-// RunBenchmark runs a benchmark
-func (w *Worker) RunBenchmark(ctx context.Context, request *api.RunBenchmarkRequest) (*api.RunBenchmarkResponse, error) {
+// StartBenchmark starts a benchmark
+func (w *benchWorker) StartBenchmark(ctx context.Context, request *api.StartBenchmarkRequest) (*api.StartBenchmarkResponse, error) {
 	suite, ok := w.suites[request.Suite]
 	if !ok {
 		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
@@ -188,12 +191,17 @@ func (w *Worker) RunBenchmark(ctx context.Context, request *api.RunBenchmarkRequ
 		out:    os.Stdout,
 	})
 
-	var statistics api.BenchmarkStatistics
+	timeout, err := types.DurationFromProto(request.Timeout)
+	if err != nil {
+		return nil, err
+	}
 
-	var f func(context.Context) error
+	var f func() error
 	methods := reflect.TypeOf(suite)
 	if method, ok := methods.MethodByName(request.Benchmark); ok {
-		f = func(context.Context) error {
+		f = func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			defer cancel()
 			values := method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
 			if len(values) == 0 {
 				return nil
@@ -206,142 +214,65 @@ func (w *Worker) RunBenchmark(ctx context.Context, request *api.RunBenchmarkRequ
 		return nil, fmt.Errorf("unknown benchmark method %s", request.Benchmark)
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, w.spec.Timeout)
-	defer cancel()
+	w.mu.Lock()
+	w.start = time.Now()
+	w.calls = []time.Duration{}
+	w.mu.Unlock()
 
-	// Run the benchmark
-	requests, runTime, results := w.runBenchmark(ctx, request, f)
+	parallelism := int(request.Parallelism)
+	if parallelism == 0 {
+		parallelism = 1
+	}
+	for i := 0; i < parallelism; i++ {
+		go func() {
+			for !w.stopped.Load() {
+				start := time.Now()
+				if err := f(); err == nil {
+					duration := time.Since(start)
+					go func() {
+						w.mu.Lock()
+						defer w.mu.Unlock()
+						w.calls = append(w.calls, duration)
+					}()
+				}
+			}
+		}()
+	}
+	return &api.StartBenchmarkResponse{}, nil
+}
+
+func (w *benchWorker) ReportBenchmark(ctx context.Context, request *api.ReportBenchmarkRequest) (*api.ReportBenchmarkResponse, error) {
+	w.mu.Lock()
+	duration := time.Since(w.start)
+	calls := w.calls
+	w.start = time.Now()
+	w.calls = []time.Duration{}
+	w.mu.Unlock()
 
 	// Calculate the total latency from latency results
-	var totalLatency time.Duration
-	for _, result := range results {
-		totalLatency += result
+	var totalCallRTT time.Duration
+	for _, rtt := range calls {
+		totalCallRTT += rtt
 	}
 
-	// Compute statistics
-	statistics.Iterations = uint64(requests)
-	statistics.Duration = types.DurationProto(runTime)
-	statistics.MeanLatency = types.DurationProto(time.Duration(int64(totalLatency) / int64(len(results))))
-	statistics.P50Latency = types.DurationProto(results[int(math.Max(float64(len(results)/2)-1, 0))])
-	statistics.P75Latency = types.DurationProto(results[int(math.Max(float64(len(results)-(len(results)/4)-1), 0))])
-	statistics.P95Latency = types.DurationProto(results[int(math.Max(float64(len(results)-(len(results)/20)-1), 0))])
-	statistics.P99Latency = types.DurationProto(results[int(math.Max(float64(len(results)-(len(results)/100)-1), 0))])
+	// Compute the report statistics
+	report := &api.BenchmarkReport{
+		Iterations:  uint64(len(calls)),
+		Duration:    types.DurationProto(duration),
+		MeanLatency: types.DurationProto(time.Duration(int64(totalCallRTT) / int64(len(calls)))),
+		P50Latency:  types.DurationProto(calls[int(math.Max(float64(len(calls)/2)-1, 0))]),
+		P75Latency:  types.DurationProto(calls[int(math.Max(float64(len(calls)-(len(calls)/4)-1), 0))]),
+		P95Latency:  types.DurationProto(calls[int(math.Max(float64(len(calls)-(len(calls)/20)-1), 0))]),
+		P99Latency:  types.DurationProto(calls[int(math.Max(float64(len(calls)-(len(calls)/100)-1), 0))]),
+	}
 
-	return &api.RunBenchmarkResponse{
-		Statistics: &statistics,
+	return &api.ReportBenchmarkResponse{
+		Report: report,
 	}, nil
 }
 
-// warmBenchmark runs the benchmark
-func (w *Worker) runBenchmark(ctx context.Context, request *api.RunBenchmarkRequest, benchmark func(context.Context) error) (int, time.Duration, []time.Duration) {
-	// Create an iteration channel and wait group and create a goroutine for each client
-	wg := &sync.WaitGroup{}
-	parallelism := int(request.Parallelism)
-	requestCh := make(chan struct{}, parallelism)
-	resultCh := make(chan time.Duration, aggBatchSize)
-	for i := 0; i < parallelism; i++ {
-		wg.Add(1)
-		go func() {
-			for range requestCh {
-				start := time.Now()
-				ctx, cancel := context.WithCancel(ctx)
-				_ = benchmark(ctx)
-				cancel()
-				end := time.Now()
-				resultCh <- end.Sub(start)
-			}
-			wg.Done()
-		}()
-	}
-
-	// Start an aggregator goroutine
-	results := make([]time.Duration, 0, aggBatchSize*aggBatchSize)
-	aggWg := &sync.WaitGroup{}
-	aggWg.Add(1)
-	go func() {
-		var total time.Duration
-		var count = 0
-		// Iterate through results and aggregate durations
-		for duration := range resultCh {
-			total += duration
-			count++
-			// Average out the durations in batches
-			if count == aggBatchSize {
-				results = append(results, total/time.Duration(count))
-
-				// If the total number of batches reaches the batch size ^ 2, aggregate the aggregated results
-				if len(results) == aggBatchSize*aggBatchSize {
-					newResults := make([]time.Duration, 0, aggBatchSize*aggBatchSize)
-					for _, result := range results {
-						total += result
-						count++
-						if count == aggBatchSize {
-							newResults = append(newResults, total/time.Duration(count))
-							total = 0
-							count = 0
-						}
-					}
-					results = newResults
-				}
-				total = 0
-				count = 0
-			}
-		}
-		if count > 0 {
-			results = append(results, total/time.Duration(count))
-		}
-		aggWg.Done()
-	}()
-
-	// Record the start time and write arguments to the channel
-	start := time.Now()
-
-	var iterations uint64
-	if request.Iterations != 0 {
-		for request.Iterations == 0 || iterations < request.Iterations {
-			requestCh <- struct{}{}
-			iterations++
-		}
-	} else {
-		var duration *time.Duration
-		if request.Duration != nil {
-			if d, err := types.DurationFromProto(request.Duration); err == nil {
-				duration = &d
-			} else {
-				panic(err)
-			}
-		}
-
-		for request.Duration == nil || time.Since(start) < *duration {
-			requestCh <- struct{}{}
-			iterations++
-		}
-	}
-	close(requestCh)
-
-	// Wait for the tests to finish and close the result channel
-	wg.Wait()
-
-	// Record the end time
-	duration := time.Since(start)
-
-	// Close the output channel
-	close(resultCh)
-
-	// Wait for the results to be aggregated
-	aggWg.Wait()
-
-	// Sort the aggregated results
-	sort.Slice(results, func(i, j int) bool {
-		return results[i] < results[j]
-	})
-	return int(iterations), duration, results
-}
-
-// benchmarkFilter filters benchmark method names
-func benchmarkFilter(name string) (bool, error) {
-	if ok, _ := regexp.MatchString("^B", name); !ok {
-		return false, nil
-	}
-	return true, nil
+// StopBenchmark stops a benchmark
+func (w *benchWorker) StopBenchmark(ctx context.Context, request *api.StopBenchmarkRequest) (*api.StopBenchmarkResponse, error) {
+	w.stopped.Store(true)
+	return &api.StopBenchmarkResponse{}, nil
 }

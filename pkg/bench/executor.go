@@ -11,73 +11,49 @@ import (
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	api "github.com/onosproject/helmit/api/v1"
 	"github.com/onosproject/helmit/internal/async"
+	"github.com/onosproject/helmit/internal/console"
 	"github.com/onosproject/helmit/internal/job"
-	"github.com/onosproject/helmit/pkg/util/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"math"
-	"os"
-	"reflect"
-	"sync"
 	"text/tabwriter"
 	"time"
 )
 
 // newExecutor returns a new benchmark job
-func newExecutor(spec job.Spec, suites map[string]BenchmarkingSuite, tasks *console.ContextManager) (*benchExecutor, error) {
+func newExecutor(spec job.Spec) (*benchExecutor, error) {
 	return &benchExecutor{
-		spec:    spec,
-		suites:  suites,
-		manager: job.NewManager[WorkerConfig](tasks),
-		tasks:   tasks,
+		spec: spec,
+		jobs: job.NewManager[WorkerConfig](),
 	}, nil
 }
 
 // benchExecutor coordinates workers for suites of benchmarks
 type benchExecutor struct {
-	spec    job.Spec
-	suites  map[string]BenchmarkingSuite
-	manager *job.Manager[WorkerConfig]
-	tasks   *console.ContextManager
+	spec job.Spec
+	jobs *job.Manager[WorkerConfig]
 }
 
 // Run runs the tests
-func (e *benchExecutor) run(config Config) error {
-	if config.Suite == "" {
-		for name := range e.suites {
-			suite := config
-			suite.Suite = name
-			executor, err := newSuiteExecutor(e, suite)
-			if err != nil {
-				return err
-			}
-			if err := executor.run(); err != nil {
-				return err
-			}
+func (e *benchExecutor) run(config Config, context *console.Context) error {
+	err := context.Run("Deploying workers", func(task *console.Task) error {
+		var waiters []console.Waiter
+		for worker := 0; worker < config.Workers; worker++ {
+			waiters = append(waiters, task.RunAsync(fmt.Sprintf("Deploying worker %d", worker), func(task *console.Task) error {
+				return e.createWorker(config, worker, task)
+			}))
 		}
-	} else {
-		executor, err := newSuiteExecutor(e, config)
-		if err != nil {
-			return err
-		}
-		if err := executor.run(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func newSuiteExecutor(executor *benchExecutor, config Config) (*suiteExecutor, error) {
-	suite, ok := executor.suites[config.Suite]
-	if !ok {
-		return nil, fmt.Errorf("unknown suite %s", config.Suite)
+		return console.Wait(waiters...)
+	})
+	if err != nil {
+		return err
 	}
 
 	workers := make(map[int]api.BenchmarkerClient)
 	for i := 0; i < config.Workers; i++ {
 		worker, err := grpc.Dial(
-			fmt.Sprintf("%s:5000", newWorkerName(executor.spec.ID, config.Suite, i)),
+			fmt.Sprintf("%s:5000", newWorkerName(e.spec.ID, config.Suite, i)),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithUnaryInterceptor(
 				grpc_retry.UnaryClientInterceptor(
@@ -85,37 +61,248 @@ func newSuiteExecutor(executor *benchExecutor, config Config) (*suiteExecutor, e
 					grpc_retry.WithBackoff(grpc_retry.BackoffExponential(1*time.Second)),
 					grpc_retry.WithMax(10))))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		workers[i] = api.NewBenchmarkerClient(worker)
 	}
-	return &suiteExecutor{
-		benchExecutor: executor,
-		suite:         suite,
-		config:        config,
-		workers:       workers,
-	}, nil
-}
 
-type suiteExecutor struct {
-	*benchExecutor
-	suite   BenchmarkingSuite
-	config  Config
-	workers map[int]api.BenchmarkerClient
-}
-
-// Run runs the tests
-func (e *suiteExecutor) run(context *console.Context) error {
-	for worker := 0; worker < e.config.Workers; worker++ {
-		context.Fork(fmt.Sprintf("Creating worker %d", worker), func(context *console.Context) error {
-			return e.createWorker(worker, context)
-		})
-	}
-	if err := context.Wait(); err != nil {
+	err = context.Run("Setting up benchmark suite", func(task *console.Task) error {
+		var retErr error
+		for _, client := range workers {
+			_, err := client.SetupBenchmarkSuite(e.newContext(config), &api.SetupBenchmarkSuiteRequest{
+				Suite: config.Suite,
+			})
+			if err != nil {
+				retErr = err
+			} else {
+				retErr = nil
+				break
+			}
+		}
+		return retErr
+	})
+	if err != nil {
 		return err
 	}
 
-	if err := e.runBenchmarks(); err != nil {
+	err = context.Run("Setting up workers", func(task *console.Task) error {
+		var waiters []console.Waiter
+		for i, client := range workers {
+			waiters = append(waiters, func(client api.BenchmarkerClient) console.Waiter {
+				return task.RunAsync(fmt.Sprintf("Setting up worker %d", i), func(task *console.Task) error {
+					_, err := client.SetupBenchmarkWorker(e.newContext(config), &api.SetupBenchmarkWorkerRequest{
+						Suite: config.Suite,
+					})
+					return err
+				})
+			}(client))
+		}
+		return console.Wait(waiters...)
+	})
+	if err != nil {
+		return err
+	}
+
+	err = context.Run("Starting benchmark", func(task *console.Task) error {
+		var waiters []console.Waiter
+		for worker, client := range workers {
+			waiters = append(waiters, func(worker int, client api.BenchmarkerClient) console.Waiter {
+				return task.RunAsync(fmt.Sprintf("Starting worker %d", worker), func(task *console.Task) error {
+					_, err := client.StartBenchmark(e.newContext(config), &api.StartBenchmarkRequest{
+						Suite:       config.Suite,
+						Benchmark:   config.Benchmark,
+						Parallelism: uint32(config.Parallelism),
+						Timeout:     types.DurationProto(e.spec.Timeout),
+					})
+					return err
+				})
+			}(worker, client))
+		}
+		return console.Wait(waiters...)
+	})
+	if err != nil {
+		return err
+	}
+
+	err = context.Run("Running benchmark", func(task *console.Task) error {
+		err := async.IterAsync(len(workers), func(i int) error {
+			client := workers[i]
+			request := &api.StartBenchmarkRequest{
+				Suite:       config.Suite,
+				Benchmark:   config.Benchmark,
+				Parallelism: uint32(config.Parallelism),
+			}
+			_, err := client.StartBenchmark(e.newContext(config), request)
+			return err
+		})
+		if err != nil {
+			return err
+		}
+
+		var maxDuration time.Duration
+		var iterations uint64
+		var meanLatencySum time.Duration
+		var p50LatencySum time.Duration
+		var p75LatencySum time.Duration
+		var p95LatencySum time.Duration
+		var p99LatencySum time.Duration
+
+		var report = func() {
+			writer := new(tabwriter.Writer)
+			writer.Init(task.Writer(), 0, 0, 3, ' ', tabwriter.FilterHTML)
+			fmt.Fprintln(writer, "\tREQUESTS\tDURATION\tTHROUGHPUT\tMEAN LATENCY\tMEDIAN LATENCY\t75% LATENCY\t95% LATENCY\t99% LATENCY")
+
+			for worker, client := range workers {
+				request := &api.ReportBenchmarkRequest{
+					Suite:     config.Suite,
+					Benchmark: config.Benchmark,
+				}
+				response, err := client.ReportBenchmark(e.newContext(config), request)
+				if err != nil {
+					task.Log(err.Error())
+					continue
+				} else {
+					report := response.Report
+					iterations += report.Iterations
+					duration, err := types.DurationFromProto(report.Duration)
+					if err != nil {
+						task.Log(err.Error())
+						continue
+					}
+					maxDuration = time.Duration(math.Max(float64(maxDuration), float64(duration)))
+
+					meanLatency, err := types.DurationFromProto(report.MeanLatency)
+					if err != nil {
+						task.Log(err.Error())
+						continue
+					}
+					meanLatencySum += meanLatency
+
+					p50Latency, err := types.DurationFromProto(report.P50Latency)
+					if err != nil {
+						task.Log(err.Error())
+						continue
+					}
+					p50LatencySum += p50Latency
+
+					p75Latency, err := types.DurationFromProto(report.P75Latency)
+					if err != nil {
+						task.Log(err.Error())
+						continue
+					}
+					p75LatencySum += p75Latency
+
+					p95Latency, err := types.DurationFromProto(report.P95Latency)
+					if err != nil {
+						task.Log(err.Error())
+						continue
+					}
+					p95LatencySum += p95Latency
+
+					p99Latency, err := types.DurationFromProto(report.P99Latency)
+					if err != nil {
+						task.Log(err.Error())
+						continue
+					}
+					p99LatencySum += p99Latency
+
+					throughput := float64(report.Iterations) / (float64(duration) / float64(time.Second))
+					fmt.Fprintf(writer, "WORKER %d\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
+						worker, report.Iterations, report.Duration, throughput,
+						meanLatency, p50Latency, p75Latency, p95Latency, p99Latency)
+				}
+			}
+
+			throughput := float64(iterations) / (float64(maxDuration) / float64(time.Second))
+			meanLatency := time.Duration(float64(meanLatencySum) / float64(len(workers)))
+			p50Latency := time.Duration(float64(p50LatencySum) / float64(len(workers)))
+			p75Latency := time.Duration(float64(p75LatencySum) / float64(len(workers)))
+			p95Latency := time.Duration(float64(p95LatencySum) / float64(len(workers)))
+			p99Latency := time.Duration(float64(p99LatencySum) / float64(len(workers)))
+
+			fmt.Fprintf(writer, "total\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
+				iterations, maxDuration, throughput, meanLatency,
+				p50Latency, p75Latency, p95Latency, p99Latency)
+
+			writer.Flush()
+		}
+
+		if config.Duration != nil {
+			ticker := time.NewTicker(config.ReportInterval)
+			timer := time.NewTimer(*config.Duration)
+			for {
+				select {
+				case <-ticker.C:
+					report()
+				case <-timer.C:
+					break
+				}
+			}
+		} else {
+			ticker := time.NewTicker(config.ReportInterval)
+			for range ticker.C {
+				report()
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	err = context.Run("Stopping benchmark", func(task *console.Task) error {
+		var waiters []console.Waiter
+		for worker, client := range workers {
+			waiters = append(waiters, func(worker int, client api.BenchmarkerClient) console.Waiter {
+				return task.RunAsync(fmt.Sprintf("Stopping worker %d", worker), func(task *console.Task) error {
+					_, err := client.StopBenchmark(e.newContext(config), &api.StopBenchmarkRequest{
+						Suite:     config.Suite,
+						Benchmark: config.Benchmark,
+					})
+					return err
+				})
+			}(worker, client))
+		}
+		return console.Wait(waiters...)
+	})
+	if err != nil {
+		return err
+	}
+
+	err = context.Run("Tearing down workers", func(task *console.Task) error {
+		var waiters []console.Waiter
+		for i, client := range workers {
+			waiters = append(waiters, func(client api.BenchmarkerClient) console.Waiter {
+				return task.RunAsync(fmt.Sprintf("Tearing down worker %d", i), func(task *console.Task) error {
+					_, err := client.TearDownBenchmarkWorker(e.newContext(config), &api.TearDownBenchmarkWorkerRequest{
+						Suite: config.Suite,
+					})
+					return err
+				})
+			}(client))
+		}
+		return console.Wait(waiters...)
+	})
+	if err != nil {
+		return err
+	}
+
+	err = context.Run("Tearing down benchmark suite", func(task *console.Task) error {
+		var retErr error
+		for _, client := range workers {
+			_, err := client.TearDownBenchmarkSuite(e.newContext(config), &api.TearDownBenchmarkSuiteRequest{
+				Suite: config.Suite,
+			})
+			if err != nil {
+				retErr = err
+			} else {
+				retErr = nil
+				break
+			}
+		}
+		return retErr
+	})
+	if err != nil {
 		return err
 	}
 	return nil
@@ -125,41 +312,28 @@ func newWorkerName(jobID string, suite string, worker int) string {
 	return fmt.Sprintf("%s-%s-worker-%d", jobID, suite, worker)
 }
 
-func (e *suiteExecutor) getWorkerAddress(config Config, worker int) string {
+func (e *benchExecutor) getWorkerAddress(config Config, worker int) string {
 	return fmt.Sprintf("%s:5000", newWorkerName(e.spec.ID, config.Suite, worker))
 }
 
-// createWorkers creates the benchmark workers
-func (e *suiteExecutor) createWorkers(status *console.TaskReporter) error {
-	return async.IterAsync(e.config.Workers, func(i int) error {
-		status := status.NewSubTask("Creating worker %d", i)
-		if err := e.createWorker(i, status); err != nil {
-			status.Error(err)
-			return err
-		}
-		status.Done()
-		return nil
-	})
-}
-
 // createWorker creates the given worker
-func (e *suiteExecutor) createWorker(worker int, context *console.Context) error {
-	jobID := newWorkerName(e.spec.ID, e.config.Suite, worker)
-	env := e.config.WorkerConfig.Env
+func (e *benchExecutor) createWorker(config Config, worker int, task *console.Task) error {
+	jobID := newWorkerName(e.spec.ID, config.Suite, worker)
+	env := config.WorkerConfig.Env
 	if env == nil {
 		env = make(map[string]string)
 	}
 	env[benchmarkTypeEnv] = string(benchTypeWorker)
 	env[benchmarkWorkerEnv] = fmt.Sprintf("%d", worker)
-	return e.manager.Start(job.Job[WorkerConfig]{
+	return e.jobs.Start(job.Job[WorkerConfig]{
 		Spec: job.Spec{
 			ID:              jobID,
 			Namespace:       e.spec.Namespace,
 			ServiceAccount:  e.spec.ServiceAccount,
 			Labels:          e.spec.Labels,
 			Annotations:     e.spec.Annotations,
-			Image:           e.config.WorkerConfig.Image,
-			ImagePullPolicy: e.config.WorkerConfig.ImagePullPolicy,
+			Image:           config.WorkerConfig.Image,
+			ImagePullPolicy: config.WorkerConfig.ImagePullPolicy,
 			Executable:      e.spec.Executable,
 			Context:         e.spec.Context,
 			Values:          e.spec.Values,
@@ -170,272 +344,13 @@ func (e *suiteExecutor) createWorker(worker int, context *console.Context) error
 			Secrets:         e.spec.Secrets,
 			ManagementPort:  5000,
 		},
-	}, context)
+	}, task)
 }
 
-func (e *suiteExecutor) newContext() context.Context {
+func (e *benchExecutor) newContext(config Config) context.Context {
 	ctx := context.Background()
-	for key, value := range e.config.Args {
+	for key, value := range config.Args {
 		ctx = context.WithValue(ctx, key, value)
 	}
 	return ctx
-}
-
-// setupSuite sets up the benchmark suite
-func (e *suiteExecutor) setupSuite() error {
-	var retErr error
-	for _, worker := range e.workers {
-		_, err := worker.SetupBenchmarkSuite(e.newContext(), &api.SetupBenchmarkSuiteRequest{
-			Suite: e.config.Suite,
-		})
-		if err != nil {
-			retErr = err
-		} else {
-			return nil
-		}
-	}
-	return retErr
-}
-
-// setupWorkers sets up the benchmark workers
-func (e *suiteExecutor) setupWorkers() error {
-	wg := &sync.WaitGroup{}
-	errCh := make(chan error)
-	for _, worker := range e.workers {
-		wg.Add(1)
-		go func(worker api.BenchmarkerClient) {
-			_, err := worker.SetupBenchmarkWorker(e.newContext(), &api.SetupBenchmarkWorkerRequest{
-				Suite: e.config.Suite,
-			})
-			if err != nil {
-				errCh <- err
-			}
-			wg.Done()
-		}(worker)
-	}
-	wg.Wait()
-	close(errCh)
-
-	for err := range errCh {
-		return err
-	}
-	return nil
-}
-
-// setupBenchmark sets up the given benchmark
-func (e *suiteExecutor) setupBenchmark() error {
-	wg := &sync.WaitGroup{}
-	errCh := make(chan error)
-	for _, worker := range e.workers {
-		wg.Add(1)
-		go func(worker api.BenchmarkerClient) {
-			_, err := worker.SetupBenchmark(e.newContext(), &api.SetupBenchmarkRequest{
-				Suite:     e.config.Suite,
-				Benchmark: e.config.Benchmark,
-			})
-			if err != nil {
-				errCh <- err
-			}
-			wg.Done()
-		}(worker)
-	}
-	wg.Wait()
-	close(errCh)
-
-	for err := range errCh {
-		return err
-	}
-	return nil
-}
-
-// runBenchmarks runs the given benchmarks
-func (e *suiteExecutor) runBenchmarks() error {
-	// Setup the benchmark suite on one of the workers
-	if err := e.setupSuite(); err != nil {
-		return err
-	}
-
-	// Setup the workers
-	if err := e.setupWorkers(); err != nil {
-		return err
-	}
-
-	// Run the benchmarks
-	results := make([]result, 0)
-	if e.config.Benchmark != "" {
-		step := logging.NewStep(e.spec.ID, "Run benchmark %s", e.config.Benchmark)
-		step.Start()
-		result, err := e.runBenchmark(e.config)
-		if err != nil {
-			step.Fail(err)
-			return err
-		}
-		step.Complete()
-		results = append(results, result)
-	} else {
-		suiteStep := logging.NewStep(e.spec.ID, "Run benchmark suite %s", e.config.Suite)
-		suiteStep.Start()
-		benchmarks := listBenchmarks(e.suite)
-		for _, benchmark := range benchmarks {
-			benchmarkSuite := logging.NewStep(e.spec.ID, "Run benchmark %s", benchmark)
-			benchmarkSuite.Start()
-			benchConfig := config
-			benchConfig.Benchmark = benchmark
-			result, err := e.runBenchmark(benchConfig)
-			if err != nil {
-				benchmarkSuite.Fail(err)
-				suiteStep.Fail(err)
-				return err
-			}
-			benchmarkSuite.Complete()
-			results = append(results, result)
-		}
-		suiteStep.Complete()
-	}
-
-	writer := new(tabwriter.Writer)
-	writer.Init(os.Stdout, 0, 0, 3, ' ', tabwriter.FilterHTML)
-	fmt.Fprintln(writer, "BENCHMARK\tREQUESTS\tDURATION\tTHROUGHPUT\tMEAN LATENCY\tMEDIAN LATENCY\t75% LATENCY\t95% LATENCY\t99% LATENCY")
-	for _, result := range results {
-		fmt.Fprintf(writer, "%s\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
-			result.benchmark, result.requests, result.duration, result.throughput, result.meanLatency,
-			result.latencyPercentiles[.5], result.latencyPercentiles[.75],
-			result.latencyPercentiles[.95], result.latencyPercentiles[.99])
-	}
-	writer.Flush()
-	return nil
-}
-
-// runBenchmark runs the given benchmark
-func (e *suiteExecutor) runBenchmark() (result, error) {
-	// Setup the benchmark
-	if err := e.setupBenchmark(); err != nil {
-		return result{}, err
-	}
-
-	wg := &sync.WaitGroup{}
-	resultCh := make(chan *api.RunBenchmarkResponse, len(e.workers))
-	errCh := make(chan error, len(e.workers))
-
-	for _, worker := range e.workers {
-		wg.Add(1)
-		go func(worker api.BenchmarkerClient, iterations int, duration *time.Duration) {
-			ctx := context.Background()
-			for key, value := range e.config.Args {
-				ctx = context.WithValue(ctx, key, value)
-			}
-			var durationProto *types.Duration
-			if duration != nil {
-				durationProto = types.DurationProto(*duration)
-			}
-			result, err := worker.RunBenchmark(context.Background(), &api.RunBenchmarkRequest{
-				Suite:       e.config.Suite,
-				Benchmark:   e.config.Benchmark,
-				Iterations:  uint64(iterations),
-				Duration:    durationProto,
-				Parallelism: uint32(e.config.Parallelism),
-			})
-			if err != nil {
-				errCh <- err
-			} else {
-				resultCh <- result
-			}
-			wg.Done()
-		}(worker, e.config.Iterations/len(e.workers), e.config.Duration)
-	}
-
-	wg.Wait()
-	close(resultCh)
-	close(errCh)
-
-	for err := range errCh {
-		return result{}, err
-	}
-
-	var duration time.Duration
-	var iterations uint64
-	var meanLatencySum time.Duration
-	var p50LatencySum time.Duration
-	var p75LatencySum time.Duration
-	var p95LatencySum time.Duration
-	var p99LatencySum time.Duration
-	for result := range resultCh {
-		statistics := result.Statistics
-		if statistics == nil {
-			continue
-		}
-		iterations += statistics.Iterations
-		if d, err := types.DurationFromProto(statistics.Duration); err == nil {
-			duration = time.Duration(math.Max(float64(duration), float64(d)))
-		} else {
-			// TODO: log error
-		}
-		if d, err := types.DurationFromProto(statistics.MeanLatency); err == nil {
-			meanLatencySum += d
-		} else {
-			// TODO: log error
-		}
-		if d, err := types.DurationFromProto(statistics.P50Latency); err == nil {
-			p50LatencySum += d
-		} else {
-			// TODO: log error
-		}
-		if d, err := types.DurationFromProto(statistics.P75Latency); err == nil {
-			p75LatencySum += d
-		} else {
-			// TODO: log error
-		}
-		if d, err := types.DurationFromProto(statistics.P95Latency); err == nil {
-			p95LatencySum += d
-		} else {
-			// TODO: log error
-		}
-		if d, err := types.DurationFromProto(statistics.P99Latency); err == nil {
-			p99LatencySum += d
-		} else {
-			// TODO: log error
-		}
-	}
-
-	throughput := float64(iterations) / (float64(duration) / float64(time.Second))
-	meanLatency := time.Duration(float64(meanLatencySum) / float64(len(e.workers)))
-	latencyPercentiles := make(map[float32]time.Duration)
-	latencyPercentiles[.5] = time.Duration(float64(p50LatencySum) / float64(len(e.workers)))
-	latencyPercentiles[.75] = time.Duration(float64(p75LatencySum) / float64(len(e.workers)))
-	latencyPercentiles[.95] = time.Duration(float64(p95LatencySum) / float64(len(e.workers)))
-	latencyPercentiles[.99] = time.Duration(float64(p99LatencySum) / float64(len(e.workers)))
-
-	return result{
-		benchmark:          e.config.Benchmark,
-		requests:           int(iterations),
-		duration:           duration,
-		throughput:         throughput,
-		meanLatency:        meanLatency,
-		latencyPercentiles: latencyPercentiles,
-	}, nil
-}
-
-type result struct {
-	benchmark          string
-	requests           int
-	duration           time.Duration
-	throughput         float64
-	meanLatency        time.Duration
-	latencyPercentiles map[float32]time.Duration
-}
-
-// listBenchmarks returns a list of benchmarks in the given suite
-func listBenchmarks(suite BenchmarkingSuite) []string {
-	methodFinder := reflect.TypeOf(suite)
-	benchmarks := []string{}
-	for index := 0; index < methodFinder.NumMethod(); index++ {
-		method := methodFinder.Method(index)
-		ok, err := benchmarkFilter(method.Name)
-		if ok {
-			benchmarks = append(benchmarks, method.Name)
-		} else if err != nil {
-			panic(err)
-		}
-	}
-	return benchmarks
 }
