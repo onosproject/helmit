@@ -172,20 +172,26 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		if image == "" {
 			image = "onosproject/helmit-runner:latest"
 		}
-		err := context.Run("Preparing artifacts", func(task *console.Task) error {
-			task.Reportf("Validating package path %s", pkgPath)
-			if err := validatePackage(pkgPath); err != nil {
+		err := context.Fork("Preparing artifacts", func(context *console.Context) error {
+			err := context.Run(func(status *console.Status) error {
+				status.Reportf("Validating package path %s", pkgPath)
+				return validatePackage(pkgPath)
+			}).Wait()
+			if err != nil {
 				return err
 			}
 
-			task.Reportf("Building %s", executable)
-			if err := buildBinary(pkgPath, executable); err != nil {
+			err = context.Run(func(status *console.Status) error {
+				status.Reportf("Building %s", executable)
+				return buildBinary(pkgPath, executable)
+			}).Wait()
+			if err != nil {
 				cmd.SilenceUsage = true
 				cmd.SilenceErrors = true
 				return err
 			}
 			return nil
-		})
+		}).Join()
 		if err != nil {
 			return err
 		}
@@ -228,28 +234,28 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	err = context.Run("Starting benchmark", func(task *console.Task) error {
-		return manager.Start(job, task)
-	})
+	err = context.Fork("Starting benchmark", func(context *console.Context) error {
+		return manager.Start(job, context)
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	err = context.Run("Running benchmark", func(task *console.Task) error {
-		return manager.Run(job, task)
-	})
+	err = context.Fork("Running benchmark", func(context *console.Context) error {
+		return manager.Run(job, context)
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	err = context.Run("Terminating benchmark", func(task *console.Task) error {
+	err = context.Fork("Terminating benchmark", func(context *console.Context) error {
 		code, err := manager.Stop(job)
 		if err != nil {
 			return err
 		}
 		os.Exit(code)
 		return nil
-	})
+	}).Join()
 	if err != nil {
 		return err
 	}

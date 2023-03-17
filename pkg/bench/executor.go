@@ -39,15 +39,15 @@ type benchExecutor struct {
 
 // Run runs the tests
 func (e *benchExecutor) run(config Config, context *console.Context) error {
-	err := context.Run("Deploying workers", func(task *console.Task) error {
-		var waiters []console.Waiter
+	err := context.Fork("Deploying workers", func(context *console.Context) error {
+		var joiners []console.Joiner
 		for worker := 0; worker < config.Workers; worker++ {
-			waiters = append(waiters, task.RunAsync(fmt.Sprintf("Deploying worker %d", worker), func(task *console.Task) error {
-				return e.createWorker(config, worker, task)
+			joiners = append(joiners, context.Fork(fmt.Sprintf("Deploying worker %d", worker), func(context *console.Context) error {
+				return e.createWorker(config, worker, context)
 			}))
 		}
-		return console.Wait(waiters...)
-	})
+		return console.Join(joiners...)
+	}).Join()
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 		workers[i] = api.NewBenchmarkerClient(worker)
 	}
 
-	err = context.Run("Setting up benchmark suite", func(task *console.Task) error {
+	err = context.Fork("Setting up benchmark suite", func(context *console.Context) error {
 		var retErr error
 		for _, client := range workers {
 			_, err := client.SetupBenchmarkSuite(e.newContext(config), &api.SetupBenchmarkSuiteRequest{
@@ -82,16 +82,16 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 			}
 		}
 		return retErr
-	})
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	err = context.Run("Setting up workers", func(task *console.Task) error {
-		var waiters []console.Waiter
+	err = context.Fork("Setting up workers", func(context *console.Context) error {
+		var joiners []console.Joiner
 		for i, client := range workers {
-			waiters = append(waiters, func(client api.BenchmarkerClient) console.Waiter {
-				return task.RunAsync(fmt.Sprintf("Setting up worker %d", i), func(task *console.Task) error {
+			joiners = append(joiners, func(client api.BenchmarkerClient) console.Joiner {
+				return context.Fork(fmt.Sprintf("Setting up worker %d", i), func(context *console.Context) error {
 					_, err := client.SetupBenchmarkWorker(e.newContext(config), &api.SetupBenchmarkWorkerRequest{
 						Suite: config.Suite,
 					})
@@ -99,17 +99,17 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 				})
 			}(client))
 		}
-		return console.Wait(waiters...)
-	})
+		return console.Join(joiners...)
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	err = context.Run("Starting benchmark", func(task *console.Task) error {
-		var waiters []console.Waiter
+	err = context.Fork("Starting benchmark", func(context *console.Context) error {
+		var joiners []console.Joiner
 		for worker, client := range workers {
-			waiters = append(waiters, func(worker int, client api.BenchmarkerClient) console.Waiter {
-				return task.RunAsync(fmt.Sprintf("Starting worker %d", worker), func(task *console.Task) error {
+			joiners = append(joiners, func(worker int, client api.BenchmarkerClient) console.Joiner {
+				return context.Fork(fmt.Sprintf("Starting worker %d", worker), func(context *console.Context) error {
 					_, err := client.StartBenchmark(e.newContext(config), &api.StartBenchmarkRequest{
 						Suite:       config.Suite,
 						Benchmark:   config.Benchmark,
@@ -120,143 +120,145 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 				})
 			}(worker, client))
 		}
-		return console.Wait(waiters...)
-	})
+		return console.Join(joiners...)
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	err = context.Run("Running benchmark", func(task *console.Task) error {
-		err := async.IterAsync(len(workers), func(i int) error {
-			client := workers[i]
-			request := &api.StartBenchmarkRequest{
-				Suite:       config.Suite,
-				Benchmark:   config.Benchmark,
-				Parallelism: uint32(config.Parallelism),
-			}
-			_, err := client.StartBenchmark(e.newContext(config), request)
-			return err
-		})
-		if err != nil {
-			return err
-		}
-
-		var maxDuration time.Duration
-		var iterations uint64
-		var meanLatencySum time.Duration
-		var p50LatencySum time.Duration
-		var p75LatencySum time.Duration
-		var p95LatencySum time.Duration
-		var p99LatencySum time.Duration
-
-		var report = func() {
-			writer := new(tabwriter.Writer)
-			writer.Init(task.Writer(), 0, 0, 3, ' ', tabwriter.FilterHTML)
-			fmt.Fprintln(writer, "\tREQUESTS\tDURATION\tTHROUGHPUT\tMEAN LATENCY\tMEDIAN LATENCY\t75% LATENCY\t95% LATENCY\t99% LATENCY")
-
-			for worker, client := range workers {
-				request := &api.ReportBenchmarkRequest{
-					Suite:     config.Suite,
-					Benchmark: config.Benchmark,
+	err = context.Fork("Running benchmark", func(context *console.Context) error {
+		return context.Run(func(status *console.Status) error {
+			err := async.IterAsync(len(workers), func(i int) error {
+				client := workers[i]
+				request := &api.StartBenchmarkRequest{
+					Suite:       config.Suite,
+					Benchmark:   config.Benchmark,
+					Parallelism: uint32(config.Parallelism),
 				}
-				response, err := client.ReportBenchmark(e.newContext(config), request)
-				if err != nil {
-					task.Log(err.Error())
-					continue
-				} else {
-					report := response.Report
-					iterations += report.Iterations
-					duration, err := types.DurationFromProto(report.Duration)
-					if err != nil {
-						task.Log(err.Error())
-						continue
-					}
-					maxDuration = time.Duration(math.Max(float64(maxDuration), float64(duration)))
-
-					meanLatency, err := types.DurationFromProto(report.MeanLatency)
-					if err != nil {
-						task.Log(err.Error())
-						continue
-					}
-					meanLatencySum += meanLatency
-
-					p50Latency, err := types.DurationFromProto(report.P50Latency)
-					if err != nil {
-						task.Log(err.Error())
-						continue
-					}
-					p50LatencySum += p50Latency
-
-					p75Latency, err := types.DurationFromProto(report.P75Latency)
-					if err != nil {
-						task.Log(err.Error())
-						continue
-					}
-					p75LatencySum += p75Latency
-
-					p95Latency, err := types.DurationFromProto(report.P95Latency)
-					if err != nil {
-						task.Log(err.Error())
-						continue
-					}
-					p95LatencySum += p95Latency
-
-					p99Latency, err := types.DurationFromProto(report.P99Latency)
-					if err != nil {
-						task.Log(err.Error())
-						continue
-					}
-					p99LatencySum += p99Latency
-
-					throughput := float64(report.Iterations) / (float64(duration) / float64(time.Second))
-					fmt.Fprintf(writer, "WORKER %d\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
-						worker, report.Iterations, report.Duration, throughput,
-						meanLatency, p50Latency, p75Latency, p95Latency, p99Latency)
-				}
+				_, err := client.StartBenchmark(e.newContext(config), request)
+				return err
+			})
+			if err != nil {
+				return err
 			}
 
-			throughput := float64(iterations) / (float64(maxDuration) / float64(time.Second))
-			meanLatency := time.Duration(float64(meanLatencySum) / float64(len(workers)))
-			p50Latency := time.Duration(float64(p50LatencySum) / float64(len(workers)))
-			p75Latency := time.Duration(float64(p75LatencySum) / float64(len(workers)))
-			p95Latency := time.Duration(float64(p95LatencySum) / float64(len(workers)))
-			p99Latency := time.Duration(float64(p99LatencySum) / float64(len(workers)))
+			var maxDuration time.Duration
+			var iterations uint64
+			var meanLatencySum time.Duration
+			var p50LatencySum time.Duration
+			var p75LatencySum time.Duration
+			var p95LatencySum time.Duration
+			var p99LatencySum time.Duration
 
-			fmt.Fprintf(writer, "total\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
-				iterations, maxDuration, throughput, meanLatency,
-				p50Latency, p75Latency, p95Latency, p99Latency)
+			var report = func() {
+				writer := new(tabwriter.Writer)
+				writer.Init(status.Writer(), 0, 0, 3, ' ', tabwriter.FilterHTML)
+				fmt.Fprintln(writer, "\tREQUESTS\tDURATION\tTHROUGHPUT\tMEAN LATENCY\tMEDIAN LATENCY\t75% LATENCY\t95% LATENCY\t99% LATENCY")
 
-			writer.Flush()
-		}
+				for worker, client := range workers {
+					request := &api.ReportBenchmarkRequest{
+						Suite:     config.Suite,
+						Benchmark: config.Benchmark,
+					}
+					response, err := client.ReportBenchmark(e.newContext(config), request)
+					if err != nil {
+						status.Log(err.Error())
+						continue
+					} else {
+						report := response.Report
+						iterations += report.Iterations
+						duration, err := types.DurationFromProto(report.Duration)
+						if err != nil {
+							status.Log(err.Error())
+							continue
+						}
+						maxDuration = time.Duration(math.Max(float64(maxDuration), float64(duration)))
 
-		if config.Duration != nil {
-			ticker := time.NewTicker(config.ReportInterval)
-			timer := time.NewTimer(*config.Duration)
-			for {
-				select {
-				case <-ticker.C:
+						meanLatency, err := types.DurationFromProto(report.MeanLatency)
+						if err != nil {
+							status.Log(err.Error())
+							continue
+						}
+						meanLatencySum += meanLatency
+
+						p50Latency, err := types.DurationFromProto(report.P50Latency)
+						if err != nil {
+							status.Log(err.Error())
+							continue
+						}
+						p50LatencySum += p50Latency
+
+						p75Latency, err := types.DurationFromProto(report.P75Latency)
+						if err != nil {
+							status.Log(err.Error())
+							continue
+						}
+						p75LatencySum += p75Latency
+
+						p95Latency, err := types.DurationFromProto(report.P95Latency)
+						if err != nil {
+							status.Log(err.Error())
+							continue
+						}
+						p95LatencySum += p95Latency
+
+						p99Latency, err := types.DurationFromProto(report.P99Latency)
+						if err != nil {
+							status.Log(err.Error())
+							continue
+						}
+						p99LatencySum += p99Latency
+
+						throughput := float64(report.Iterations) / (float64(duration) / float64(time.Second))
+						fmt.Fprintf(writer, "WORKER %d\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
+							worker, report.Iterations, report.Duration, throughput,
+							meanLatency, p50Latency, p75Latency, p95Latency, p99Latency)
+					}
+				}
+
+				throughput := float64(iterations) / (float64(maxDuration) / float64(time.Second))
+				meanLatency := time.Duration(float64(meanLatencySum) / float64(len(workers)))
+				p50Latency := time.Duration(float64(p50LatencySum) / float64(len(workers)))
+				p75Latency := time.Duration(float64(p75LatencySum) / float64(len(workers)))
+				p95Latency := time.Duration(float64(p95LatencySum) / float64(len(workers)))
+				p99Latency := time.Duration(float64(p99LatencySum) / float64(len(workers)))
+
+				fmt.Fprintf(writer, "total\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
+					iterations, maxDuration, throughput, meanLatency,
+					p50Latency, p75Latency, p95Latency, p99Latency)
+
+				writer.Flush()
+			}
+
+			if config.Duration != nil {
+				ticker := time.NewTicker(config.ReportInterval)
+				timer := time.NewTimer(*config.Duration)
+				for {
+					select {
+					case <-ticker.C:
+						report()
+					case <-timer.C:
+						break
+					}
+				}
+			} else {
+				ticker := time.NewTicker(config.ReportInterval)
+				for range ticker.C {
 					report()
-				case <-timer.C:
-					break
 				}
 			}
-		} else {
-			ticker := time.NewTicker(config.ReportInterval)
-			for range ticker.C {
-				report()
-			}
-		}
-		return nil
-	})
+			return nil
+		}).Wait()
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	err = context.Run("Stopping benchmark", func(task *console.Task) error {
-		var waiters []console.Waiter
+	err = context.Fork("Stopping benchmark", func(context *console.Context) error {
+		var joiners []console.Joiner
 		for worker, client := range workers {
-			waiters = append(waiters, func(worker int, client api.BenchmarkerClient) console.Waiter {
-				return task.RunAsync(fmt.Sprintf("Stopping worker %d", worker), func(task *console.Task) error {
+			joiners = append(joiners, func(worker int, client api.BenchmarkerClient) console.Joiner {
+				return context.Fork(fmt.Sprintf("Stopping worker %d", worker), func(context *console.Context) error {
 					_, err := client.StopBenchmark(e.newContext(config), &api.StopBenchmarkRequest{
 						Suite:     config.Suite,
 						Benchmark: config.Benchmark,
@@ -265,17 +267,17 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 				})
 			}(worker, client))
 		}
-		return console.Wait(waiters...)
-	})
+		return console.Join(joiners...)
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	err = context.Run("Tearing down workers", func(task *console.Task) error {
-		var waiters []console.Waiter
+	err = context.Fork("Tearing down workers", func(context *console.Context) error {
+		var joiners []console.Joiner
 		for i, client := range workers {
-			waiters = append(waiters, func(client api.BenchmarkerClient) console.Waiter {
-				return task.RunAsync(fmt.Sprintf("Tearing down worker %d", i), func(task *console.Task) error {
+			joiners = append(joiners, func(client api.BenchmarkerClient) console.Joiner {
+				return context.Fork(fmt.Sprintf("Tearing down worker %d", i), func(context *console.Context) error {
 					_, err := client.TearDownBenchmarkWorker(e.newContext(config), &api.TearDownBenchmarkWorkerRequest{
 						Suite: config.Suite,
 					})
@@ -283,13 +285,13 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 				})
 			}(client))
 		}
-		return console.Wait(waiters...)
-	})
+		return console.Join(joiners...)
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	err = context.Run("Tearing down benchmark suite", func(task *console.Task) error {
+	err = context.Fork("Tearing down benchmark suite", func(context *console.Context) error {
 		var retErr error
 		for _, client := range workers {
 			_, err := client.TearDownBenchmarkSuite(e.newContext(config), &api.TearDownBenchmarkSuiteRequest{
@@ -303,7 +305,7 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 			}
 		}
 		return retErr
-	})
+	}).Join()
 	if err != nil {
 		return err
 	}
@@ -319,7 +321,7 @@ func (e *benchExecutor) getWorkerAddress(config Config, worker int) string {
 }
 
 // createWorker creates the given worker
-func (e *benchExecutor) createWorker(config Config, worker int, task *console.Task) error {
+func (e *benchExecutor) createWorker(config Config, worker int, context *console.Context) error {
 	jobID := newWorkerName(e.spec.ID, config.Suite, worker)
 	return e.jobs.Start(job.Job[WorkerConfig]{
 		Spec: job.Spec{
@@ -340,7 +342,7 @@ func (e *benchExecutor) createWorker(config Config, worker int, task *console.Ta
 			Secrets:         e.spec.Secrets,
 			ManagementPort:  managementPort,
 		},
-	}, task)
+	}, context)
 }
 
 func (e *benchExecutor) newContext(config Config) context.Context {

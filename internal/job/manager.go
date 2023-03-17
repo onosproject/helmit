@@ -55,15 +55,17 @@ type Manager[C any] struct {
 }
 
 // Start starts the given job
-func (m *Manager[C]) Start(job Job[C], task *console.Task) error {
-	if err := m.startJob(job, task); err != nil {
+func (m *Manager[C]) Start(job Job[C], context *console.Context) error {
+	if err := m.startJob(job, context); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *Manager[C]) Run(job Job[C], task *console.Task) error {
-	return m.streamLogs(job, task.Writer())
+func (m *Manager[C]) Run(job Job[C], context *console.Context) error {
+	return context.Run(func(status *console.Status) error {
+		return m.streamLogs(job, status.Writer())
+	}).Wait()
 }
 
 // streamLogs streams logs from the given pod
@@ -177,43 +179,48 @@ func (m *Manager[C]) createClusterRoleBinding(job Job[C]) error {
 }
 
 // startJob starts running a test job
-func (m *Manager[C]) startJob(job Job[C], task *console.Task) error {
-	err := task.Run("Setting up cluster", func(task *console.Task) error {
-		task.Report("Creating resources")
-		if err := m.createJob(job); err != nil {
-			return err
-		}
-		if err := m.createServiceAccount(job); err != nil {
-			return err
-		}
-		if err := m.createClusterRoleBinding(job); err != nil {
-			return err
-		}
-		if err := m.createSecrets(job); err != nil {
-			return err
-		}
-		task.Report("Waiting for job to start")
-		if err := m.awaitJobRunning(job); err != nil {
-			return err
-		}
-		return nil
-	})
+func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
+	err := context.Fork("Setting up cluster", func(context *console.Context) error {
+		return context.Run(func(status *console.Status) error {
+			status.Report("Creating Job")
+			if err := m.createJob(job); err != nil {
+				return err
+			}
+			status.Report("Creating ServiceAccount")
+			if err := m.createServiceAccount(job); err != nil {
+				return err
+			}
+			status.Report("Creating ClusterRoleBinding")
+			if err := m.createClusterRoleBinding(job); err != nil {
+				return err
+			}
+			status.Report("Creating Secret")
+			if err := m.createSecrets(job); err != nil {
+				return err
+			}
+			status.Report("Waiting for job to start")
+			if err := m.awaitJobRunning(job); err != nil {
+				return err
+			}
+			return nil
+		}).Wait()
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	err = task.Run("Copying artifacts", func(task *console.Task) error {
+	err = context.Fork("Starting job", func(context *console.Context) error {
 		var waiters []console.Waiter
-		waiters = append(waiters, task.Fork(func(status *console.Status) error {
+		waiters = append(waiters, context.Run(func(status *console.Status) error {
 			status.Report("Copying binaries")
 			return m.copyBinary(job)
 		}))
-		waiters = append(waiters, task.Fork(func(status *console.Status) error {
+		waiters = append(waiters, context.Run(func(status *console.Status) error {
 			status.Report("Copying context")
 			return m.copyContext(job)
 		}))
 		if len(job.ValueFiles) != 0 {
-			waiters = append(waiters, task.Fork(func(status *console.Status) error {
+			waiters = append(waiters, context.Run(func(status *console.Status) error {
 				for _, valueFiles := range job.ValueFiles {
 					for _, valueFile := range valueFiles {
 						if err := m.copyValuesFile(job, valueFile); err != nil {
@@ -224,27 +231,26 @@ func (m *Manager[C]) startJob(job Job[C], task *console.Task) error {
 				return nil
 			}))
 		}
-		return console.Wait(waiters...)
-	})
-	if err != nil {
-		return err
-	}
+		err := console.Wait(waiters...)
+		if err != nil {
+			return err
+		}
 
-	err = task.Run("Starting job", func(task *console.Task) error {
-		task.Report("Staring binary")
-		if err := m.runBinary(job); err != nil {
-			return err
-		}
-		task.Report("Running binary")
-		if err := m.runJob(job); err != nil {
-			return err
-		}
-		task.Report("Waiting for ready")
-		if err := m.awaitJobReady(job); err != nil {
-			return err
-		}
+		context.Run(func(status *console.Status) error {
+			status.Report("Running job")
+			if err := m.runBinary(job); err != nil {
+				return err
+			}
+			if err := m.runJob(job); err != nil {
+				return err
+			}
+			if err := m.awaitJobReady(job); err != nil {
+				return err
+			}
+			return nil
+		})
 		return nil
-	})
+	}).Join()
 	if err != nil {
 		return err
 	}
