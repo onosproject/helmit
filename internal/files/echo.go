@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/onosproject/helmit/pkg/util/k8s"
+	"github.com/onosproject/helmit/internal/k8s"
 	"k8s.io/client-go/kubernetes"
 	"os"
 

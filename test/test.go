@@ -5,6 +5,7 @@
 package test
 
 import (
+	"context"
 	"github.com/onosproject/helmit/pkg/test"
 )
 
@@ -14,30 +15,30 @@ type ChartTestSuite struct {
 }
 
 // TestLocalInstall tests a local chart installation
-func (s *ChartTestSuite) TestLocalInstall() {
+func (s *ChartTestSuite) TestLocalInstall(ctx context.Context) {
 	err := s.Helm().Install("atomix-controller", "./controller/chart").
 		Set("image.tag", "latest").
 		Set("init.image.tag", "latest").
 		Wait().
-		Do(s.Context())
+		Do(ctx)
 	s.NoError(err)
 
-	err = s.Helm().Uninstall("atomix-controller").Do(s.Context())
+	err = s.Helm().Uninstall("atomix-controller").Do(ctx)
 	s.NoError(err)
 }
 
 // TestRemoteInstall tests a remote chart installation
-func (s *ChartTestSuite) TestRemoteInstall() {
+func (s *ChartTestSuite) TestRemoteInstall(ctx context.Context) {
 	err := s.Helm().Install("redis", "redis").
 		RepoURL("https://charts.bitnami.com/bitnami").
 		Set("architecture", "standalone").
 		Set("auth.enabled", false).
 		Wait().
-		Do(s.Context())
+		Do(ctx)
 	s.NoError(err)
 
 	err = s.Helm().
 		Uninstall("redis").
-		Do(s.Context())
+		Do(ctx)
 	s.NoError(err)
 }

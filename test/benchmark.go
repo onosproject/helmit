@@ -5,43 +5,50 @@
 package test
 
 import (
+	"context"
+	"github.com/brianvoe/gofakeit/v6"
+	"github.com/onosproject/helmit/pkg/bench"
+	"math/rand"
 	"time"
-
-	"github.com/onosproject/helmit/pkg/benchmark"
-	"github.com/onosproject/helmit/pkg/input"
 )
 
 // ChartBenchmarkSuite benchmarks a Helm chart
 type ChartBenchmarkSuite struct {
-	benchmark.Suite
-	value input.Source
+	bench.Suite
 }
 
-func (s *ChartBenchmarkSuite) SetupSuite() error {
+func (s *ChartBenchmarkSuite) SetupSuite(ctx context.Context) error {
 	err := s.Helm().Install("atomix-controller", "./controller/chart").
 		Wait().
-		Do(s.Context())
+		Do(ctx)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *ChartBenchmarkSuite) SetupWorker() error {
-	s.value = input.RandomString(8)
+func (s *ChartBenchmarkSuite) BenchmarkFoo(ctx context.Context) error {
+	println(gofakeit.Animal())
+	time.Sleep(time.Duration(rand.Intn(250)) * time.Millisecond)
 	return nil
 }
 
-func (s *ChartBenchmarkSuite) BenchmarkTest() error {
-	println(s.value.Next().String())
-	time.Sleep(time.Second)
+func (s *ChartBenchmarkSuite) BenchmarkBar(ctx context.Context) error {
+	println(gofakeit.Animal())
+	time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 	return nil
 }
 
-func (s *ChartBenchmarkSuite) TearDownSuite() error {
+func (s *ChartBenchmarkSuite) BenchmarkBaz(ctx context.Context) error {
+	println(gofakeit.Animal())
+	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	return nil
+}
+
+func (s *ChartBenchmarkSuite) TearDownSuite(ctx context.Context) error {
 	err := s.Helm().Uninstall("atomix-controller").
 		Wait().
-		Do(s.Context())
+		Do(ctx)
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/onosproject/helmit/pkg/util/k8s"
+	"github.com/onosproject/helmit/internal/k8s"
 	"io"
 	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
