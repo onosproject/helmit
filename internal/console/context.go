@@ -4,22 +4,56 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"time"
 )
 
-func NewContext(reporter *Reporter) *Context {
+const defaultRefreshRate = time.Millisecond
+
+type Option func(*Options)
+
+func WithRefreshRate(d time.Duration) Option {
+	return func(options *Options) {
+		options.RefreshRate = d
+	}
+}
+
+func WithVerbose() Option {
+	return func(options *Options) {
+		options.Verbose = true
+	}
+}
+
+type Options struct {
+	RefreshRate time.Duration
+	Verbose     bool
+}
+
+func NewContext(writer io.Writer, opts ...Option) *Context {
+	options := Options{
+		RefreshRate: defaultRefreshRate,
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	reporter := newReporter(writer, options.RefreshRate)
+	reporter.Start()
 	return &Context{
+		options:     options,
 		newProgress: reporter.NewProgress,
+		closer:      reporter.Stop,
 	}
 }
 
 type Context struct {
+	options     Options
 	newProgress func(string, ...any) *ProgressReport
+	closer      func()
 }
 
 func (c *Context) Run(desc string, f func(task *Task) error) error {
 	progress := c.newProgress(desc)
 	progress.Start()
-	if err := f(newTask(progress)); err != nil {
+	if err := f(newTask(c.options, progress)); err != nil {
 		progress.Error(err)
 		return err
 	}
@@ -33,7 +67,7 @@ func (c *Context) RunAsync(desc string, f func(task *Task) error) Waiter {
 	ch := make(chan error, 1)
 	go func() {
 		defer close(ch)
-		if err := f(newTask(progress)); err != nil {
+		if err := f(newTask(c.options, progress)); err != nil {
 			progress.Error(err)
 			ch <- err
 		} else {
@@ -43,11 +77,18 @@ func (c *Context) RunAsync(desc string, f func(task *Task) error) Waiter {
 	return newChannelWaiter(ch)
 }
 
-func newTask(progress *ProgressReport) *Task {
+func (c *Context) Close() {
+	c.closer()
+}
+
+func newTask(options Options, progress *ProgressReport) *Task {
 	return &Task{
 		Context: &Context{
+			options:     options,
 			newProgress: progress.NewProgress,
+			closer:      func() {},
 		},
+		Status:   newStatus(progress.StatusReport),
 		progress: progress,
 		writer:   newStatusReportWriter(progress.StatusReport),
 	}
@@ -55,6 +96,7 @@ func newTask(progress *ProgressReport) *Task {
 
 type Task struct {
 	*Context
+	*Status
 	progress *ProgressReport
 	writer   io.Writer
 }
@@ -72,11 +114,13 @@ func (t *Task) Logf(message string, args ...any) {
 }
 
 func (t *Task) log(message string) {
-	buf := bytes.NewBufferString(message)
-	if buf.Len() == 0 || buf.Bytes()[buf.Len()-1] != '\n' {
-		buf.WriteByte('\n')
+	if t.options.Verbose {
+		buf := bytes.NewBufferString(message)
+		if buf.Len() == 0 || buf.Bytes()[buf.Len()-1] != '\n' {
+			buf.WriteByte('\n')
+		}
+		_, _ = t.writer.Write(buf.Bytes())
 	}
-	_, _ = t.writer.Write(buf.Bytes())
 }
 
 func (t *Task) Fork(f func(status *Status) error) Waiter {

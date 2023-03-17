@@ -38,48 +38,20 @@ var (
 	errorErrColor = color.New(color.FgRed, color.Bold)
 )
 
-const defaultRefreshRate = time.Millisecond
-
-type Option func(*Options)
-
-func WithRefreshRate(d time.Duration) Option {
-	return func(options *Options) {
-		options.RefreshRate = d
-	}
-}
-
-func WithVerbose() Option {
-	return func(options *Options) {
-		options.Verbose = true
-	}
-}
-
-type Options struct {
-	RefreshRate time.Duration
-	Verbose     bool
-}
-
-func NewReporter(writer io.Writer, opts ...Option) *Reporter {
-	options := Options{
-		RefreshRate: defaultRefreshRate,
-	}
-	for _, opt := range opts {
-		opt(&options)
-	}
-
+func newReporter(writer io.Writer, rate time.Duration) *Reporter {
 	lwriter := uilive.New()
 	lwriter.Out = writer
 	lwriter.RefreshInterval = time.Hour
 
 	return &Reporter{
-		Options: options,
-		writer:  lwriter,
+		writer: lwriter,
+		rate:   rate,
 	}
 }
 
 type Reporter struct {
-	Options
 	writer   *uilive.Writer
+	rate     time.Duration
 	progress []*ProgressReport
 	ticker   *time.Ticker
 	stop     chan struct{}
@@ -90,13 +62,13 @@ type Reporter struct {
 func (r *Reporter) NewProgress(msg string, args ...any) *ProgressReport {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	progress := newProgressReport(r.Options, msg, args...)
+	progress := newProgressReport(msg, args...)
 	r.progress = append(r.progress, progress)
 	return progress
 }
 
 func (r *Reporter) Start() {
-	r.ticker = time.NewTicker(r.RefreshRate)
+	r.ticker = time.NewTicker(r.rate)
 	r.stop = make(chan struct{})
 	r.stopped = make(chan struct{})
 	go r.run()
@@ -134,7 +106,7 @@ type statusWriter interface {
 	write(writer *uilive.Writer, depth int)
 }
 
-func newProgressReport(options Options, msg string, args ...any) *ProgressReport {
+func newProgressReport(msg string, args ...any) *ProgressReport {
 	var desc string
 	if len(args) > 0 {
 		desc = fmt.Sprintf(msg, args...)
@@ -143,14 +115,12 @@ func newProgressReport(options Options, msg string, args ...any) *ProgressReport
 	}
 	return &ProgressReport{
 		StatusReport: newStatusReport(),
-		options:      options,
 		desc:         desc,
 	}
 }
 
 type ProgressReport struct {
 	*StatusReport
-	options  Options
 	desc     string
 	children []statusWriter
 	start    time.Time
@@ -163,7 +133,7 @@ type ProgressReport struct {
 func (r *ProgressReport) NewProgress(msg string, args ...any) *ProgressReport {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	progress := newProgressReport(r.options, msg, args...)
+	progress := newProgressReport(msg, args...)
 	r.children = append(r.children, progress)
 	return progress
 }
@@ -218,9 +188,7 @@ func (r *ProgressReport) write(writer *uilive.Writer, depth int) {
 		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*2), taskMsgColor.Sprintf("%s %s", spinnerFrame, r.desc))
 	}
 
-	if r.options.Verbose {
-		r.StatusReport.write(writer, depth+1)
-	}
+	r.StatusReport.write(writer, depth+1)
 
 	for _, child := range r.children {
 		child.write(writer, depth+1)
