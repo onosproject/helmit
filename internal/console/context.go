@@ -39,6 +39,7 @@ func NewContext(writer io.Writer, opts ...Option) *Context {
 	reporter.Start()
 	return &Context{
 		options:     options,
+		newStatus:   reporter.NewStatus,
 		newProgress: reporter.NewProgress,
 		closer:      reporter.Stop,
 	}
@@ -46,94 +47,80 @@ func NewContext(writer io.Writer, opts ...Option) *Context {
 
 type Context struct {
 	options     Options
+	newStatus   func() *StatusReport
 	newProgress func(string, ...any) *ProgressReport
 	closer      func()
 }
 
-func (c *Context) Run(desc string, f func(task *Task) error) error {
-	progress := c.newProgress(desc)
-	progress.Start()
-	if err := f(newTask(c.options, progress)); err != nil {
-		progress.Error(err)
-		return err
-	}
-	progress.Done()
-	return nil
-}
+func (c *Context) Fork(desc string, f func(context *Context) error) Joiner {
+	report := c.newProgress(desc)
+	report.Start()
 
-func (c *Context) RunAsync(desc string, f func(task *Task) error) Waiter {
-	progress := c.newProgress(desc)
-	progress.Start()
+	context := &Context{
+		options:     c.options,
+		newStatus:   report.NewStatus,
+		newProgress: report.NewProgress,
+	}
+
 	ch := make(chan error, 1)
 	go func() {
 		defer close(ch)
-		if err := f(newTask(c.options, progress)); err != nil {
-			progress.Error(err)
+		if err := f(context); err != nil {
+			report.Error(err)
 			ch <- err
 		} else {
-			progress.Done()
+			report.Done()
 		}
+	}()
+	return newChannelJoiner(ch)
+}
+
+func (c *Context) Run(f func(status *Status) error) Waiter {
+	report := c.newStatus()
+	status := newStatus(report, c.options.Verbose)
+	ch := make(chan error, 1)
+	go func() {
+		defer close(ch)
+		if err := f(status); err != nil {
+			ch <- err
+		}
+		report.Done()
 	}()
 	return newChannelWaiter(ch)
 }
 
 func (c *Context) Close() {
-	c.closer()
-}
-
-func newTask(options Options, progress *ProgressReport) *Task {
-	return &Task{
-		Context: &Context{
-			options:     options,
-			newProgress: progress.NewProgress,
-			closer:      func() {},
-		},
-		Status:   newStatus(progress.StatusReport),
-		progress: progress,
-		writer:   newStatusReportWriter(progress.StatusReport),
+	if c.closer != nil {
+		c.closer()
 	}
 }
 
-type Task struct {
-	*Context
-	*Status
-	progress *ProgressReport
-	writer   io.Writer
+type Joiner interface {
+	Join() error
 }
 
-func (t *Task) Writer() io.Writer {
-	return t.writer
-}
-
-func (t *Task) Log(message string) {
-	t.log(message)
-}
-
-func (t *Task) Logf(message string, args ...any) {
-	t.log(fmt.Sprintf(message, args...))
-}
-
-func (t *Task) log(message string) {
-	if t.options.Verbose {
-		buf := bytes.NewBufferString(message)
-		if buf.Len() == 0 || buf.Bytes()[buf.Len()-1] != '\n' {
-			buf.WriteByte('\n')
+func Join(joiners ...Joiner) error {
+	var err error
+	for _, joiner := range joiners {
+		if e := joiner.Join(); e != nil {
+			err = e
 		}
-		_, _ = t.writer.Write(buf.Bytes())
+	}
+	return err
+}
+
+func newChannelJoiner(ch <-chan error) Joiner {
+	return &channelJoiner{
+		ch: ch,
 	}
 }
 
-func (t *Task) Fork(f func(status *Status) error) Waiter {
-	status := t.progress.NewStatus()
-	ch := make(chan error, 1)
-	go func() {
-		defer close(ch)
-		if err := f(newStatus(status)); err != nil {
-			ch <- err
-		}
-		status.Done()
-	}()
-	return newChannelWaiter(ch)
+type channelJoiner struct {
+	ch <-chan error
+}
+
+func (w *channelJoiner) Join() error {
+	return <-w.ch
 }
 
 type Waiter interface {
@@ -164,14 +151,22 @@ func (w *channelWaiter) Wait() error {
 	return <-w.ch
 }
 
-func newStatus(report *StatusReport) *Status {
+func newStatus(report *StatusReport, verbose bool) *Status {
 	return &Status{
-		report: report,
+		report:  report,
+		writer:  newStatusReportWriter(report),
+		verbose: verbose,
 	}
 }
 
 type Status struct {
-	report *StatusReport
+	report  *StatusReport
+	writer  io.Writer
+	verbose bool
+}
+
+func (s *Status) Writer() io.Writer {
+	return s.writer
 }
 
 func (s *Status) Report(message string) {
@@ -180,6 +175,24 @@ func (s *Status) Report(message string) {
 
 func (s *Status) Reportf(message string, args ...any) {
 	s.report.Update(fmt.Sprintf(message, args...))
+}
+
+func (s *Status) Log(message string) {
+	s.log(message)
+}
+
+func (s *Status) Logf(message string, args ...any) {
+	s.log(fmt.Sprintf(message, args...))
+}
+
+func (s *Status) log(message string) {
+	if s.verbose {
+		buf := bytes.NewBufferString(message)
+		if buf.Len() == 0 || buf.Bytes()[buf.Len()-1] != '\n' {
+			buf.WriteByte('\n')
+		}
+		_, _ = s.writer.Write(buf.Bytes())
+	}
 }
 
 func newStatusReportWriter(report *StatusReport) io.Writer {

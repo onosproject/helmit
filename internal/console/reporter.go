@@ -38,11 +38,13 @@ var (
 	errorErrColor = color.New(color.FgRed, color.Bold)
 )
 
+type reportWriter interface {
+	write(writer *uilive.Writer, depth int)
+}
+
 func newReporter(writer io.Writer, rate time.Duration) *Reporter {
 	lwriter := uilive.New()
 	lwriter.Out = writer
-	lwriter.RefreshInterval = time.Hour
-
 	return &Reporter{
 		writer: lwriter,
 		rate:   rate,
@@ -50,20 +52,28 @@ func newReporter(writer io.Writer, rate time.Duration) *Reporter {
 }
 
 type Reporter struct {
-	writer   *uilive.Writer
-	rate     time.Duration
-	progress []*ProgressReport
-	ticker   *time.Ticker
-	stop     chan struct{}
-	stopped  chan struct{}
-	mu       sync.RWMutex
+	writer  *uilive.Writer
+	rate    time.Duration
+	reports []reportWriter
+	ticker  *time.Ticker
+	stop    chan struct{}
+	stopped chan struct{}
+	mu      sync.RWMutex
+}
+
+func (r *Reporter) NewStatus() *StatusReport {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	status := newStatusReport()
+	r.reports = append(r.reports, status)
+	return status
 }
 
 func (r *Reporter) NewProgress(msg string, args ...any) *ProgressReport {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	progress := newProgressReport(msg, args...)
-	r.progress = append(r.progress, progress)
+	r.reports = append(r.reports, progress)
 	return progress
 }
 
@@ -90,7 +100,7 @@ func (r *Reporter) run() {
 func (r *Reporter) write() {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	for _, task := range r.progress {
+	for _, task := range r.reports {
 		task.write(r.writer, 0)
 	}
 	r.writer.Flush()
@@ -102,10 +112,6 @@ func (r *Reporter) Stop() {
 	<-r.stopped
 }
 
-type statusWriter interface {
-	write(writer *uilive.Writer, depth int)
-}
-
 func newProgressReport(msg string, args ...any) *ProgressReport {
 	var desc string
 	if len(args) > 0 {
@@ -114,19 +120,16 @@ func newProgressReport(msg string, args ...any) *ProgressReport {
 		desc = msg
 	}
 	return &ProgressReport{
-		StatusReport: newStatusReport(),
-		desc:         desc,
+		desc: desc,
 	}
 }
 
 type ProgressReport struct {
-	*StatusReport
 	desc     string
-	children []statusWriter
+	children []reportWriter
 	start    time.Time
 	done     bool
 	err      error
-	closer   func(*ProgressReport)
 	mu       sync.RWMutex
 }
 
@@ -166,9 +169,6 @@ func (r *ProgressReport) close(err error) {
 	if !r.done {
 		r.done = true
 		r.err = err
-		if r.closer != nil {
-			r.closer(r)
-		}
 	}
 }
 
@@ -187,8 +187,6 @@ func (r *ProgressReport) write(writer *uilive.Writer, depth int) {
 		spinnerFrame := spinnerFrames[frameIndex]
 		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*2), taskMsgColor.Sprintf("%s %s", spinnerFrame, r.desc))
 	}
-
-	r.StatusReport.write(writer, depth+1)
 
 	for _, child := range r.children {
 		child.write(writer, depth+1)
