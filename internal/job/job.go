@@ -40,6 +40,7 @@ type Job[C any] struct {
 type Spec struct {
 	ID              string
 	Namespace       string
+	CreateNamespace bool
 	ServiceAccount  string
 	Labels          map[string]string
 	Annotations     map[string]string

@@ -8,26 +8,38 @@ import (
 	"context"
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/stretchr/testify/suite"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 // TestingSuite is a suite of tests
 type TestingSuite interface {
 	suite.TestingSuite
+	SetConfig(config *rest.Config)
+	Config() *rest.Config
 	SetHelm(helm *helm.Helm)
 	Helm() *helm.Helm
-	SetContext(ctx context.Context)
-	Context() context.Context
 }
 
 // Suite is the base for a test suite
 type Suite struct {
 	suite.Suite
-	helm *helm.Helm
-	ctx  context.Context
+	*kubernetes.Clientset
+	config *rest.Config
+	helm   *helm.Helm
 }
 
 func (suite *Suite) Namespace() string {
 	return suite.helm.Namespace()
+}
+
+func (suite *Suite) SetConfig(config *rest.Config) {
+	suite.config = config
+	suite.Clientset = kubernetes.NewForConfigOrDie(config)
+}
+
+func (suite *Suite) Config() *rest.Config {
+	return suite.config
 }
 
 func (suite *Suite) SetHelm(helm *helm.Helm) {
@@ -38,32 +50,24 @@ func (suite *Suite) Helm() *helm.Helm {
 	return suite.helm
 }
 
-func (suite *Suite) SetContext(ctx context.Context) {
-	suite.ctx = ctx
-}
-
-func (suite *Suite) Context() context.Context {
-	return suite.ctx
-}
-
-// SetupTestSuite is an interface for setting up a suite of tests
-type SetupTestSuite interface {
-	SetupTestSuite() error
+// SetupSuite is an interface for setting up a suite of tests
+type SetupSuite interface {
+	SetupSuite(ctx context.Context) error
 }
 
 // SetupTest is an interface for setting up individual tests
 type SetupTest interface {
-	SetupTest() error
+	SetupTest(ctx context.Context) error
 }
 
-// TearDownTestSuite is an interface for tearing down a suite of tests
-type TearDownTestSuite interface {
-	TearDownTestSuite() error
+// TearDownSuite is an interface for tearing down a suite of tests
+type TearDownSuite interface {
+	TearDownSuite(ctx context.Context) error
 }
 
 // TearDownTest is an interface for tearing down individual tests
 type TearDownTest interface {
-	TearDownTest() error
+	TearDownTest(ctx context.Context) error
 }
 
 // BeforeTest is an interface for executing code before every test

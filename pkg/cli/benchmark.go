@@ -61,6 +61,7 @@ func getBenchCommand() *cobra.Command {
 		RunE:    runBenchCommand,
 	}
 	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the benchmarks")
+	cmd.Flags().Bool("create-namespace", false, "whether to create the namespace when running the test")
 	cmd.Flags().String("service-account", "", "the name of the service account to use to run worker pods")
 	cmd.Flags().StringToString("labels", map[string]string{}, "a mapping of labels to add to the test pod")
 	cmd.Flags().StringToString("annotations", map[string]string{}, "a mapping of annotations to add to the test pod")
@@ -103,6 +104,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	namespace, _ := cmd.Flags().GetString("namespace")
+	createNamespace, _ := cmd.Flags().GetBool("create-namespace")
 	serviceAccount, _ := cmd.Flags().GetString("service-account")
 	labels, _ := cmd.Flags().GetStringToString("labels")
 	annotations, _ := cmd.Flags().GetStringToString("annotations")
@@ -123,11 +125,6 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
 	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
 	secretsArray, _ := cmd.Flags().GetStringSlice("secret")
-
-	// Either --iterations or --duration must be specified
-	if iterations == 0 && duration == 0 {
-		return errors.New("either --iterations or --duration must be specified")
-	}
 
 	// Either a command package or image must be specified
 	if pkgPath == "" && image == "" {
@@ -169,9 +166,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	var executable string
 	if pkgPath != "" {
 		executable = filepath.Join(os.TempDir(), "helmit", benchID)
-		if image == "" {
-			image = "onosproject/helmit-runner:latest"
-		}
+		defer os.RemoveAll(executable)
 		err := context.Fork("Preparing artifacts", func(context *console.Context) error {
 			err := context.Run(func(status *console.Status) error {
 				status.Reportf("Validating package path %s", pkgPath)
@@ -202,11 +197,12 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		Spec: job.Spec{
 			ID:              benchID,
 			Namespace:       namespace,
+			CreateNamespace: createNamespace,
 			ServiceAccount:  serviceAccount,
 			Labels:          labels,
 			Annotations:     annotations,
 			Executable:      executable,
-			Image:           image,
+			Image:           defaultRunnerImage,
 			ImagePullPolicy: pullPolicy,
 			Context:         contextPath,
 			ValueFiles:      valueFiles,

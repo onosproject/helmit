@@ -82,12 +82,12 @@ type TearDownWorker interface {
 
 // SetupBenchmark is an interface for executing code before every benchmark
 type SetupBenchmark interface {
-	SetupBenchmark(ctx context.Context, suite string, name string) error
+	SetupBenchmark(ctx context.Context) error
 }
 
 // TearDownBenchmark is an interface for executing code after every benchmark
 type TearDownBenchmark interface {
-	TearDownBenchmark(ctx context.Context, suite string, name string) error
+	TearDownBenchmark(ctx context.Context) error
 }
 
 // B is a benchmark runner

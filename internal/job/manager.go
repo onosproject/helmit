@@ -182,6 +182,12 @@ func (m *Manager[C]) createClusterRoleBinding(job Job[C]) error {
 func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 	err := context.Fork("Setting up cluster", func(context *console.Context) error {
 		return context.Run(func(status *console.Status) error {
+			if job.CreateNamespace {
+				status.Report("Creating namespace")
+				if err := m.createNamespace(job); err != nil {
+					return err
+				}
+			}
 			status.Report("Creating Job")
 			if err := m.createJob(job); err != nil {
 				return err
@@ -252,6 +258,21 @@ func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 		return nil
 	}).Join()
 	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *Manager[C]) createNamespace(job Job[C]) error {
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: job.Namespace,
+			Annotations: map[string]string{
+				"job": job.ID,
+			},
+		},
+	}
+	if _, err := m.client.CoreV1().Namespaces().Create(context.Background(), namespace, metav1.CreateOptions{}); err != nil {
 		return err
 	}
 	return nil
@@ -719,6 +740,11 @@ func (m *Manager[C]) finishJob(job Job[C]) error {
 	if err := m.deleteJob(job); err != nil {
 		return err
 	}
+	if job.CreateNamespace && !job.NoTeardown {
+		if err := m.deleteNamespace(job); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -730,6 +756,21 @@ func (m *Manager[C]) deleteJob(job Job[C]) error {
 	deleteOptions.PropagationPolicy = &deletePropagation
 
 	err := m.client.BatchV1().Jobs(job.Namespace).Delete(context.Background(), job.ID, deleteOptions)
+	stat, ok := status.FromError(err)
+	if err != nil && !k8serrors.IsNotFound(err) && ok && stat.Code() != codes.Unavailable {
+		return err
+	}
+	return nil
+}
+
+// deleteNamespace deletes a job
+func (m *Manager[C]) deleteNamespace(job Job[C]) error {
+	deleteOptions := metav1.DeleteOptions{}
+	deletePropagation := metav1.DeletePropagationBackground
+
+	deleteOptions.PropagationPolicy = &deletePropagation
+
+	err := m.client.CoreV1().Namespaces().Delete(context.Background(), job.Namespace, deleteOptions)
 	stat, ok := status.FromError(err)
 	if err != nil && !k8serrors.IsNotFound(err) && ok && stat.Code() != codes.Unavailable {
 		return err

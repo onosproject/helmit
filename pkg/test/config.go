@@ -5,38 +5,25 @@
 package test
 
 import (
-	"github.com/onosproject/helmit/pkg/job"
-	"os"
+	corev1 "k8s.io/api/core/v1"
 )
 
-type testType string
-
-const (
-	testTypeCoordinator testType = "coordinator"
-	testTypeWorker      testType = "worker"
-)
-
-const (
-	testTypeEnv = "TEST_TYPE"
-	testJobType = "test"
-)
-
-// Config is a test configuration
+// Config is a benchmark configuration
 type Config struct {
-	*job.Config `json:",inline"`
-	Suites      []string          `json:"suites,omitempty"`
-	Tests       []string          `json:"tests,omitempty"`
-	Iterations  int               `json:"iterations,omitempty"`
-	Verbose     bool              `json:"verbose,omitempty"`
-	NoTeardown  bool              `json:"noteardown,omitempty"`
-	Args        map[string]string `json:"args,omitempty"`
+	WorkerConfig `json:"workerConfig"`
+	Suites       []string          `json:"suites,omitempty"`
+	Tests        []string          `json:"tests,omitempty"`
+	Workers      int               `json:"workers,omitempty"`
+	Parallel     bool              `json:"parallel,omitempty"`
+	Iterations   int               `json:"iterations,omitempty"`
+	Verbose      bool              `json:"verbose,omitempty"`
+	Args         map[string]string `json:"args,omitempty"`
+	NoTeardown   bool              `json:"noteardown,omitempty"`
 }
 
-// getTestContext returns the current test context
-func getTestType() testType {
-	context := os.Getenv(testTypeEnv)
-	if context != "" {
-		return testType(context)
-	}
-	return testTypeCoordinator
+// WorkerConfig is a benchmark worker configuration
+type WorkerConfig struct {
+	Image           string            `json:"workerImage"`
+	ImagePullPolicy corev1.PullPolicy `json:"WorkerImagePullPolicy"`
+	Env             map[string]string `json:"env"`
 }

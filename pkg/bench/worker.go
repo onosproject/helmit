@@ -143,7 +143,7 @@ func (w *benchWorker) SetupBenchmark(ctx context.Context, request *api.SetupBenc
 	if setupBenchmark, ok := suite.(SetupBenchmark); ok {
 		ctx, cancel := context.WithTimeout(ctx, w.spec.Timeout)
 		defer cancel()
-		if err := setupBenchmark.SetupBenchmark(ctx, request.Suite, request.Benchmark); err != nil {
+		if err := setupBenchmark.SetupBenchmark(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -165,7 +165,7 @@ func (w *benchWorker) TearDownBenchmark(ctx context.Context, request *api.TearDo
 	if tearDownBenchmark, ok := suite.(TearDownBenchmark); ok {
 		ctx, cancel := context.WithTimeout(ctx, w.spec.Timeout)
 		defer cancel()
-		if err := tearDownBenchmark.TearDownBenchmark(ctx, request.Suite, request.Benchmark); err != nil {
+		if err := tearDownBenchmark.TearDownBenchmark(ctx); err != nil {
 			return nil, err
 		}
 	}

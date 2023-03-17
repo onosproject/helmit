@@ -7,224 +7,169 @@ package test
 import (
 	"context"
 	"fmt"
+	api "github.com/onosproject/helmit/api/v1"
+	"github.com/onosproject/helmit/internal/job"
+	"github.com/onosproject/helmit/internal/k8s"
 	"github.com/onosproject/helmit/pkg/helm"
-	"github.com/stretchr/testify/suite"
+	"github.com/onosproject/onos-lib-go/pkg/errors"
 	"google.golang.org/grpc"
 	"net"
-	"os"
 	"reflect"
-	"regexp"
-	"runtime/debug"
 	"testing"
 )
 
-// newWorker returns a new test worker
-func newWorker(suites map[string]TestingSuite, config *Config) (*Worker, error) {
-	return &Worker{
+// newWorker returns a new benchmark worker
+func newWorker(spec job.Spec, suites map[string]TestingSuite, t *testing.T) (*testWorker, error) {
+	return &testWorker{
+		spec:   spec,
 		suites: suites,
-		config: config,
+		t:      t,
 	}, nil
 }
 
-// Worker runs a test job
-type Worker struct {
+// testWorker runs a benchmark job
+type testWorker struct {
+	spec   job.Spec
 	suites map[string]TestingSuite
-	config *Config
+	t      *testing.T
 }
 
-// Run runs a test
-func (w *Worker) Run() error {
+// run runs a benchmark
+func (w *testWorker) run() error {
 	lis, err := net.Listen("tcp", ":5000")
 	if err != nil {
 		return err
 	}
 	server := grpc.NewServer()
-	RegisterWorkerServiceServer(server, w)
+	api.RegisterTesterServer(server, w)
 	return server.Serve(lis)
 }
 
-// RunTests runs a suite of tests
-func (w *Worker) RunTests(ctx context.Context, request *TestRequest) (*TestResponse, error) {
-	go w.runTests(request)
-	return &TestResponse{}, nil
-}
-
-func (w *Worker) runTests(request *TestRequest) {
-	test, ok := w.suites[request.Suite]
+// SetupTestSuite sets up a benchmark suite
+func (w *testWorker) SetupTestSuite(ctx context.Context, request *api.SetupTestSuiteRequest) (*api.SetupTestSuiteResponse, error) {
+	suite, ok := w.suites[request.Suite]
 	if !ok {
-		fmt.Println(fmt.Errorf("unknown test suite %s", request.Suite))
-		os.Exit(1)
+		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
 	}
 
-	tests := []testing.InternalTest{
-		{
-			Name: request.Suite,
-			F: func(t *testing.T) {
-				w.runSuite(t, test, request)
-			},
-		},
+	config, err := k8s.GetConfig()
+	if err != nil {
+		return nil, err
 	}
+	suite.SetConfig(config)
 
-	// Hack to enable verbose testing.
-	os.Args = []string{
-		os.Args[0],
-		"-test.v",
-	}
-
-	testing.Main(func(_, _ string) (bool, error) { return true, nil }, tests, nil, nil)
-}
-
-// RunTests runs a test suite
-func (w *Worker) runSuite(t *testing.T, s TestingSuite, request *TestRequest) {
-	defer failTestOnPanic(t)
-
-	parentCtx := context.Background()
-	for key, value := range request.Args {
-		parentCtx = context.WithValue(parentCtx, key, value)
-	}
-
-	s.SetT(t)
-	s.SetContext(parentCtx)
-	s.SetHelm(helm.NewClient(helm.Context{
-		Namespace:  w.config.Namespace,
-		WorkDir:    w.config.Context,
-		Values:     w.config.Values,
-		ValueFiles: w.config.ValueFiles,
+	suite.SetHelm(helm.NewClient(helm.Context{
+		Namespace:  w.spec.Namespace,
+		WorkDir:    w.spec.Context,
+		Values:     w.spec.Values,
+		ValueFiles: w.spec.ValueFiles,
 	}))
 
-	var suiteSetupDone bool
-
-	methodFinder := reflect.TypeOf(s)
-	tests := []testing.InternalTest{}
-	for index := 0; index < methodFinder.NumMethod(); index++ {
-		method := methodFinder.Method(index)
-		ok, err := testFilter(method.Name, request.Tests)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "invalid regexp for -m: %s\n", err)
-			os.Exit(1)
+	if setupSuite, ok := suite.(SetupSuite); ok {
+		ctx, cancel := context.WithTimeout(ctx, w.spec.Timeout)
+		defer cancel()
+		if err := setupSuite.SetupSuite(ctx); err != nil {
+			return nil, err
 		}
-		if !ok {
-			continue
-		}
-		if !suiteSetupDone {
-			ctx, cancel := context.WithTimeout(parentCtx, w.config.Timeout)
-			s.SetContext(ctx)
-			if setupTestSuite, ok := s.(suite.SetupAllSuite); ok {
-				setupTestSuite.SetupSuite()
-			}
-			if setupTestSuite, ok := s.(SetupTestSuite); ok {
-				if err := setupTestSuite.SetupTestSuite(); err != nil {
-					panic(err)
-				}
-			}
-			s.SetContext(parentCtx)
-			cancel()
-			suiteSetupDone = true
-		}
-
-		test := testing.InternalTest{
-			Name: method.Name,
-			F: func(t *testing.T) {
-				defer failTestOnPanic(t)
-
-				parentT := s.T()
-				s.SetT(t)
-
-				ctx, cancel := context.WithTimeout(parentCtx, w.config.Timeout)
-				defer cancel()
-				s.SetContext(ctx)
-
-				if setupTest, ok := s.(suite.SetupTestSuite); ok {
-					setupTest.SetupTest()
-				}
-				if setupTest, ok := s.(SetupTest); ok {
-					if err := setupTest.SetupTest(); err != nil {
-						panic(err)
-					}
-				}
-				if beforeTest, ok := s.(suite.BeforeTest); ok {
-					beforeTest.BeforeTest(methodFinder.Elem().Name(), method.Name)
-				}
-				if beforeTest, ok := s.(BeforeTest); ok {
-					if err := beforeTest.BeforeTest(method.Name); err != nil {
-						panic(err)
-					}
-				}
-				defer func() {
-					if afterTest, ok := s.(suite.AfterTest); ok {
-						afterTest.AfterTest(methodFinder.Elem().Name(), method.Name)
-					}
-					if afterTest, ok := s.(AfterTest); ok {
-						if err := afterTest.AfterTest(method.Name); err != nil {
-							panic(err)
-						}
-					}
-					if tearDownTest, ok := s.(suite.TearDownTestSuite); ok {
-						tearDownTest.TearDownTest()
-					}
-					if tearDownTest, ok := s.(TearDownTest); ok {
-						if err := tearDownTest.TearDownTest(); err != nil {
-							panic(err)
-						}
-					}
-					s.SetContext(parentCtx)
-					s.SetT(parentT)
-				}()
-				method.Func.Call([]reflect.Value{reflect.ValueOf(s)})
-			},
-		}
-		tests = append(tests, test)
 	}
-
-	if suiteSetupDone {
-		defer func() {
-			ctx, cancel := context.WithTimeout(parentCtx, w.config.Timeout)
-			s.SetContext(ctx)
-			if tearDownTestSuite, ok := s.(suite.TearDownAllSuite); ok {
-				tearDownTestSuite.TearDownSuite()
-			}
-			if tearDownTestSuite, ok := s.(TearDownTestSuite); ok {
-				if err := tearDownTestSuite.TearDownTestSuite(); err != nil {
-					panic(err)
-				}
-			}
-			s.SetContext(parentCtx)
-			cancel()
-		}()
-	}
-
-	runTests(t, tests)
+	return &api.SetupTestSuiteResponse{}, nil
 }
 
-// runSuite runs a test
-func runTests(t *testing.T, tests []testing.InternalTest) {
-	for _, test := range tests {
-		t.Run(test.Name, test.F)
-	}
-}
-
-// testFilter filters test method names
-func testFilter(name string, cases []string) (bool, error) {
-	if ok, _ := regexp.MatchString("^Test", name); !ok {
-		return false, nil
+// TearDownTestSuite tears down a benchmark suite
+func (w *testWorker) TearDownTestSuite(ctx context.Context, request *api.TearDownTestSuiteRequest) (*api.TearDownTestSuiteResponse, error) {
+	suite, ok := w.suites[request.Suite]
+	if !ok {
+		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
 	}
 
-	if len(cases) == 0 || cases[0] == "" {
-		return true, nil
-	}
-
-	for _, test := range cases {
-		if test == name {
-			return true, nil
+	if tearDownSuite, ok := suite.(TearDownSuite); ok {
+		ctx, cancel := context.WithTimeout(ctx, w.spec.Timeout)
+		defer cancel()
+		if err := tearDownSuite.TearDownSuite(ctx); err != nil {
+			return nil, err
 		}
 	}
-	return false, nil
+	return &api.TearDownTestSuiteResponse{}, nil
 }
 
-func failTestOnPanic(t *testing.T) {
-	r := recover()
-	if r != nil {
-		t.Errorf("test panicked: %v\n%s", r, debug.Stack())
-		t.FailNow()
+// SetupTest sets up a benchmark
+func (w *testWorker) SetupTest(ctx context.Context, request *api.SetupTestRequest) (*api.SetupTestResponse, error) {
+	suite, ok := w.suites[request.Suite]
+	if !ok {
+		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
 	}
+
+	if setupTest, ok := suite.(SetupTest); ok {
+		ctx, cancel := context.WithTimeout(ctx, w.spec.Timeout)
+		defer cancel()
+		if err := setupTest.SetupTest(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	methods := reflect.TypeOf(suite)
+	if method, ok := methods.MethodByName("Setup" + request.Test); ok {
+		method.Func.Call([]reflect.Value{reflect.ValueOf(suite)})
+	}
+	return &api.SetupTestResponse{}, nil
+}
+
+// TearDownTest tears down a benchmark
+func (w *testWorker) TearDownTest(ctx context.Context, request *api.TearDownTestRequest) (*api.TearDownTestResponse, error) {
+	suite, ok := w.suites[request.Suite]
+	if !ok {
+		return nil, errors.NewNotFound("unknown suite %s", request.Suite)
+	}
+
+	if tearDownTest, ok := suite.(TearDownTest); ok {
+		ctx, cancel := context.WithTimeout(ctx, w.spec.Timeout)
+		defer cancel()
+		if err := tearDownTest.TearDownTest(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	methods := reflect.TypeOf(suite)
+	if method, ok := methods.MethodByName("TearDown" + request.Test); ok {
+		method.Func.Call([]reflect.Value{reflect.ValueOf(suite)})
+	}
+	return &api.TearDownTestResponse{}, nil
+}
+
+func (w *testWorker) GetTestSuites(ctx context.Context, request *api.GetTestSuitesRequest) (*api.GetTestSuitesResponse, error) {
+	var suites []*api.TestSuite
+	for name, suite := range w.suites {
+		var tests []*api.Test
+		methodFinder := reflect.TypeOf(suite)
+		for index := 0; index < methodFinder.NumMethod(); index++ {
+			method := methodFinder.Method(index)
+			tests = append(tests, &api.Test{
+				Name: method.Name,
+			})
+		}
+		suites = append(suites, &api.TestSuite{
+			Name:  name,
+			Tests: tests,
+		})
+	}
+	return &api.GetTestSuitesResponse{
+		Suites: suites,
+	}, nil
+}
+
+func (w *testWorker) RunTest(ctx context.Context, request *api.RunTestRequest) (*api.RunTestResponse, error) {
+	suite, ok := w.suites[request.Suite]
+	if !ok {
+		return nil, fmt.Errorf("unknown test suite %s", request.Suite)
+	}
+	methodFinder := reflect.TypeOf(suite)
+	method, ok := methodFinder.MethodByName(request.Test)
+	if !ok {
+		return nil, fmt.Errorf("unknown test %s", request.Test)
+	}
+	w.t.Run(request.Test, func(t *testing.T) {
+		suite.SetT(t)
+		method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
+	})
+	return &api.RunTestResponse{}, nil
 }

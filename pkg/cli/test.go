@@ -7,13 +7,10 @@ package cli
 import (
 	"errors"
 	petname "github.com/dustinkirkland/golang-petname"
-	"go/build"
+	"github.com/onosproject/helmit/internal/console"
 	"math/rand"
 	"os"
-	"os/exec"
-	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/onosproject/helmit/internal/job"
@@ -63,6 +60,7 @@ func getTestCommand() *cobra.Command {
 		RunE:    runTestCommand,
 	}
 	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the tests")
+	cmd.Flags().Bool("create-namespace", false, "whether to create the namespace when running the test")
 	cmd.Flags().String("service-account", "", "the name of the service account to use to run test pods")
 	cmd.Flags().StringP("context", "c", "", "the test context")
 	cmd.Flags().StringP("image", "i", "", "the test image to run")
@@ -71,6 +69,8 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().StringArray("set", []string{}, "chart value overrides")
 	cmd.Flags().StringSliceP("suite", "s", []string{}, "the name of test suite to run")
 	cmd.Flags().StringSliceP("test", "t", []string{}, "the name of the test method to run")
+	cmd.Flags().IntP("workers", "w", 1, "the number of workers to run")
+	cmd.Flags().BoolP("parallel", "p", false, "whether to run test tests in parallel")
 	cmd.Flags().Duration("timeout", 10*time.Minute, "test timeout")
 	cmd.Flags().Int("iterations", 1, "number of iterations")
 	cmd.Flags().Bool("until-failure", false, "run until an error is detected")
@@ -81,11 +81,15 @@ func getTestCommand() *cobra.Command {
 }
 
 func runTestCommand(cmd *cobra.Command, args []string) error {
-	status := console.NewReporter(cmd.OutOrStdout())
-	status.Start()
-	defer status.Stop()
+	verbose, _ := cmd.Flags().GetBool("verbose")
 
-	tasks := console.NewContextManager(status)
+	var opts []console.Option
+	if verbose {
+		opts = append(opts, console.WithVerbose())
+	}
+
+	context := console.NewContext(cmd.OutOrStdout(), opts...)
+	defer context.Close()
 
 	pkgPath := ""
 	if len(args) > 0 {
@@ -93,66 +97,41 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	namespace, _ := cmd.Flags().GetString("namespace")
+	createNamespace, _ := cmd.Flags().GetBool("create-namespace")
 	serviceAccount, _ := cmd.Flags().GetString("service-account")
-	context, _ := cmd.Flags().GetString("context")
+	contextPath, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
 	files, _ := cmd.Flags().GetStringArray("values")
 	sets, _ := cmd.Flags().GetStringArray("set")
 	suites, _ := cmd.Flags().GetStringSlice("suite")
 	testNames, _ := cmd.Flags().GetStringSlice("test")
+	workers, _ := cmd.Flags().GetInt("workers")
+	parallel, _ := cmd.Flags().GetBool("parallel")
 	timeout, _ := cmd.Flags().GetDuration("timeout")
-	pullPolicy, _ := cmd.Flags().GetString("image-pull-policy")
+	imagePullPolicy, _ := cmd.Flags().GetString("image-pull-policy")
+	pullPolicy := corev1.PullPolicy(imagePullPolicy)
 	iterations, _ := cmd.Flags().GetInt("iterations")
 	untilFailure, _ := cmd.Flags().GetBool("until-failure")
 	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
 	secretsArray, _ := cmd.Flags().GetStringSlice("secret")
 	testArgs, _ := cmd.Flags().GetStringToString("args")
 
-	// Either a command package or image must be specified
-	if pkgPath == "" && image == "" {
-		return errors.New("must specify either a test package or --image to run")
+	if untilFailure {
+		iterations = -1
 	}
 
-	// Generate a unique test ID
-	testID := petname.Generate(2, "-")
-
-	// If a command package was provided, build a binary and update the image tag
-	var executable string
-	if pkgPath != "" {
-		task := tasks.New("Building executable")
-		task.Run(func(log console.Logger) error {
-			log.Logf("Validating package path %s", pkgPath)
-			if err := validatePackage(pkgPath); err != nil {
-				return err
-			}
-
-			// TODO: Ensure temporary directory is deleted after use
-			executable = filepath.Join(os.TempDir(), "helmit", testID)
-			log.Logf("Building %s", executable)
-			if err := buildBinary(pkgPath, executable); err != nil {
-				cmd.SilenceUsage = true
-				cmd.SilenceErrors = true
-				return err
-			}
-			if image == "" {
-				image = "onosproject/helmit-runner:latest"
-			}
-			return nil
-		})
-		task.Wait()
+	// Either a command package or image must be specified
+	if pkgPath == "" && image == "" {
+		return errors.New("must specify either a benchmark package or --image to run")
 	}
 
 	// If a context was provided, convert the context to its absolute path
-	if context != "" {
-		path, err := filepath.Abs(context)
+	if contextPath != "" {
+		path, err := filepath.Abs(contextPath)
 		if err != nil {
 			return err
 		}
-		context = path
-	}
-
-	if untilFailure {
-		iterations = -1
+		contextPath = path
 	}
 
 	valueFiles, err := parseFiles(files)
@@ -170,168 +149,97 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	config := &test.Config{
-		Config: &job.Config{
-			ID:              testID,
-			ServiceAccount:  serviceAccount,
+	// Generate a unique benchmark ID
+	benchID := petname.Generate(2, "-")
+
+	var executable string
+	if pkgPath != "" {
+		executable = filepath.Join(os.TempDir(), "helmit", benchID)
+		defer os.RemoveAll(executable)
+		err := context.Fork("Preparing artifacts", func(context *console.Context) error {
+			err := context.Run(func(status *console.Status) error {
+				status.Reportf("Validating package path %s", pkgPath)
+				return validatePackage(pkgPath)
+			}).Wait()
+			if err != nil {
+				return err
+			}
+
+			err = context.Run(func(status *console.Status) error {
+				status.Reportf("Building %s", executable)
+				return buildBinary(pkgPath, executable)
+			}).Wait()
+			if err != nil {
+				cmd.SilenceUsage = true
+				cmd.SilenceErrors = true
+				return err
+			}
+			return nil
+		}).Join()
+		if err != nil {
+			return err
+		}
+	}
+
+	manager := job.NewManager[test.Config](job.ExecutorType)
+	job := job.Job[test.Config]{
+		Spec: job.Spec{
+			ID:              benchID,
 			Namespace:       namespace,
-			Image:           image,
-			ImagePullPolicy: corev1.PullPolicy(pullPolicy),
+			CreateNamespace: createNamespace,
+			ServiceAccount:  serviceAccount,
 			Executable:      executable,
-			Context:         context,
+			Image:           defaultRunnerImage,
+			ImagePullPolicy: pullPolicy,
+			Context:         contextPath,
 			ValueFiles:      valueFiles,
 			Values:          values,
 			Timeout:         timeout,
 			NoTeardown:      noTeardown,
 			Secrets:         secrets,
 		},
-		Suites:     suites,
-		Tests:      testNames,
-		Iterations: iterations,
-		Verbose:    os.Getenv("VERBOSE_LOGGING") != "",
-		NoTeardown: noTeardown,
-		Args:       testArgs,
-	}
-	return runTest(config)
-}
-
-// runTest runs the test
-func runTest(config *test.Config) error {
-	configValueFiles := make(map[string][]string)
-	if config.ValueFiles != nil {
-		for release, valueFiles := range config.ValueFiles {
-			configReleaseFiles := make([]string, 0)
-			for _, valueFile := range valueFiles {
-				configReleaseFiles = append(configReleaseFiles, path.Base(valueFile))
-			}
-			configValueFiles[release] = configReleaseFiles
-		}
-	}
-
-	configExecutable := ""
-	if config.Executable != "" {
-		configExecutable = path.Base(config.Executable)
-	}
-
-	configContext := ""
-	if config.Context != "" {
-		configContext = path.Base(config.Context)
-	}
-	return job.Run(&job.Job{
-		Config: config.Config,
-		JobConfig: &test.Config{
-			Config: &job.Config{
-				ID:              config.ID,
-				Namespace:       config.Namespace,
-				ServiceAccount:  config.ServiceAccount,
-				Image:           config.Image,
-				ImagePullPolicy: config.ImagePullPolicy,
-				Executable:      configExecutable,
-				Context:         configContext,
-				Values:          config.Values,
-				ValueFiles:      configValueFiles,
-				Args:            config.Config.Args,
-				Env:             config.Env,
-				Timeout:         config.Timeout,
-				NoTeardown:      config.NoTeardown,
-				Secrets:         config.Secrets,
+		Config: test.Config{
+			WorkerConfig: test.WorkerConfig{
+				Image:           image,
+				ImagePullPolicy: pullPolicy,
+				// TODO: Add environment variables?
+				// Env: ...
 			},
-			Suites:     config.Suites,
-			Tests:      config.Tests,
-			Iterations: config.Iterations,
-			Verbose:    config.Verbose,
-			Args:       config.Args,
+			Suites:     suites,
+			Tests:      testNames,
+			Workers:    workers,
+			Parallel:   parallel,
+			Iterations: iterations,
+			Verbose:    verbose,
+			Args:       testArgs,
+			NoTeardown: noTeardown,
 		},
-		Type: job.TestType,
-	})
-}
+	}
 
-func buildBinary(pkgPath, binPath string) error {
-	build := exec.Command("go", "build", "-o", binPath, pkgPath)
-	build.Stderr = os.Stderr
-	build.Stdout = os.Stdout
-	env := os.Environ()
-	env = append(env, "GOOS=linux", "CGO_ENABLED=0")
-	build.Env = env
-	return build.Run()
-}
-
-func validatePackage(pkgPath string) error {
-	workDir, err := os.Getwd()
+	err = context.Fork("Starting benchmark", func(context *console.Context) error {
+		return manager.Start(job, context)
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	pkg, err := build.Import(pkgPath, workDir, build.ImportComment)
+	err = context.Fork("Running benchmark", func(context *console.Context) error {
+		return manager.Run(job, context)
+	}).Join()
 	if err != nil {
 		return err
 	}
 
-	if !pkg.IsCommand() {
-		return errors.New("main not found in package")
+	err = context.Fork("Terminating benchmark", func(context *console.Context) error {
+		code, err := manager.Stop(job)
+		if err != nil {
+			return err
+		}
+		os.Exit(code)
+		return nil
+	}).Join()
+	if err != nil {
+		return err
 	}
 	return nil
-}
-
-func parseFiles(files []string) (map[string][]string, error) {
-	if len(files) == 0 {
-		return map[string][]string{}, nil
-	}
-
-	values := make(map[string][]string)
-	for _, path := range files {
-		index := strings.Index(path, "=")
-		if index == -1 {
-			return nil, errors.New("values file must be in the format {release}={file}")
-		}
-		release, path := path[:index], path[index+1:]
-		path, err := filepath.Abs(path)
-		if err != nil {
-			return nil, err
-		}
-		_, err = os.Stat(path)
-		if err != nil {
-			return nil, err
-		}
-		releaseValues, ok := values[release]
-		if !ok {
-			releaseValues = make([]string, 0)
-		}
-		values[release] = append(releaseValues, path)
-	}
-	return values, nil
-}
-
-func parseOverrides(values []string) (map[string][]string, error) {
-	overrides := make(map[string][]string)
-	for _, set := range values {
-		index := strings.Index(set, ".")
-		if index == -1 {
-			return nil, errors.New("values must be in the format {release}.{path}={value}")
-		}
-		release, value := set[:index], set[index+1:]
-		override, ok := overrides[release]
-		if !ok {
-			override = make([]string, 0)
-		}
-		overrides[release] = append(override, value)
-	}
-	return overrides, nil
-}
-
-func parseSecrets(secrets []string) (map[string]string, error) {
-	if len(secrets) == 0 {
-		return map[string]string{}, nil
-	}
-
-	values := make(map[string]string)
-	for _, secret := range secrets {
-		index := strings.Index(secret, "=")
-		if index == -1 {
-			return nil, errors.New("secrets must be in the format {key}={value}")
-		}
-		key, value := secret[:index], secret[index+1:]
-		values[key] = value
-	}
-	return values, nil
 }
