@@ -34,8 +34,8 @@ const spinnerSpeed = 150 * time.Millisecond
 var (
 	taskMsgColor  = color.New(color.FgBlue)
 	doneMsgColor  = color.New(color.FgGreen)
-	errorMsgColor = color.New(color.FgRed, color.Bold)
-	errorErrColor = color.New(color.FgRed, color.Italic)
+	errorMsgColor = color.New(color.FgRed)
+	errorErrColor = color.New(color.FgRed, color.Bold)
 )
 
 const defaultRefreshRate = time.Millisecond
@@ -208,8 +208,7 @@ func (r *ProgressReport) write(writer *uilive.Writer, depth int) {
 
 	if r.done {
 		if r.err != nil {
-			fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*2), errorMsgColor.Sprintf(" ✘ %s", r.desc))
-			fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*2+2), errorErrColor.Sprint(r.err.Error()))
+			fmt.Fprintf(writer.Newline(), "%s%s %s\n", strings.Repeat(" ", depth*2), errorMsgColor.Sprintf(" ✘ %s", r.desc), errorErrColor.Sprintf("← %s", r.err.Error()))
 		} else {
 			fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*2), doneMsgColor.Sprintf(" ✔ %s", r.desc))
 		}
@@ -220,7 +219,7 @@ func (r *ProgressReport) write(writer *uilive.Writer, depth int) {
 	}
 
 	if r.options.Verbose {
-		r.StatusReport.write(writer, depth)
+		r.StatusReport.write(writer, depth+1)
 	}
 
 	for _, child := range r.children {
@@ -252,5 +251,10 @@ func (r *StatusReport) write(writer *uilive.Writer, depth int) {
 	if value == nil {
 		return
 	}
-	fmt.Fprintf(writer.Newline(), "%s %s\n", strings.Repeat(" ", depth*2), *value)
+	lines := strings.Split(*value, "\n")
+	for _, line := range lines {
+		if line != "" {
+			fmt.Fprintf(writer.Newline(), "%s %s\n", strings.Repeat(" ", depth*2), line)
+		}
+	}
 }
