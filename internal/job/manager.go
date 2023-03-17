@@ -64,12 +64,12 @@ func (m *Manager[C]) Start(job Job[C], context *console.Context) error {
 
 func (m *Manager[C]) Run(job Job[C], context *console.Context) error {
 	return context.Run(func(status *console.Status) error {
-		return m.streamLogs(job, status.Writer())
+		return m.streamLogs(job, status)
 	}).Wait()
 }
 
 // streamLogs streams logs from the given pod
-func (m *Manager[C]) streamLogs(job Job[C], writer io.Writer) error {
+func (m *Manager[C]) streamLogs(job Job[C], status *console.Status) error {
 	// Get the stream of logs for the pod
 	pod, err := m.getPod(job, func(pod corev1.Pod) bool {
 		return len(pod.Status.ContainerStatuses) > 0 &&
@@ -79,17 +79,29 @@ func (m *Manager[C]) streamLogs(job Job[C], writer io.Writer) error {
 		return err
 	}
 
+	ticker := time.NewTicker(time.Second)
+	for range ticker.C {
+		if err := m.readLogs(job, pod, status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager[C]) readLogs(job Job[C], pod *corev1.Pod, status *console.Status) error {
 	req := m.client.CoreV1().Pods(job.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
 		Container: "job",
-		Follow:    true,
 	})
 	reader, err := req.Stream(context.Background())
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
-	_, err = io.Copy(writer, reader)
-	return err
+	bytes, err := io.ReadAll(reader)
+	if err != nil {
+		return err
+	}
+	status.Report(string(bytes))
+	return nil
 }
 
 // Stop stops the job and waits for it to exit

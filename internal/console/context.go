@@ -1,13 +1,22 @@
 package console
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
 )
 
 const defaultRefreshRate = time.Millisecond
+
+type Format int
+
+const (
+	LiveFormat Format = iota
+	JSONFormat
+)
 
 type Option func(*Options)
 
@@ -23,33 +32,72 @@ func WithVerbose() Option {
 	}
 }
 
+func WithFormat(format Format) Option {
+	return func(options *Options) {
+		options.Format = format
+	}
+}
+
 type Options struct {
+	Format      Format
 	RefreshRate time.Duration
 	Verbose     bool
 }
 
 func NewContext(writer io.Writer, opts ...Option) *Context {
 	options := Options{
+		Format:      LiveFormat,
 		RefreshRate: defaultRefreshRate,
 	}
 	for _, opt := range opts {
 		opt(&options)
 	}
-	reporter := newReporter(writer, options.RefreshRate)
-	reporter.Start()
-	return &Context{
-		options:     options,
-		newStatus:   reporter.NewStatus,
-		newProgress: reporter.NewProgress,
-		closer:      reporter.Stop,
+
+	switch options.Format {
+	case LiveFormat:
+		reporter := newLiveReporter(writer, options.RefreshRate)
+		reporter.Start()
+		return &Context{
+			options:     options,
+			newStatus:   reporter.NewStatus,
+			newProgress: reporter.NewProgress,
+			restore: func(reader io.Reader) error {
+				scanner := bufio.NewScanner(reader)
+				for scanner.Scan() {
+					var record Record
+					if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+						return err
+					}
+					if err := reporter.restore(record); err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+			closer: reporter.Stop,
+		}
+	case JSONFormat:
+		reporter := newStructuredReport(writer)
+		return &Context{
+			options:     options,
+			newStatus:   reporter.NewStatus,
+			newProgress: reporter.NewProgress,
+		}
+	default:
+		panic("unknown console format")
 	}
 }
 
 type Context struct {
 	options     Options
-	newStatus   func() *StatusReport
-	newProgress func(string, ...any) *ProgressReport
+	restore     func(io.Reader) error
+	newStatus   func() statusReport
+	newProgress func(string, ...any) progressReport
 	closer      func()
+}
+
+func (c *Context) Restore(reader io.Reader) error {
+	return c.restore(reader)
 }
 
 func (c *Context) Fork(desc string, f func(context *Context) error) Joiner {
@@ -60,6 +108,19 @@ func (c *Context) Fork(desc string, f func(context *Context) error) Joiner {
 		options:     c.options,
 		newStatus:   report.NewStatus,
 		newProgress: report.NewProgress,
+		restore: func(reader io.Reader) error {
+			scanner := bufio.NewScanner(reader)
+			for scanner.Scan() {
+				var record Record
+				if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
+					return err
+				}
+				if err := report.(*liveProgressReport).restore(record); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
 	}
 
 	ch := make(chan error, 1)
@@ -82,10 +143,7 @@ func (c *Context) Run(f func(status *Status) error) Waiter {
 	go func() {
 		defer close(ch)
 		if err := f(status); err != nil {
-			value := report.value.Load()
-			if value != nil {
-				report.Update(errorErrColor.Sprintf(" %s ← %s", *value, err.Error()))
-			}
+			report.Error(err)
 			ch <- err
 		} else {
 			report.Done()
@@ -156,7 +214,7 @@ func (w *channelWaiter) Wait() error {
 	return <-w.ch
 }
 
-func newStatus(report *StatusReport, verbose bool) *Status {
+func newStatus(report statusReport, verbose bool) *Status {
 	return &Status{
 		report:  report,
 		writer:  newStatusReportWriter(report),
@@ -165,7 +223,7 @@ func newStatus(report *StatusReport, verbose bool) *Status {
 }
 
 type Status struct {
-	report  *StatusReport
+	report  statusReport
 	writer  io.Writer
 	verbose bool
 }
@@ -200,14 +258,14 @@ func (s *Status) log(message string) {
 	}
 }
 
-func newStatusReportWriter(report *StatusReport) io.Writer {
+func newStatusReportWriter(report statusReport) io.Writer {
 	return &statusReportWriter{
 		report: report,
 	}
 }
 
 type statusReportWriter struct {
-	report *StatusReport
+	report statusReport
 	buf    bytes.Buffer
 }
 

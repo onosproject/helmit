@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"net"
 	"reflect"
+	"regexp"
 	"testing"
 )
 
@@ -143,6 +144,9 @@ func (w *testWorker) GetTestSuites(ctx context.Context, request *api.GetTestSuit
 		methodFinder := reflect.TypeOf(suite)
 		for index := 0; index < methodFinder.NumMethod(); index++ {
 			method := methodFinder.Method(index)
+			if ok, _ := regexp.MatchString("^Test", method.Name); !ok {
+				continue
+			}
 			tests = append(tests, &api.Test{
 				Name: method.Name,
 			})

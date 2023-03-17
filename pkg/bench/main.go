@@ -36,7 +36,7 @@ func run(suites map[string]BenchmarkingSuite) error {
 
 // runExecutor runs a test image in the executor context
 func runExecutor() error {
-	context := console.NewContext(os.Stdout)
+	context := console.NewContext(os.Stdout, console.WithFormat(console.JSONFormat))
 	defer context.Close()
 
 	job, err := jobs.Bootstrap[Config]()

@@ -84,6 +84,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
 	var opts []console.Option
+	opts = append(opts, console.WithFormat(console.LiveFormat))
 	if verbose {
 		opts = append(opts, console.WithVerbose())
 	}
