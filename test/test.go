@@ -7,6 +7,7 @@ package test
 import (
 	"context"
 	"github.com/onosproject/helmit/pkg/test"
+	"time"
 )
 
 // ChartTestSuite is a test for chart deployment
@@ -25,6 +26,12 @@ func (s *ChartTestSuite) TestLocalInstall(ctx context.Context) {
 
 	err = s.Helm().Uninstall("atomix-controller").Do(ctx)
 	s.NoError(err)
+}
+
+// TestFailure tests a test failure
+func (s *ChartTestSuite) TestFailure(ctx context.Context) {
+	time.Sleep(10 * time.Second)
+	s.Fail("test failed")
 }
 
 // TestRemoteInstall tests a remote chart installation

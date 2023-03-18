@@ -171,9 +171,11 @@ func (w *testWorker) RunTest(ctx context.Context, request *api.RunTestRequest) (
 	if !ok {
 		return nil, fmt.Errorf("unknown test %s", request.Test)
 	}
-	w.t.Run(request.Test, func(t *testing.T) {
+	succeeded := w.t.Run(request.Test, func(t *testing.T) {
 		suite.SetT(t)
 		method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
 	})
-	return &api.RunTestResponse{}, nil
+	return &api.RunTestResponse{
+		Succeeded: succeeded,
+	}, nil
 }

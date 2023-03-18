@@ -120,7 +120,6 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 			}
 
 			err = context.Fork("Running tests", func(context *console.Context) error {
-				var result error
 				var tests []console.Fork
 				for _, test := range suite.Tests {
 					tests = append(tests, context.Fork(test.Name, func(context *console.Context) error {
@@ -135,7 +134,7 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 							}
 
 							status.Report("Running the test")
-							_, err = client.RunTest(e.newContext(config), &api.RunTestRequest{
+							response, err := client.RunTest(e.newContext(config), &api.RunTestRequest{
 								Suite: suite.Name,
 								Test:  test.Name,
 							})
@@ -151,19 +150,26 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 							if err != nil {
 								return err
 							}
+
+							if !response.Succeeded {
+								status.Report("Test failed")
+								return errors.New("test failed")
+							}
 							return nil
 						}).Await()
 					}))
 				}
 
-				if config.Parallel {
-					_ = console.Join(tests...)
-				} else {
+				if !config.Parallel {
+					var err error
 					for _, test := range tests {
-						_ = test.Join()
+						if e := test.Join(); e != nil {
+							err = e
+						}
 					}
+					return err
 				}
-				return result
+				return console.Join(tests...)
 			}).Join()
 
 			_ = context.Fork("Tearing down the suite", func(context *console.Context) error {
@@ -180,9 +186,9 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 	}
 
 	err = context.Fork("Tearing down workers", func(context *console.Context) error {
-		var joiners []console.Fork
+		var tasks []console.Fork
 		for i := 0; i < config.Workers; i++ {
-			joiners = append(joiners, func(worker int) console.Fork {
+			tasks = append(tasks, func(worker int) console.Fork {
 				return context.Fork(fmt.Sprintf("Stopping worker %d", worker), func(context *console.Context) error {
 					jobID := newWorkerName(e.spec.ID, worker)
 					job := e.newJob(jobID, config)
@@ -190,7 +196,7 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 				})
 			}(i))
 		}
-		return console.Join(joiners...)
+		return console.Join(tasks...)
 	}).Join()
 	if err != nil {
 		return err

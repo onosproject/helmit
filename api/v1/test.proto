@@ -80,5 +80,5 @@ message RunTestRequest {
 
 // RunTestResponse is a test response
 message RunTestResponse {
-
+    bool succeeded = 1;
 }
