@@ -63,8 +63,8 @@ func (m *Manager[C]) Start(job Job[C], context *console.Context) error {
 	return nil
 }
 
-func (m *Manager[C]) Run(job Job[C], context *console.Context) error {
-	return context.Fork("Running job", func(context *console.Context) error {
+func (m *Manager[C]) Run(job Job[C], context *console.Context) (int, error) {
+	err := context.Fork("Running job", func(context *console.Context) error {
 		reader, err := m.streamLogs(job)
 		if err != nil {
 			return err
@@ -72,6 +72,11 @@ func (m *Manager[C]) Run(job Job[C], context *console.Context) error {
 		defer reader.Close()
 		return context.Restore(reader)
 	}).Join()
+	if err != nil {
+		return 0, err
+	}
+	_, status, err := m.getStatus(job)
+	return status, err
 }
 
 // streamLogs streams logs from the given pod
@@ -94,30 +99,14 @@ func (m *Manager[C]) streamLogs(job Job[C]) (io.ReadCloser, error) {
 	return req.Stream(context.Background())
 }
 
-func (m *Manager[C]) readLogs(job Job[C], pod *corev1.Pod, status *console.Status) error {
-	req := m.client.CoreV1().Pods(job.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
-		Container: "job",
-	})
-	reader, err := req.Stream(context.Background())
-	if err != nil {
-		return err
-	}
-	bytes, err := io.ReadAll(reader)
-	if err != nil {
-		return err
-	}
-	status.Report(string(bytes))
-	return nil
-}
-
 // Stop stops the job and waits for it to exit
-func (m *Manager[C]) Stop(job Job[C]) (int, error) {
-	_, status, err := m.getStatus(job)
-	_ = m.finishJob(job)
-	if err != nil {
-		return 0, err
-	}
-	return status, nil
+func (m *Manager[C]) Stop(job Job[C], context *console.Context) error {
+	return context.Fork("Cleaning up job", func(context *console.Context) error {
+		if err := m.finishJob(job); err != nil {
+			return err
+		}
+		return nil
+	}).Join()
 }
 
 // createServiceAccount creates a ServiceAccount used by the test manager

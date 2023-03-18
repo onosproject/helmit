@@ -260,8 +260,7 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 				return context.Fork(fmt.Sprintf("Stopping worker %d", worker), func(context *console.Context) error {
 					jobID := newWorkerName(e.spec.ID, worker)
 					job := e.newJob(jobID, config)
-					_, err := e.jobs.Stop(job)
-					return err
+					return e.jobs.Stop(job, context)
 				})
 			}(i))
 		}

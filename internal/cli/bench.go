@@ -234,30 +234,11 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	err = context.Fork("Starting benchmark", func(context *console.Context) error {
-		return manager.Start(job, context)
-	}).Join()
-	if err != nil {
+	if err := manager.Start(job, context); err != nil {
 		return err
 	}
-
-	err = context.Fork("Running benchmark", func(context *console.Context) error {
-		return manager.Run(job, context)
-	}).Join()
-	if err != nil {
-		return err
-	}
-
-	err = context.Fork("Terminating benchmark", func(context *console.Context) error {
-		code, err := manager.Stop(job)
-		if err != nil {
-			return err
-		}
-		os.Exit(code)
-		return nil
-	}).Join()
-	if err != nil {
-		return err
-	}
+	code, _ := manager.Run(job, context)
+	_ = manager.Stop(job, context)
+	os.Exit(code)
 	return nil
 }

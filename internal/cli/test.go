@@ -223,15 +223,8 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	if err := manager.Start(job, context); err != nil {
 		return err
 	}
-
-	if err := manager.Run(job, context); err != nil {
-		return err
-	}
-
-	code, err := manager.Stop(job)
-	if err != nil {
-		return err
-	}
+	code, _ := manager.Run(job, context)
+	_ = manager.Stop(job, context)
 	os.Exit(code)
 	return nil
 }
