@@ -252,7 +252,7 @@ func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 			return err
 		}
 
-		context.Run(func(status *console.Status) error {
+		err = context.Run(func(status *console.Status) error {
 			status.Report("Waiting for ready")
 			if err := m.runBinary(job); err != nil {
 				return err
@@ -264,7 +264,7 @@ func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 				return err
 			}
 			return nil
-		})
+		}).Await()
 		if err != nil {
 			return err
 		}
@@ -599,7 +599,7 @@ func (m *Manager[C]) runBinary(job Job[C]) error {
 		Namespace: job.Namespace,
 		Pod:       pod.Name,
 		Container: "job",
-		File:      "/tmp/bin-ready",
+		File:      binFile,
 		Bytes:     []byte(path.Base(job.Executable)),
 	}
 	if err := echo.Do(context.Background()); err != nil {

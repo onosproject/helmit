@@ -17,6 +17,7 @@ const (
 	specFile   = "spec.json"
 	configFile = "config.json"
 	readyFile  = "/tmp/job-ready"
+	binFile    = "/tmp/bin-ready"
 	typeEnv    = "JOB_TYPE"
 )
 
