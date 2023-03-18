@@ -382,7 +382,7 @@ func (r *liveStatusReport) write(writer *uilive.Writer, depth int) {
 	lines := strings.Split(*value, "\n")
 	for _, line := range lines {
 		if line != "" {
-			fmt.Fprintf(writer.Newline(), "%s %s\n", strings.Repeat(" ", depth*3), line)
+			fmt.Fprintf(writer.Newline(), "%s → %s\n", strings.Repeat(" ", depth*3), line)
 		}
 	}
 }
