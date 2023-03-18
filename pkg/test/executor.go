@@ -106,150 +106,78 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 		}
 	}
 
-	if config.Parallel {
-		var joiners []console.Fork
-		for i, suite := range suites {
-			joiners = append(joiners, func(client api.TesterClient, suite *api.TestSuite) console.Fork {
-				return context.Fork("Running test suite", func(context *console.Context) error {
-					err := context.Fork("Setting up the suite", func(context *console.Context) error {
-						_, err := client.SetupTestSuite(e.newContext(config), &api.SetupTestSuiteRequest{
-							Suite: suite.Name,
-						})
-						return err
-					}).Join()
-					if err != nil {
-						return err
-					}
-
-					err = context.Fork(fmt.Sprintf("Running %s tests", suite.Name), func(context *console.Context) error {
-						var joiners []console.Fork
-						for _, test := range suite.Tests {
-							joiners = append(joiners, func(test *api.Test) console.Fork {
-								return context.Fork(fmt.Sprintf("Running %s", test.Name), func(context *console.Context) error {
-									err := context.Fork("Setting up the test", func(context *console.Context) error {
-										_, err := client.SetupTest(e.newContext(config), &api.SetupTestRequest{
-											Suite: suite.Name,
-											Test:  test.Name,
-										})
-										return err
-									}).Join()
-									if err != nil {
-										return err
-									}
-									err = context.Fork("Running the test", func(context *console.Context) error {
-										_, err = client.RunTest(e.newContext(config), &api.RunTestRequest{
-											Suite: suite.Name,
-											Test:  test.Name,
-										})
-										return err
-									}).Join()
-									if err != nil {
-										return err
-									}
-									err = context.Fork("Tearing down the test", func(context *console.Context) error {
-										_, _ = client.TearDownTest(e.newContext(config), &api.TearDownTestRequest{
-											Suite: suite.Name,
-											Test:  test.Name,
-										})
-										return err
-									}).Join()
-									if err != nil {
-										return err
-									}
-									return err
-								})
-							}(test))
-						}
-						return console.Join(joiners...)
-					}).Join()
-					if err != nil {
-						return err
-					}
-
-					err = context.Fork("Tearing down the suite", func(context *console.Context) error {
-						_, err := client.TearDownTestSuite(e.newContext(config), &api.TearDownTestSuiteRequest{
-							Suite: suite.Name,
-						})
-						return err
-					}).Join()
-					if err != nil {
-						return err
-					}
-					return nil
+	for i, suite := range suites {
+		client := workers[i%len(workers)]
+		err := context.Fork(fmt.Sprintf("Running suite '%s'", suite.Name), func(context *console.Context) error {
+			err := context.Fork("Setting up the suite", func(context *console.Context) error {
+				_, err := client.SetupTestSuite(e.newContext(config), &api.SetupTestSuiteRequest{
+					Suite: suite.Name,
 				})
-			}(workers[i%len(workers)], suite))
-		}
-		if err := console.Join(joiners...); err != nil {
-			return err
-		}
-	} else {
-		for i, suite := range suites {
-			client := workers[i%len(workers)]
-			err := context.Fork(fmt.Sprintf("Running suite '%s'", suite.Name), func(context *console.Context) error {
-				err := context.Fork("Setting up the suite", func(context *console.Context) error {
-					_, err := client.SetupTestSuite(e.newContext(config), &api.SetupTestSuiteRequest{
-						Suite: suite.Name,
-					})
-					return err
-				}).Join()
-				if err != nil {
-					return err
-				}
-
-				var result error
-				for _, test := range suite.Tests {
-					err := context.Fork(fmt.Sprintf("Running %s", test.Name), func(context *console.Context) error {
-						err := context.Fork("Setting up the test", func(context *console.Context) error {
-							_, err := client.SetupTest(e.newContext(config), &api.SetupTestRequest{
-								Suite: suite.Name,
-								Test:  test.Name,
-							})
-							return err
-						}).Join()
-						if err != nil {
-							return err
-						}
-						err = context.Fork("Running the test", func(context *console.Context) error {
-							_, err = client.RunTest(e.newContext(config), &api.RunTestRequest{
-								Suite: suite.Name,
-								Test:  test.Name,
-							})
-							return err
-						}).Join()
-						if err != nil {
-							return err
-						}
-						err = context.Fork("Tearing down the test", func(context *console.Context) error {
-							_, _ = client.TearDownTest(e.newContext(config), &api.TearDownTestRequest{
-								Suite: suite.Name,
-								Test:  test.Name,
-							})
-							return err
-						}).Join()
-						if err != nil {
-							return err
-						}
-						return err
-					}).Join()
-					if err != nil {
-						result = err
-					}
-				}
-
-				err = context.Fork("Tearing down the suite", func(context *console.Context) error {
-					_, err := client.TearDownTestSuite(e.newContext(config), &api.TearDownTestSuiteRequest{
-						Suite: suite.Name,
-					})
-					return err
-				}).Join()
-				if err != nil {
-					return err
-				}
-				return result
+				return err
 			}).Join()
 			if err != nil {
 				return err
 			}
+
+			var result error
+			var tests []console.Fork
+			for _, test := range suite.Tests {
+				tests = append(tests, context.Fork(test.Name, func(context *console.Context) error {
+					err := context.Fork("Setting up the test", func(context *console.Context) error {
+						_, err := client.SetupTest(e.newContext(config), &api.SetupTestRequest{
+							Suite: suite.Name,
+							Test:  test.Name,
+						})
+						return err
+					}).Join()
+					if err != nil {
+						return err
+					}
+					err = context.Fork("Running the test", func(context *console.Context) error {
+						_, err = client.RunTest(e.newContext(config), &api.RunTestRequest{
+							Suite: suite.Name,
+							Test:  test.Name,
+						})
+						return err
+					}).Join()
+					if err != nil {
+						return err
+					}
+					err = context.Fork("Tearing down the test", func(context *console.Context) error {
+						_, _ = client.TearDownTest(e.newContext(config), &api.TearDownTestRequest{
+							Suite: suite.Name,
+							Test:  test.Name,
+						})
+						return err
+					}).Join()
+					if err != nil {
+						return err
+					}
+					return err
+				}))
+			}
+
+			if config.Parallel {
+				_ = console.Join(tests...)
+			} else {
+				for _, test := range tests {
+					_ = test.Join()
+				}
+			}
+
+			err = context.Fork("Tearing down the suite", func(context *console.Context) error {
+				_, err := client.TearDownTestSuite(e.newContext(config), &api.TearDownTestSuiteRequest{
+					Suite: suite.Name,
+				})
+				return err
+			}).Join()
+			if err != nil {
+				return err
+			}
+			return result
+		}).Join()
+		if err != nil {
+			return err
 		}
 	}
 
