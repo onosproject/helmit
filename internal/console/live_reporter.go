@@ -331,17 +331,17 @@ func (r *liveProgressReport) write(writer *uilive.Writer, depth int) {
 
 	if r.done {
 		if r.err != nil {
-			fmt.Fprintf(writer.Newline(), "%s%s %s\n", strings.Repeat(" ", depth*2), errorMsgColor.Sprintf(" ✘ %s", r.desc), errorErrColor.Sprintf("← %s", r.err.Error()))
+			fmt.Fprintf(writer.Newline(), "%s%s %s\n", strings.Repeat(" ", depth*3), errorMsgColor.Sprintf(" ✘ %s", r.desc), errorErrColor.Sprintf("← %s", r.err.Error()))
 			for _, child := range r.children {
 				child.write(writer, depth+1)
 			}
 		} else {
-			fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*2), doneMsgColor.Sprintf(" ✔ %s", r.desc))
+			fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), doneMsgColor.Sprintf(" ✔ %s", r.desc))
 		}
 	} else {
 		frameIndex := int(time.Since(r.start)/spinnerSpeed) % len(spinnerFrames)
 		spinnerFrame := spinnerFrames[frameIndex]
-		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*2), taskMsgColor.Sprintf("%s %s", spinnerFrame, r.desc))
+		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), taskMsgColor.Sprintf("%s %s", spinnerFrame, r.desc))
 		for _, child := range r.children {
 			child.write(writer, depth+1)
 		}
@@ -382,7 +382,7 @@ func (r *liveStatusReport) write(writer *uilive.Writer, depth int) {
 	lines := strings.Split(*value, "\n")
 	for _, line := range lines {
 		if line != "" {
-			fmt.Fprintf(writer.Newline(), "%s %s\n", strings.Repeat(" ", depth*2), line)
+			fmt.Fprintf(writer.Newline(), "%s %s\n", strings.Repeat(" ", depth*3), line)
 		}
 	}
 }
