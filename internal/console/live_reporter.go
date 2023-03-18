@@ -12,23 +12,8 @@ import (
 	"time"
 )
 
-var spinnerFrames = []string{
-	"⠈⠁",
-	"⠈⠑",
-	"⠈⠱",
-	"⠈⡱",
-	"⢀⡱",
-	"⢄⡱",
-	"⢄⡱",
-	"⢆⡱",
-	"⢎⡱",
-	"⢎⡰",
-	"⢎⡠",
-	"⢎⡀",
-	"⢎⠁",
-	"⠎⠁",
-	"⠊⠁",
-}
+var progressFrames = []string{"⠈⠁", "⠈⠑", "⠈⠱", "⠈⡱", "⢀⡱", "⢄⡱", "⢄⡱", "⢆⡱", "⢎⡱", "⢎⡰", "⢎⡠", "⢎⡀", "⢎⠁", "⠎⠁", "⠊⠁"}
+var statusFrames = []string{"⊷", "⊶"}
 
 const spinnerSpeed = 150 * time.Millisecond
 const errorHighlightDuration = 5 * time.Second
@@ -273,8 +258,8 @@ func (r *liveProgressReport) write(writer *uilive.Writer, depth int) {
 	case progressPending:
 		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), pendingMsgColor.Sprintf(" · %s", r.desc))
 	case progressRunning:
-		frameIndex := int(time.Since(r.updateTime)/spinnerSpeed) % len(spinnerFrames)
-		spinnerFrame := spinnerFrames[frameIndex]
+		frameIndex := int(time.Since(r.updateTime)/spinnerSpeed) % len(progressFrames)
+		spinnerFrame := progressFrames[frameIndex]
 		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), runningMsgColor.Sprintf("%s %s", spinnerFrame, r.desc))
 		for _, child := range r.children {
 			child.write(writer, depth+1)
@@ -405,13 +390,16 @@ func (r *liveProgressReport) restore(entry reportEntry) error {
 }
 
 func newLiveStatusReport() *liveStatusReport {
-	return &liveStatusReport{}
+	return &liveStatusReport{
+		time: time.Now(),
+	}
 }
 
 // liveStatusReport is a liveProgressReport status report
 type liveStatusReport struct {
 	value atomic.Pointer[string]
 	error atomic.Bool
+	time  time.Time
 }
 
 func (r *liveStatusReport) failed() bool {
@@ -441,10 +429,6 @@ func (r *liveStatusReport) write(writer *uilive.Writer, depth int) {
 	if value == nil {
 		return
 	}
-	lines := strings.Split(*value, "\n")
-	for _, line := range lines {
-		if line != "" {
-			fmt.Fprintf(writer.Newline(), "%s · %s\n", strings.Repeat(" ", depth*3), line)
-		}
-	}
+	frameIndex := int(time.Since(r.time)/spinnerSpeed) % len(statusFrames)
+	fmt.Fprintf(writer.Newline(), "%s %s %s\n", strings.Repeat(" ", depth*3), statusFrames[frameIndex], *value)
 }
