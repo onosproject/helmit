@@ -17,6 +17,7 @@ var statusFrames = []string{"⊷", "⊶"}
 
 const spinnerSpeed = 150 * time.Millisecond
 const errorHighlightDuration = 5 * time.Second
+const minStatusDelay = 100 * time.Millisecond
 
 var (
 	pendingMsgColor      = color.New(color.FgWhite, color.Faint, color.Concealed)
@@ -307,7 +308,7 @@ func (r *liveProgressReport) restore(entry reportEntry) error {
 		}
 	} else if entry.ProgressStart != nil {
 		if len(entry.ProgressStart.Address) == 1 {
-			r.children[entry.ProgressStart.Address[0]].(*liveProgressReport).Finish()
+			r.children[entry.ProgressStart.Address[0]].(*liveProgressReport).Start()
 		} else {
 			r.mu.RLock()
 			defer r.mu.RUnlock()
@@ -391,19 +392,14 @@ func (r *liveProgressReport) restore(entry reportEntry) error {
 
 func newLiveStatusReport() *liveStatusReport {
 	return &liveStatusReport{
-		time: time.Now(),
+		started: time.Now(),
 	}
 }
 
 // liveStatusReport is a liveProgressReport status report
 type liveStatusReport struct {
-	value atomic.Pointer[string]
-	error atomic.Bool
-	time  time.Time
-}
-
-func (r *liveStatusReport) failed() bool {
-	return r.error.Load()
+	value   atomic.Pointer[string]
+	started time.Time
 }
 
 // Update updates the report
@@ -413,14 +409,25 @@ func (r *liveStatusReport) Update(contents string) {
 
 // Done marks the sub-task complete
 func (r *liveStatusReport) Done() {
-	r.value = atomic.Pointer[string]{}
+	r.afterMinDelay(func() {
+		r.value = atomic.Pointer[string]{}
+	})
 }
 
 func (r *liveStatusReport) Error(err error) {
-	r.error.Store(true)
-	value := r.value.Load()
-	if value != nil {
-		r.Update(failedErrColor.Sprint(*value))
+	r.afterMinDelay(func() {
+		value := r.value.Load()
+		if value != nil {
+			r.Update(failedErrColor.Sprint(*value))
+		}
+	})
+}
+
+func (r *liveStatusReport) afterMinDelay(f func()) {
+	if time.Since(r.started) < minStatusDelay {
+		time.AfterFunc(time.Until(r.started.Add(minStatusDelay)), f)
+	} else {
+		f()
 	}
 }
 
@@ -429,6 +436,6 @@ func (r *liveStatusReport) write(writer *uilive.Writer, depth int) {
 	if value == nil {
 		return
 	}
-	frameIndex := int(time.Since(r.time)/spinnerSpeed) % len(statusFrames)
+	frameIndex := int(time.Since(r.started)/spinnerSpeed) % len(statusFrames)
 	fmt.Fprintf(writer.Newline(), "%s %s %s\n", strings.Repeat(" ", depth*3), statusFrames[frameIndex], *value)
 }

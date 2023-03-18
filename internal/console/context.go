@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const defaultRefreshRate = time.Millisecond
+const defaultRefreshRate = 5 * time.Millisecond
 
 type Format int
 
