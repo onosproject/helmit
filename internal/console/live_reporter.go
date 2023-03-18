@@ -31,12 +31,15 @@ var spinnerFrames = []string{
 }
 
 const spinnerSpeed = 150 * time.Millisecond
+const errorHighlightDuration = 5 * time.Second
 
 var (
-	taskMsgColor  = color.New(color.FgBlue)
-	doneMsgColor  = color.New(color.FgGreen)
-	errorMsgColor = color.New(color.FgRed)
-	errorErrColor = color.New(color.FgRed, color.Bold)
+	pendingMsgColor      = color.New(color.FgWhite, color.Faint, color.Concealed)
+	runningMsgColor      = color.New(color.FgBlue)
+	succeededMsgColor    = color.New(color.FgGreen)
+	failedMsgColor       = color.New(color.FgRed)
+	failedHighlightColor = color.New(color.FgRed, color.BlinkRapid)
+	failedErrColor       = color.New(color.FgRed, color.Bold)
 )
 
 func newLiveReporter(writer io.Writer, rate time.Duration) *liveReporter {
@@ -61,7 +64,7 @@ type liveReporter struct {
 func (r *liveReporter) restore(entry reportEntry) error {
 	if entry.NewProgress != nil {
 		if len(entry.NewProgress.Address) == 0 {
-			r.NewProgress(entry.NewProgress.Message).Start()
+			r.NewProgress(entry.NewProgress.Message)
 		} else {
 			r.mu.RLock()
 			defer r.mu.RUnlock()
@@ -188,6 +191,15 @@ func (r *liveReporter) Stop() {
 	<-r.stopped
 }
 
+type progressState int
+
+const (
+	progressPending progressState = iota
+	progressRunning
+	progressSucceeded
+	progressFailed
+)
+
 func newLiveProgressReport(msg string, args ...any) *liveProgressReport {
 	var desc string
 	if len(args) > 0 {
@@ -196,23 +208,107 @@ func newLiveProgressReport(msg string, args ...any) *liveProgressReport {
 		desc = msg
 	}
 	return &liveProgressReport{
-		desc: desc,
+		desc:      desc,
+		state:     progressPending,
+		startTime: time.Now(),
 	}
 }
 
 type liveProgressReport struct {
-	desc     string
-	children []reportWriter
-	start    time.Time
-	done     bool
-	err      error
-	mu       sync.RWMutex
+	desc       string
+	state      progressState
+	children   []reportWriter
+	startTime  time.Time
+	updateTime time.Time
+	err        error
+	mu         sync.RWMutex
+}
+
+func (r *liveProgressReport) failed() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.state == progressFailed
+}
+
+func (r *liveProgressReport) NewProgress(msg string, args ...any) ProgressReport {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	progress := newLiveProgressReport(msg, args...)
+	r.children = append(r.children, progress)
+	return progress
+}
+
+func (r *liveProgressReport) NewStatus() StatusReport {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	detail := newLiveStatusReport()
+	r.children = append(r.children, detail)
+	return detail
+}
+
+func (r *liveProgressReport) Start() {
+	r.setState(progressRunning, nil)
+}
+
+func (r *liveProgressReport) Finish() {
+	r.setState(progressSucceeded, nil)
+}
+
+func (r *liveProgressReport) Error(err error) {
+	r.setState(progressFailed, err)
+}
+
+func (r *liveProgressReport) setState(state progressState, err error) {
+	r.mu.Lock()
+	r.state = state
+	r.err = err
+	r.updateTime = time.Now()
+	r.mu.Unlock()
+}
+
+func (r *liveProgressReport) write(writer *uilive.Writer, depth int) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	switch r.state {
+	case progressPending:
+		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), pendingMsgColor.Sprintf(" · %s", r.desc))
+	case progressRunning:
+		frameIndex := int(time.Since(r.updateTime)/spinnerSpeed) % len(spinnerFrames)
+		spinnerFrame := spinnerFrames[frameIndex]
+		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), runningMsgColor.Sprintf("%s %s", spinnerFrame, r.desc))
+		for _, child := range r.children {
+			child.write(writer, depth+1)
+		}
+	case progressSucceeded:
+		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), succeededMsgColor.Sprintf(" ✔ %s", r.desc))
+	case progressFailed:
+		var failures []reportWriter
+		for _, child := range r.children {
+			if report, ok := child.(*liveProgressReport); ok && report.failed() {
+				failures = append(failures, child)
+			}
+		}
+
+		if len(failures) > 0 {
+			fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), failedMsgColor.Sprintf(" ✘ %s", r.desc))
+		} else {
+			if time.Since(r.updateTime) <= errorHighlightDuration {
+				fmt.Fprintf(writer.Newline(), "%s%s%s\n", strings.Repeat(" ", depth*3), failedMsgColor.Sprintf(" ✘ %s ← ", r.desc), failedHighlightColor.Sprint(r.err.Error()))
+			} else {
+				fmt.Fprintf(writer.Newline(), "%s%s%s\n", strings.Repeat(" ", depth*3), failedMsgColor.Sprintf(" ✘ %s ← ", r.desc), failedErrColor.Sprint(r.err.Error()))
+			}
+		}
+
+		for _, child := range failures {
+			child.write(writer, depth+1)
+		}
+	}
 }
 
 func (r *liveProgressReport) restore(entry reportEntry) error {
 	if entry.NewProgress != nil {
 		if len(entry.NewProgress.Address) == 0 {
-			r.NewProgress(entry.NewProgress.Message).Start()
+			r.NewProgress(entry.NewProgress.Message)
 		} else {
 			r.mu.RLock()
 			defer r.mu.RUnlock()
@@ -308,68 +404,6 @@ func (r *liveProgressReport) restore(entry reportEntry) error {
 	return nil
 }
 
-func (r *liveProgressReport) NewProgress(msg string, args ...any) ProgressReport {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	progress := newLiveProgressReport(msg, args...)
-	r.children = append(r.children, progress)
-	return progress
-}
-
-func (r *liveProgressReport) NewStatus() StatusReport {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	detail := newLiveStatusReport()
-	r.children = append(r.children, detail)
-	return detail
-}
-
-func (r *liveProgressReport) Start() {
-	r.start = time.Now()
-}
-
-func (r *liveProgressReport) Finish() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.close(nil)
-}
-
-func (r *liveProgressReport) Error(err error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.close(err)
-}
-
-func (r *liveProgressReport) close(err error) {
-	if !r.done {
-		r.done = true
-		r.err = err
-	}
-}
-
-func (r *liveProgressReport) write(writer *uilive.Writer, depth int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.done {
-		if r.err != nil {
-			fmt.Fprintf(writer.Newline(), "%s%s %s\n", strings.Repeat(" ", depth*3), errorMsgColor.Sprintf(" ✘ %s", r.desc), errorErrColor.Sprintf("← %s", r.err.Error()))
-			for _, child := range r.children {
-				child.write(writer, depth+1)
-			}
-		} else {
-			fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), doneMsgColor.Sprintf(" ✔ %s", r.desc))
-		}
-	} else {
-		frameIndex := int(time.Since(r.start)/spinnerSpeed) % len(spinnerFrames)
-		spinnerFrame := spinnerFrames[frameIndex]
-		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), taskMsgColor.Sprintf("%s %s", spinnerFrame, r.desc))
-		for _, child := range r.children {
-			child.write(writer, depth+1)
-		}
-	}
-}
-
 func newLiveStatusReport() *liveStatusReport {
 	return &liveStatusReport{}
 }
@@ -377,6 +411,11 @@ func newLiveStatusReport() *liveStatusReport {
 // liveStatusReport is a liveProgressReport status report
 type liveStatusReport struct {
 	value atomic.Pointer[string]
+	error atomic.Bool
+}
+
+func (r *liveStatusReport) failed() bool {
+	return r.error.Load()
 }
 
 // Update updates the report
@@ -390,9 +429,10 @@ func (r *liveStatusReport) Done() {
 }
 
 func (r *liveStatusReport) Error(err error) {
+	r.error.Store(true)
 	value := r.value.Load()
 	if value != nil {
-		r.Update(errorErrColor.Sprintf(" %s ← %s", *value, err.Error()))
+		r.Update(failedErrColor.Sprint(*value))
 	}
 }
 
@@ -404,7 +444,7 @@ func (r *liveStatusReport) write(writer *uilive.Writer, depth int) {
 	lines := strings.Split(*value, "\n")
 	for _, line := range lines {
 		if line != "" {
-			fmt.Fprintf(writer.Newline(), "%s → %s\n", strings.Repeat(" ", depth*3), line)
+			fmt.Fprintf(writer.Newline(), "%s · %s\n", strings.Repeat(" ", depth*3), line)
 		}
 	}
 }

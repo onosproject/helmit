@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/onosproject/helmit/internal/async"
 	"io"
 	"time"
 )
@@ -109,7 +110,7 @@ func (c *Context) Fork(desc string, f func(context *Context) error) Fork {
 }
 
 func (c *Context) Run(f func(status *Status) error) Task {
-	return newTask(c, c.newStatus())
+	return newTask(c, c.newStatus(), f)
 }
 
 func (c *Context) Close() {
@@ -123,13 +124,9 @@ type Fork interface {
 }
 
 func Join(forks ...Fork) error {
-	var err error
-	for _, joiner := range forks {
-		if e := joiner.Join(); e != nil {
-			err = e
-		}
-	}
-	return err
+	return async.IterAsync(len(forks), func(i int) error {
+		return forks[i].Join()
+	})
 }
 
 func newFork(context *Context, report ProgressReport, f func(context *Context) error) Fork {
@@ -203,27 +200,9 @@ func (t *contextTask) Await() error {
 }
 
 func Await(tasks ...Task) error {
-	var err error
-	for _, waiter := range tasks {
-		if e := waiter.Await(); e != nil {
-			err = e
-		}
-	}
-	return err
-}
-
-func newChannelWaiter(ch <-chan error) Task {
-	return &channelWaiter{
-		ch: ch,
-	}
-}
-
-type channelWaiter struct {
-	ch <-chan error
-}
-
-func (w *channelWaiter) Await() error {
-	return <-w.ch
+	return async.IterAsync(len(tasks), func(i int) error {
+		return tasks[i].Await()
+	})
 }
 
 func newStatus(report StatusReport, verbose bool) *Status {
