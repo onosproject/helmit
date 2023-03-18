@@ -371,7 +371,7 @@ func (r *liveProgressReport) restore(entry reportEntry) error {
 		}
 	} else if entry.StatusUpdate != nil {
 		if len(entry.StatusUpdate.Address) == 1 {
-			r.children[entry.StatusUpdate.Address[0]].(*liveStatusReport).Done()
+			r.children[entry.StatusUpdate.Address[0]].(*liveStatusReport).Update(entry.StatusUpdate.Message)
 		} else {
 			r.mu.RLock()
 			defer r.mu.RUnlock()
