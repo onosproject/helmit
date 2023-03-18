@@ -73,13 +73,22 @@ func (r *liveReporter) restore(entry reportEntry) error {
 				},
 			})
 		}
-	} else if entry.ProgressDone != nil {
+	} else if entry.ProgressStart != nil {
 		r.mu.RLock()
 		defer r.mu.RUnlock()
-		progress := r.reports[entry.ProgressDone.Address[0]].(*liveProgressReport)
+		progress := r.reports[entry.ProgressStart.Address[0]].(*liveProgressReport)
 		return progress.restore(reportEntry{
-			ProgressDone: &progressDoneEntry{
-				Address: entry.ProgressDone.Address[1:],
+			ProgressStart: &progressStartEntry{
+				Address: entry.ProgressStart.Address[1:],
+			},
+		})
+	} else if entry.ProgressFinish != nil {
+		r.mu.RLock()
+		defer r.mu.RUnlock()
+		progress := r.reports[entry.ProgressFinish.Address[0]].(*liveProgressReport)
+		return progress.restore(reportEntry{
+			ProgressFinish: &progressFinishEntry{
+				Address: entry.ProgressFinish.Address[1:],
 			},
 		})
 	} else if entry.ProgressError != nil {
@@ -215,16 +224,29 @@ func (r *liveProgressReport) restore(entry reportEntry) error {
 				},
 			})
 		}
-	} else if entry.ProgressDone != nil {
-		if len(entry.ProgressDone.Address) == 1 {
-			r.children[entry.ProgressDone.Address[0]].(*liveProgressReport).Done()
+	} else if entry.ProgressStart != nil {
+		if len(entry.ProgressStart.Address) == 1 {
+			r.children[entry.ProgressStart.Address[0]].(*liveProgressReport).Finish()
 		} else {
 			r.mu.RLock()
 			defer r.mu.RUnlock()
-			progress := r.children[entry.ProgressDone.Address[0]].(*liveProgressReport)
+			progress := r.children[entry.ProgressStart.Address[0]].(*liveProgressReport)
 			return progress.restore(reportEntry{
-				ProgressDone: &progressDoneEntry{
-					Address: entry.ProgressDone.Address[1:],
+				ProgressStart: &progressStartEntry{
+					Address: entry.ProgressStart.Address[1:],
+				},
+			})
+		}
+	} else if entry.ProgressFinish != nil {
+		if len(entry.ProgressFinish.Address) == 1 {
+			r.children[entry.ProgressFinish.Address[0]].(*liveProgressReport).Finish()
+		} else {
+			r.mu.RLock()
+			defer r.mu.RUnlock()
+			progress := r.children[entry.ProgressFinish.Address[0]].(*liveProgressReport)
+			return progress.restore(reportEntry{
+				ProgressFinish: &progressFinishEntry{
+					Address: entry.ProgressFinish.Address[1:],
 				},
 			})
 		}
@@ -306,7 +328,7 @@ func (r *liveProgressReport) Start() {
 	r.start = time.Now()
 }
 
-func (r *liveProgressReport) Done() {
+func (r *liveProgressReport) Finish() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.close(nil)

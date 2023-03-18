@@ -79,12 +79,16 @@ func (r *jsonProgressReport) NewStatus() StatusReport {
 }
 
 func (r *jsonProgressReport) Start() {
-
+	_ = r.logger.Log(reportEntry{
+		ProgressStart: &progressStartEntry{
+			Address: r.address,
+		},
+	})
 }
 
-func (r *jsonProgressReport) Done() {
+func (r *jsonProgressReport) Finish() {
 	_ = r.logger.Log(reportEntry{
-		ProgressDone: &progressDoneEntry{
+		ProgressFinish: &progressFinishEntry{
 			Address: r.address,
 		},
 	})

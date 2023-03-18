@@ -175,7 +175,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 			err := context.Run(func(status *console.Status) error {
 				status.Reportf("Validating package path %s", pkgPath)
 				return validatePackage(pkgPath)
-			}).Wait()
+			}).Await()
 			if err != nil {
 				return err
 			}
@@ -183,7 +183,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 			err = context.Run(func(status *console.Status) error {
 				status.Reportf("Building %s", executable)
 				return buildBinary(pkgPath, executable)
-			}).Wait()
+			}).Await()
 			if err != nil {
 				cmd.SilenceUsage = true
 				cmd.SilenceErrors = true

@@ -41,7 +41,7 @@ type benchExecutor struct {
 // Run runs the tests
 func (e *benchExecutor) run(config Config, context *console.Context) error {
 	err := context.Fork("Deploying workers", func(context *console.Context) error {
-		var joiners []console.Joiner
+		var joiners []console.Fork
 		for worker := 0; worker < config.Workers; worker++ {
 			joiners = append(joiners, context.Fork(fmt.Sprintf("Deploying worker %d", worker), func(context *console.Context) error {
 				return e.createWorker(config, worker, context)
@@ -89,9 +89,9 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 	}
 
 	err = context.Fork("Setting up workers", func(context *console.Context) error {
-		var joiners []console.Joiner
+		var joiners []console.Fork
 		for i, client := range workers {
-			joiners = append(joiners, func(client api.BenchmarkerClient) console.Joiner {
+			joiners = append(joiners, func(client api.BenchmarkerClient) console.Fork {
 				return context.Fork(fmt.Sprintf("Setting up worker %d", i), func(context *console.Context) error {
 					_, err := client.SetupBenchmarkWorker(e.newContext(config), &api.SetupBenchmarkWorkerRequest{
 						Suite: config.Suite,
@@ -107,9 +107,9 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 	}
 
 	err = context.Fork("Starting benchmark", func(context *console.Context) error {
-		var joiners []console.Joiner
+		var joiners []console.Fork
 		for worker, client := range workers {
-			joiners = append(joiners, func(worker int, client api.BenchmarkerClient) console.Joiner {
+			joiners = append(joiners, func(worker int, client api.BenchmarkerClient) console.Fork {
 				return context.Fork(fmt.Sprintf("Starting worker %d", worker), func(context *console.Context) error {
 					_, err := client.StartBenchmark(e.newContext(config), &api.StartBenchmarkRequest{
 						Suite:       config.Suite,
@@ -249,16 +249,16 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 				}
 			}
 			return nil
-		}).Wait()
+		}).Await()
 	}).Join()
 	if err != nil {
 		return err
 	}
 
 	err = context.Fork("Stopping benchmark", func(context *console.Context) error {
-		var joiners []console.Joiner
+		var joiners []console.Fork
 		for worker, client := range workers {
-			joiners = append(joiners, func(worker int, client api.BenchmarkerClient) console.Joiner {
+			joiners = append(joiners, func(worker int, client api.BenchmarkerClient) console.Fork {
 				return context.Fork(fmt.Sprintf("Stopping worker %d", worker), func(context *console.Context) error {
 					_, err := client.StopBenchmark(e.newContext(config), &api.StopBenchmarkRequest{
 						Suite:     config.Suite,
@@ -275,9 +275,9 @@ func (e *benchExecutor) run(config Config, context *console.Context) error {
 	}
 
 	err = context.Fork("Tearing down workers", func(context *console.Context) error {
-		var joiners []console.Joiner
+		var joiners []console.Fork
 		for i, client := range workers {
-			joiners = append(joiners, func(client api.BenchmarkerClient) console.Joiner {
+			joiners = append(joiners, func(client api.BenchmarkerClient) console.Fork {
 				return context.Fork(fmt.Sprintf("Tearing down worker %d", i), func(context *console.Context) error {
 					_, err := client.TearDownBenchmarkWorker(e.newContext(config), &api.TearDownBenchmarkWorkerRequest{
 						Suite: config.Suite,

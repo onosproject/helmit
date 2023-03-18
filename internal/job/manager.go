@@ -226,14 +226,14 @@ func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 				return err
 			}
 			return nil
-		}).Wait()
+		}).Await()
 	}).Join()
 	if err != nil {
 		return err
 	}
 
 	err = context.Fork("Starting job", func(context *console.Context) error {
-		var waiters []console.Waiter
+		var waiters []console.Task
 		if job.Executable != "" {
 			waiters = append(waiters, context.Run(func(status *console.Status) error {
 				status.Reportf("Copying %s", job.Executable)
@@ -249,7 +249,7 @@ func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 		if len(job.ValueFiles) != 0 {
 			for _, valueFiles := range job.ValueFiles {
 				for _, valueFile := range valueFiles {
-					waiters = append(waiters, func(file string) console.Waiter {
+					waiters = append(waiters, func(file string) console.Task {
 						return context.Run(func(status *console.Status) error {
 							status.Reportf("Copying %s", file)
 							return m.copyValuesFile(job, valueFile)
@@ -258,7 +258,7 @@ func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
 				}
 			}
 		}
-		err := console.Wait(waiters...)
+		err := console.Await(waiters...)
 		if err != nil {
 			return err
 		}

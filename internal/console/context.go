@@ -104,56 +104,12 @@ func (c *Context) Restore(reader io.Reader) error {
 	return c.restore(reader)
 }
 
-func (c *Context) Fork(desc string, f func(context *Context) error) Joiner {
-	report := c.newProgress(desc)
-	report.Start()
-
-	context := &Context{
-		options:     c.options,
-		newStatus:   report.NewStatus,
-		newProgress: report.NewProgress,
-		restore: func(reader io.Reader) error {
-			scanner := bufio.NewScanner(reader)
-			for scanner.Scan() {
-				var entry reportEntry
-				if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-					return err
-				}
-				if err := report.(*liveProgressReport).restore(entry); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-	}
-
-	ch := make(chan error, 1)
-	go func() {
-		defer close(ch)
-		if err := f(context); err != nil {
-			report.Error(err)
-			ch <- err
-		} else {
-			report.Done()
-		}
-	}()
-	return newChannelJoiner(ch)
+func (c *Context) Fork(desc string, f func(context *Context) error) Fork {
+	return newFork(c, c.newProgress(desc), f)
 }
 
-func (c *Context) Run(f func(status *Status) error) Waiter {
-	report := c.newStatus()
-	status := newStatus(report, c.options.Verbose)
-	ch := make(chan error, 1)
-	go func() {
-		defer close(ch)
-		if err := f(status); err != nil {
-			report.Error(err)
-			ch <- err
-		} else {
-			report.Done()
-		}
-	}()
-	return newChannelWaiter(ch)
+func (c *Context) Run(f func(status *Status) error) Task {
+	return newTask(c, c.newStatus())
 }
 
 func (c *Context) Close() {
@@ -162,13 +118,13 @@ func (c *Context) Close() {
 	}
 }
 
-type Joiner interface {
+type Fork interface {
 	Join() error
 }
 
-func Join(joiners ...Joiner) error {
+func Join(forks ...Fork) error {
 	var err error
-	for _, joiner := range joiners {
+	for _, joiner := range forks {
 		if e := joiner.Join(); e != nil {
 			err = e
 		}
@@ -176,35 +132,87 @@ func Join(joiners ...Joiner) error {
 	return err
 }
 
-func newChannelJoiner(ch <-chan error) Joiner {
-	return &channelJoiner{
-		ch: ch,
+func newFork(context *Context, report ProgressReport, f func(context *Context) error) Fork {
+	return &contextFork{
+		context: context,
+		report:  report,
+		f:       f,
 	}
 }
 
-type channelJoiner struct {
-	ch <-chan error
+type contextFork struct {
+	report  ProgressReport
+	context *Context
+	f       func(context *Context) error
 }
 
-func (w *channelJoiner) Join() error {
-	return <-w.ch
+func (f *contextFork) Join() error {
+	f.report.Start()
+	context := &Context{
+		options:     f.context.options,
+		newStatus:   f.report.NewStatus,
+		newProgress: f.report.NewProgress,
+		restore: func(reader io.Reader) error {
+			scanner := bufio.NewScanner(reader)
+			for scanner.Scan() {
+				var entry reportEntry
+				if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+					return err
+				}
+				if err := f.report.(*liveProgressReport).restore(entry); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	}
+	if err := f.f(context); err != nil {
+		f.report.Error(err)
+		return err
+	}
+	f.report.Finish()
+	return nil
 }
 
-type Waiter interface {
-	Wait() error
+type Task interface {
+	Await() error
 }
 
-func Wait(waiters ...Waiter) error {
+func newTask(context *Context, report StatusReport, f func(status *Status) error) Task {
+	return &contextTask{
+		context: context,
+		report:  report,
+		f:       f,
+	}
+}
+
+type contextTask struct {
+	context *Context
+	report  StatusReport
+	f       func(status *Status) error
+}
+
+func (t *contextTask) Await() error {
+	status := newStatus(t.report, t.context.options.Verbose)
+	if err := t.f(status); err != nil {
+		t.report.Error(err)
+		return err
+	}
+	t.report.Done()
+	return nil
+}
+
+func Await(tasks ...Task) error {
 	var err error
-	for _, waiter := range waiters {
-		if e := waiter.Wait(); e != nil {
+	for _, waiter := range tasks {
+		if e := waiter.Await(); e != nil {
 			err = e
 		}
 	}
 	return err
 }
 
-func newChannelWaiter(ch <-chan error) Waiter {
+func newChannelWaiter(ch <-chan error) Task {
 	return &channelWaiter{
 		ch: ch,
 	}
@@ -214,7 +222,7 @@ type channelWaiter struct {
 	ch <-chan error
 }
 
-func (w *channelWaiter) Wait() error {
+func (w *channelWaiter) Await() error {
 	return <-w.ch
 }
 

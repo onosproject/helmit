@@ -41,10 +41,10 @@ func TestRootRun(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		status.Report("finished")
 		return nil
-	}).Wait()
+	}).Await()
 	assert.NoError(t, err)
 
-	err = Wait(
+	err = Await(
 		context.Run(func(status *Status) error {
 			status.Report("started")
 			time.Sleep(400 * time.Millisecond)
@@ -69,7 +69,7 @@ func TestRootRun(t *testing.T) {
 		fmt.Fprintln(status.Writer(), "world!")
 		time.Sleep(time.Second)
 		return nil
-	}).Wait()
+	}).Await()
 	assert.NoError(t, err)
 }
 
@@ -102,10 +102,10 @@ func TestRootRunError(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		status.Report("oops")
 		return errors.New("oops")
-	}).Wait()
+	}).Await()
 	assert.Error(t, err)
 
-	err = Wait(
+	err = Await(
 		context.Run(func(status *Status) error {
 			status.Report("started")
 			time.Sleep(400 * time.Millisecond)
@@ -155,12 +155,12 @@ func TestNestedRun(t *testing.T) {
 		return context.Run(func(status *Status) error {
 			status.Log("I'm the child")
 			return nil
-		}).Wait()
+		}).Await()
 	}).Join()
 	assert.NoError(t, err)
 
 	err = context.Fork("I'm the parent", func(context *Context) error {
-		return Wait(
+		return Await(
 			context.Run(func(status *Status) error {
 				status.Report("I'm")
 				time.Sleep(500 * time.Millisecond)
@@ -223,12 +223,12 @@ func TestNestedRunError(t *testing.T) {
 		return context.Run(func(status *Status) error {
 			status.Log("I'm the only child")
 			return errors.New("oops")
-		}).Wait()
+		}).Await()
 	}).Join()
 	assert.Error(t, err)
 
 	err = context.Fork("I'm the parent", func(context *Context) error {
-		return Wait(
+		return Await(
 			context.Run(func(status *Status) error {
 				status.Report("I'm")
 				time.Sleep(500 * time.Millisecond)
@@ -271,12 +271,12 @@ func TestRestore(t *testing.T) {
 			return context.Run(func(status *Status) error {
 				status.Log("I'm the only child")
 				return errors.New("oops")
-			}).Wait()
+			}).Await()
 		}).Join()
 		assert.Error(t, err)
 
 		err = jsonContext.Fork("I'm the parent", func(context *Context) error {
-			return Wait(
+			return Await(
 				context.Run(func(status *Status) error {
 					status.Report("I'm")
 					time.Sleep(500 * time.Millisecond)

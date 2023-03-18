@@ -16,7 +16,7 @@ type Reporter interface {
 type ProgressReport interface {
 	Reporter
 	Start()
-	Done()
+	Finish()
 	Error(err error)
 }
 
@@ -27,13 +27,14 @@ type StatusReport interface {
 }
 
 type reportEntry struct {
-	NewProgress   *newProgressEntry   `json:"newProgress"`
-	ProgressDone  *progressDoneEntry  `json:"progressDone"`
-	ProgressError *progressErrorEntry `json:"progressError"`
-	NewStatus     *newStatusEntry     `json:"newStatus"`
-	StatusUpdate  *statusUpdateEntry  `json:"statusUpdate"`
-	StatusDone    *statusDoneEntry    `json:"statusDone"`
-	StatusError   *statusErrorEntry   `json:"statusError"`
+	NewProgress    *newProgressEntry    `json:"newProgress"`
+	ProgressStart  *progressStartEntry  `json:"progressStart"`
+	ProgressFinish *progressFinishEntry `json:"progressFinish"`
+	ProgressError  *progressErrorEntry  `json:"progressError"`
+	NewStatus      *newStatusEntry      `json:"newStatus"`
+	StatusUpdate   *statusUpdateEntry   `json:"statusUpdate"`
+	StatusDone     *statusDoneEntry     `json:"statusDone"`
+	StatusError    *statusErrorEntry    `json:"statusError"`
 }
 
 type newProgressEntry struct {
@@ -41,7 +42,11 @@ type newProgressEntry struct {
 	Message string `json:"message"`
 }
 
-type progressDoneEntry struct {
+type progressStartEntry struct {
+	Address []int `json:"address"`
+}
+
+type progressFinishEntry struct {
 	Address []int `json:"address"`
 }
 

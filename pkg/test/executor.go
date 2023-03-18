@@ -38,9 +38,9 @@ type testExecutor struct {
 // Run runs the tests
 func (e *testExecutor) run(config Config, context *console.Context) error {
 	err := context.Fork("Starting workers", func(context *console.Context) error {
-		var joiners []console.Joiner
+		var joiners []console.Fork
 		for i := 0; i < config.Workers; i++ {
-			joiners = append(joiners, func(worker int) console.Joiner {
+			joiners = append(joiners, func(worker int) console.Fork {
 				return context.Fork(fmt.Sprintf("Starting worker %d", worker), func(context *console.Context) error {
 					return e.createWorker(config, worker, context)
 				})
@@ -107,9 +107,9 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 	}
 
 	if config.Parallel {
-		var joiners []console.Joiner
+		var joiners []console.Fork
 		for i, suite := range suites {
-			joiners = append(joiners, func(client api.TesterClient, suite *api.TestSuite) console.Joiner {
+			joiners = append(joiners, func(client api.TesterClient, suite *api.TestSuite) console.Fork {
 				return context.Fork("Running test suite", func(context *console.Context) error {
 					err := context.Fork("Setting up the suite", func(context *console.Context) error {
 						_, err := client.SetupTestSuite(e.newContext(config), &api.SetupTestSuiteRequest{
@@ -122,9 +122,9 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 					}
 
 					err = context.Fork(fmt.Sprintf("Running %s tests", suite.Name), func(context *console.Context) error {
-						var joiners []console.Joiner
+						var joiners []console.Fork
 						for _, test := range suite.Tests {
-							joiners = append(joiners, func(test *api.Test) console.Joiner {
+							joiners = append(joiners, func(test *api.Test) console.Fork {
 								return context.Fork(fmt.Sprintf("Running %s", test.Name), func(context *console.Context) error {
 									err := context.Fork("Setting up the test", func(context *console.Context) error {
 										_, err := client.SetupTest(e.newContext(config), &api.SetupTestRequest{
@@ -254,9 +254,9 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 	}
 
 	err = context.Fork("Tearing down workers", func(context *console.Context) error {
-		var joiners []console.Joiner
+		var joiners []console.Fork
 		for i := 0; i < config.Workers; i++ {
-			joiners = append(joiners, func(worker int) console.Joiner {
+			joiners = append(joiners, func(worker int) console.Fork {
 				return context.Fork(fmt.Sprintf("Stopping worker %d", worker), func(context *console.Context) error {
 					jobID := newWorkerName(e.spec.ID, worker)
 					job := e.newJob(jobID, config)
