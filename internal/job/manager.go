@@ -113,8 +113,7 @@ func (m *Manager[C]) readLogs(job Job[C], pod *corev1.Pod, status *console.Statu
 // Stop stops the job and waits for it to exit
 func (m *Manager[C]) Stop(job Job[C]) (int, error) {
 	_, status, err := m.getStatus(job)
-	// FIXME: Make sure you uncomment this again!
-	//_ = m.finishJob(job)
+	_ = m.finishJob(job)
 	if err != nil {
 		return 0, err
 	}
