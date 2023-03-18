@@ -7,6 +7,7 @@ package job
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/onosproject/helmit/internal/console"
 	"github.com/onosproject/helmit/internal/k8s"
 	"io"
@@ -63,29 +64,34 @@ func (m *Manager[C]) Start(job Job[C], context *console.Context) error {
 }
 
 func (m *Manager[C]) Run(job Job[C], context *console.Context) error {
-	return context.Run(func(status *console.Status) error {
-		return m.streamLogs(job, status)
-	}).Wait()
+	return context.Fork("Running job", func(context *console.Context) error {
+		reader, err := m.streamLogs(job)
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+		return context.Restore(reader)
+	}).Join()
 }
 
 // streamLogs streams logs from the given pod
-func (m *Manager[C]) streamLogs(job Job[C], status *console.Status) error {
+func (m *Manager[C]) streamLogs(job Job[C]) (io.ReadCloser, error) {
 	// Get the stream of logs for the pod
 	pod, err := m.getPod(job, func(pod corev1.Pod) bool {
 		return len(pod.Status.ContainerStatuses) > 0 &&
-			pod.Status.ContainerStatuses[0].Ready
+			pod.Status.ContainerStatuses[0].State.Running != nil
 	})
-	if err != nil || pod == nil {
-		return err
+	if err != nil {
+		return nil, err
+	} else if pod == nil {
+		return nil, errors.New("could not find pod")
 	}
 
-	ticker := time.NewTicker(time.Second)
-	for range ticker.C {
-		if err := m.readLogs(job, pod, status); err != nil {
-			return err
-		}
-	}
-	return nil
+	req := m.client.CoreV1().Pods(job.Namespace).GetLogs(pod.Name, &corev1.PodLogOptions{
+		Container: "job",
+		Follow:    true,
+	})
+	return req.Stream(context.Background())
 }
 
 func (m *Manager[C]) readLogs(job Job[C], pod *corev1.Pod, status *console.Status) error {
