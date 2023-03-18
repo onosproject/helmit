@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -256,4 +257,61 @@ func TestNestedRunError(t *testing.T) {
 			}))
 	}).Join()
 	assert.Error(t, err)
+}
+
+func TestRestore(t *testing.T) {
+	reader, writer := io.Pipe()
+
+	go func() {
+		jsonContext := NewContext(writer, WithFormat(JSONFormat))
+		defer jsonContext.Close()
+		defer writer.Close()
+
+		err := jsonContext.Fork("I'm the parent", func(context *Context) error {
+			return context.Run(func(status *Status) error {
+				status.Log("I'm the only child")
+				return errors.New("oops")
+			}).Wait()
+		}).Join()
+		assert.Error(t, err)
+
+		err = jsonContext.Fork("I'm the parent", func(context *Context) error {
+			return Wait(
+				context.Run(func(status *Status) error {
+					status.Report("I'm")
+					time.Sleep(500 * time.Millisecond)
+					status.Report("the")
+					time.Sleep(500 * time.Millisecond)
+					status.Report("first")
+					time.Sleep(500 * time.Millisecond)
+					status.Report("child")
+					return nil
+				}),
+				context.Run(func(status *Status) error {
+					status.Report("I'm")
+					time.Sleep(500 * time.Millisecond)
+					status.Report("the")
+					time.Sleep(500 * time.Millisecond)
+					status.Report("second")
+					time.Sleep(500 * time.Millisecond)
+					status.Report("one")
+					return nil
+				}),
+				context.Run(func(status *Status) error {
+					status.Log("And I just like to log stuff")
+					time.Sleep(time.Second)
+					status.Log("Logging is fun!")
+					return errors.New("oops")
+				}))
+		}).Join()
+		assert.Error(t, err)
+	}()
+
+	liveContext := NewContext(os.Stdout, WithFormat(LiveFormat))
+	defer liveContext.Close()
+
+	err := liveContext.Fork("Restoring context", func(context *Context) error {
+		return context.Restore(reader)
+	}).Join()
+	assert.NoError(t, err)
 }
