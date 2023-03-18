@@ -17,7 +17,7 @@ var statusFrames = []string{"⊷", "⊶"}
 
 const spinnerSpeed = 150 * time.Millisecond
 const errorHighlightDuration = 5 * time.Second
-const minStatusDelay = 100 * time.Millisecond
+const minStatusDelay = 250 * time.Millisecond
 
 var (
 	pendingMsgColor      = color.New(color.FgWhite, color.Faint, color.Concealed)
@@ -48,17 +48,17 @@ type liveReporter struct {
 }
 
 func (r *liveReporter) restore(entry reportEntry) error {
-	if entry.NewProgress != nil {
-		if len(entry.NewProgress.Address) == 0 {
-			r.NewProgress(entry.NewProgress.Message)
+	if entry.AppendProgress != nil {
+		if len(entry.AppendProgress.Address) == 0 {
+			r.NewProgress(entry.AppendProgress.Message)
 		} else {
 			r.mu.RLock()
 			defer r.mu.RUnlock()
-			progress := r.reports[entry.NewProgress.Address[0]].(*liveProgressReport)
+			progress := r.reports[entry.AppendProgress.Address[0]].(*liveProgressReport)
 			return progress.restore(reportEntry{
-				NewProgress: &newProgressEntry{
-					Address: entry.NewProgress.Address[1:],
-					Message: entry.NewProgress.Message,
+				AppendProgress: &appendProgressEntry{
+					Address: entry.AppendProgress.Address[1:],
+					Message: entry.AppendProgress.Message,
 				},
 			})
 		}
@@ -90,19 +90,29 @@ func (r *liveReporter) restore(entry reportEntry) error {
 				Message: entry.ProgressError.Message,
 			},
 		})
-	} else if entry.NewStatus != nil {
-		if len(entry.NewStatus.Address) == 0 {
+	} else if entry.AppendStatus != nil {
+		if len(entry.AppendStatus.Address) == 0 {
 			r.NewStatus()
 		} else {
 			r.mu.RLock()
 			defer r.mu.RUnlock()
-			progress := r.reports[entry.NewStatus.Address[0]].(*liveProgressReport)
+			progress := r.reports[entry.AppendStatus.Address[0]].(*liveProgressReport)
 			return progress.restore(reportEntry{
-				NewStatus: &newStatusEntry{
-					Address: entry.NewStatus.Address[1:],
+				AppendStatus: &appendStatusEntry{
+					Address: entry.AppendStatus.Address[1:],
 				},
 			})
 		}
+	} else if entry.StatusUpdate != nil {
+		r.mu.RLock()
+		defer r.mu.RUnlock()
+		progress := r.reports[entry.StatusUpdate.Address[0]].(*liveProgressReport)
+		return progress.restore(reportEntry{
+			StatusUpdate: &statusUpdateEntry{
+				Address: entry.StatusUpdate.Address[1:],
+				Message: entry.StatusUpdate.Message,
+			},
+		})
 	} else if entry.StatusDone != nil {
 		r.mu.RLock()
 		defer r.mu.RUnlock()
@@ -292,17 +302,17 @@ func (r *liveProgressReport) write(writer *uilive.Writer, depth int) {
 }
 
 func (r *liveProgressReport) restore(entry reportEntry) error {
-	if entry.NewProgress != nil {
-		if len(entry.NewProgress.Address) == 0 {
-			r.NewProgress(entry.NewProgress.Message)
+	if entry.AppendProgress != nil {
+		if len(entry.AppendProgress.Address) == 0 {
+			r.NewProgress(entry.AppendProgress.Message)
 		} else {
 			r.mu.RLock()
 			defer r.mu.RUnlock()
-			progress := r.children[entry.NewProgress.Address[0]].(*liveProgressReport)
+			progress := r.children[entry.AppendProgress.Address[0]].(*liveProgressReport)
 			return progress.restore(reportEntry{
-				NewProgress: &newProgressEntry{
-					Address: entry.NewProgress.Address[1:],
-					Message: entry.NewProgress.Message,
+				AppendProgress: &appendProgressEntry{
+					Address: entry.AppendProgress.Address[1:],
+					Message: entry.AppendProgress.Message,
 				},
 			})
 		}
@@ -346,16 +356,30 @@ func (r *liveProgressReport) restore(entry reportEntry) error {
 				},
 			})
 		}
-	} else if entry.NewStatus != nil {
-		if len(entry.NewStatus.Address) == 0 {
+	} else if entry.AppendStatus != nil {
+		if len(entry.AppendStatus.Address) == 0 {
 			r.NewStatus()
 		} else {
 			r.mu.RLock()
 			defer r.mu.RUnlock()
-			progress := r.children[entry.NewStatus.Address[0]].(*liveProgressReport)
+			progress := r.children[entry.AppendStatus.Address[0]].(*liveProgressReport)
 			return progress.restore(reportEntry{
-				NewStatus: &newStatusEntry{
-					Address: entry.NewStatus.Address[1:],
+				AppendStatus: &appendStatusEntry{
+					Address: entry.AppendStatus.Address[1:],
+				},
+			})
+		}
+	} else if entry.StatusUpdate != nil {
+		if len(entry.StatusUpdate.Address) == 1 {
+			r.children[entry.StatusUpdate.Address[0]].(*liveStatusReport).Done()
+		} else {
+			r.mu.RLock()
+			defer r.mu.RUnlock()
+			progress := r.children[entry.StatusUpdate.Address[0]].(*liveProgressReport)
+			return progress.restore(reportEntry{
+				StatusUpdate: &statusUpdateEntry{
+					Address: entry.StatusUpdate.Address[1:],
+					Message: entry.StatusUpdate.Message,
 				},
 			})
 		}

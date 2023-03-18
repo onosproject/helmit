@@ -55,7 +55,7 @@ func (r *jsonProgressReport) NewProgress(msg string, args ...any) ProgressReport
 		msg = fmt.Sprintf(msg, args...)
 	}
 	_ = r.logger.Log(reportEntry{
-		NewProgress: &newProgressEntry{
+		AppendProgress: &appendProgressEntry{
 			Address: r.address,
 			Message: msg,
 		},
@@ -69,7 +69,7 @@ func (r *jsonProgressReport) NewStatus() StatusReport {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	_ = r.logger.Log(reportEntry{
-		NewStatus: &newStatusEntry{
+		AppendStatus: &appendStatusEntry{
 			Address: r.address,
 		},
 	})

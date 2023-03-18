@@ -27,17 +27,17 @@ type StatusReport interface {
 }
 
 type reportEntry struct {
-	NewProgress    *newProgressEntry    `json:"newProgress,omitempty"`
+	AppendProgress *appendProgressEntry `json:"appendProgress,omitempty"`
 	ProgressStart  *progressStartEntry  `json:"progressStart,omitempty"`
 	ProgressFinish *progressFinishEntry `json:"progressFinish,omitempty"`
 	ProgressError  *progressErrorEntry  `json:"progressError,omitempty"`
-	NewStatus      *newStatusEntry      `json:"newStatus,omitempty"`
+	AppendStatus   *appendStatusEntry   `json:"appendStatus,omitempty"`
 	StatusUpdate   *statusUpdateEntry   `json:"statusUpdate,omitempty"`
 	StatusDone     *statusDoneEntry     `json:"statusDone,omitempty"`
 	StatusError    *statusErrorEntry    `json:"statusError,omitempty"`
 }
 
-type newProgressEntry struct {
+type appendProgressEntry struct {
 	Address []int  `json:"address"`
 	Message string `json:"message"`
 }
@@ -55,7 +55,7 @@ type progressErrorEntry struct {
 	Message string `json:"message"`
 }
 
-type newStatusEntry struct {
+type appendStatusEntry struct {
 	Address []int `json:"address"`
 }
 
