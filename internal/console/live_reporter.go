@@ -267,7 +267,7 @@ func (r *liveProgressReport) write(writer *uilive.Writer, depth int) {
 	defer r.mu.RUnlock()
 	switch r.state {
 	case progressPending:
-		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), pendingMsgColor.Sprintf(" ❖ %s", r.desc))
+		fmt.Fprintf(writer.Newline(), "%s%s\n", strings.Repeat(" ", depth*3), pendingMsgColor.Sprintf(" ◦ %s", r.desc))
 	case progressRunning:
 		var hasChild bool
 		for _, child := range r.children {
