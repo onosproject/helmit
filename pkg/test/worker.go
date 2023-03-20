@@ -110,7 +110,15 @@ func (w *testWorker) SetupTest(ctx context.Context, request *api.SetupTestReques
 
 	methods := reflect.TypeOf(suite)
 	if method, ok := methods.MethodByName("Setup" + request.Test); ok {
-		method.Func.Call([]reflect.Value{reflect.ValueOf(suite)})
+		ctx, cancel := context.WithTimeout(ctx, w.spec.Timeout)
+		defer cancel()
+		outputs := method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
+		if len(outputs) == 1 {
+			err := outputs[0].Interface().(error)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	return &api.SetupTestResponse{}, nil
 }
@@ -132,7 +140,15 @@ func (w *testWorker) TearDownTest(ctx context.Context, request *api.TearDownTest
 
 	methods := reflect.TypeOf(suite)
 	if method, ok := methods.MethodByName("TearDown" + request.Test); ok {
-		method.Func.Call([]reflect.Value{reflect.ValueOf(suite)})
+		ctx, cancel := context.WithTimeout(ctx, w.spec.Timeout)
+		defer cancel()
+		outputs := method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
+		if len(outputs) == 1 {
+			err := outputs[0].Interface().(error)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	return &api.TearDownTestResponse{}, nil
 }
@@ -145,14 +161,13 @@ func (w *testWorker) GetTestSuites(ctx context.Context, request *api.GetTestSuit
 		for index := 0; index < methodFinder.NumMethod(); index++ {
 			method := methodFinder.Method(index)
 			if strings.HasPrefix(method.Name, "Test") {
-				name := method.Name[4:]
 				_, setup := suite.(SetupTest)
 				if !setup {
-					_, setup = methodFinder.MethodByName(fmt.Sprintf("Setup%s", name))
+					_, setup = methodFinder.MethodByName(fmt.Sprintf("Setup%s", method.Name))
 				}
 				_, teardown := suite.(TearDownTest)
 				if !teardown {
-					_, teardown = methodFinder.MethodByName(fmt.Sprintf("TearDown%s", name))
+					_, teardown = methodFinder.MethodByName(fmt.Sprintf("TearDown%s", method.Name))
 				}
 				tests = append(tests, &api.Test{
 					Name:     method.Name,
