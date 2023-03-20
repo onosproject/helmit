@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"net"
 	"reflect"
-	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -144,16 +144,30 @@ func (w *testWorker) GetTestSuites(ctx context.Context, request *api.GetTestSuit
 		methodFinder := reflect.TypeOf(suite)
 		for index := 0; index < methodFinder.NumMethod(); index++ {
 			method := methodFinder.Method(index)
-			if ok, _ := regexp.MatchString("^Test", method.Name); !ok {
-				continue
+			if strings.HasPrefix(method.Name, "Test") {
+				name := method.Name[4:]
+				_, setup := suite.(SetupTest)
+				if !setup {
+					_, setup = methodFinder.MethodByName(fmt.Sprintf("Setup%s", name))
+				}
+				_, teardown := suite.(TearDownTest)
+				if !teardown {
+					_, teardown = methodFinder.MethodByName(fmt.Sprintf("TearDown%s", name))
+				}
+				tests = append(tests, &api.Test{
+					Name:     method.Name,
+					Setup:    setup,
+					TearDown: teardown,
+				})
 			}
-			tests = append(tests, &api.Test{
-				Name: method.Name,
-			})
 		}
+		_, setup := suite.(SetupSuite)
+		_, teardown := suite.(TearDownSuite)
 		suites = append(suites, &api.TestSuite{
-			Name:  name,
-			Tests: tests,
+			Name:     name,
+			Setup:    setup,
+			TearDown: teardown,
+			Tests:    tests,
 		})
 	}
 	return &api.GetTestSuitesResponse{

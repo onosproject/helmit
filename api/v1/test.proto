@@ -28,11 +28,15 @@ message GetTestSuitesResponse {
 
 message TestSuite {
     string name = 1;
-    repeated Test tests = 2;
+    bool setup = 2;
+    bool tear_down = 3;
+    repeated Test tests = 4;
 }
 
 message Test {
     string name = 1;
+    bool setup = 2;
+    bool tear_down = 3;
 }
 
 message SetupTestSuiteRequest {
