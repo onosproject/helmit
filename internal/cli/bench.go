@@ -7,7 +7,8 @@ package cli
 import (
 	"errors"
 	petname "github.com/dustinkirkland/golang-petname"
-	"github.com/onosproject/helmit/internal/console"
+	"github.com/onosproject/helmit/internal/log"
+	"github.com/onosproject/helmit/internal/task"
 	"github.com/onosproject/helmit/pkg/bench"
 	"os"
 	"path/filepath"
@@ -88,16 +89,8 @@ func getBenchCommand() *cobra.Command {
 }
 
 func runBenchCommand(cmd *cobra.Command, args []string) error {
-	verbose, _ := cmd.Flags().GetBool("verbose")
-
-	var opts []console.Option
-	opts = append(opts, console.WithFormat(console.LiveFormat))
-	if verbose {
-		opts = append(opts, console.WithVerbose())
-	}
-
-	context := console.NewContext(cmd.OutOrStdout(), opts...)
-	defer context.Close()
+	writer := log.NewUIWriter(cmd.OutOrStdout())
+	defer writer.Close()
 
 	pkgPath := ""
 	if len(args) > 0 {
@@ -171,27 +164,22 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	if pkgPath != "" {
 		executable = filepath.Join(os.TempDir(), "helmit", benchID)
 		defer os.RemoveAll(executable)
-		err := context.Fork("Preparing artifacts", func(context *console.Context) error {
-			err := context.Run(func(status *console.Status) error {
-				status.Reportf("Validating package path %s", pkgPath)
-				return validatePackage(pkgPath)
-			}).Await()
-			if err != nil {
-				return err
-			}
+		err := task.New(writer, "Prepare artifacts").
+			Run(func(context task.Context) error {
+				context.Status().Setf("Validating package %s", pkgPath)
+				if err := validatePackage(pkgPath); err != nil {
+					return err
+				}
 
-			err = context.Run(func(status *console.Status) error {
-				status.Reportf("Building %s", executable)
-				return buildBinary(pkgPath, executable)
-			}).Await()
-			if err != nil {
-				cmd.SilenceUsage = true
-				cmd.SilenceErrors = true
-				return err
-			}
-			return nil
-		}).Join()
+				context.Status().Setf("Building %s", executable)
+				if err := buildBinary(pkgPath, executable); err != nil {
+					return err
+				}
+				return nil
+			})
 		if err != nil {
+			cmd.SilenceUsage = true
+			cmd.SilenceErrors = true
 			return err
 		}
 	}
@@ -234,11 +222,42 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	if err := manager.Start(job, context); err != nil {
+	err = task.New(writer, "Setup benchmark executor").Run(func(context task.Context) error {
+		return manager.Start(job, context.Status())
+	})
+	if err != nil {
 		return err
 	}
-	code, _ := manager.Run(job, context)
-	_ = manager.Stop(job, context)
+
+	err = task.New(writer, "Start benchmark executor").Run(func(context task.Context) error {
+		return manager.Run(job, context.Status())
+	})
+	if err != nil {
+		return err
+	}
+
+	stream, err := manager.Stream(job)
+	if err != nil {
+		return err
+	}
+	defer stream.Close()
+
+	// Convert the job logs into UI format for the console.
+	reader := log.NewJSONReader(stream)
+	err = log.Copy(writer, reader)
+	if err != nil {
+		return err
+	}
+
+	// Get the exit code for the job.
+	_, code, err := manager.GetStatus(job)
+	if err != nil {
+		return err
+	}
+
+	_ = task.New(writer, "Tear down benchmark executor").Run(func(context task.Context) error {
+		return manager.Stop(job, context.Status())
+	})
 	os.Exit(code)
 	return nil
 }

@@ -5,9 +5,8 @@
 package test
 
 import (
-	"fmt"
-	"github.com/onosproject/helmit/internal/console"
 	jobs "github.com/onosproject/helmit/internal/job"
+	"github.com/onosproject/helmit/internal/log"
 	"os"
 	"testing"
 )
@@ -18,7 +17,6 @@ import (
 // Main runs a benchmark
 func Main(suites map[string]TestingSuite) {
 	if err := run(suites); err != nil {
-		println("Benchmark failed " + err.Error())
 		os.Exit(1)
 	}
 	os.Exit(0)
@@ -37,21 +35,19 @@ func run(suites map[string]TestingSuite) error {
 
 // runExecutor runs a test image in the executor context
 func runExecutor() error {
-	context := console.NewContext(os.Stdout, console.WithFormat(console.JSONFormat))
-	defer context.Close()
+	writer := log.NewJSONWriter(os.Stdout)
 
 	job, err := jobs.Bootstrap[Config]()
 	if err != nil {
 		return err
 	}
 
-	executor, err := newExecutor(job.Spec)
+	executor, err := newExecutor(job.Spec, writer)
 	if err != nil {
 		return err
 	}
 
-	if err := executor.run(job.Config, context); err != nil {
-		fmt.Println(err)
+	if err := executor.run(job.Config); err != nil {
 		return err
 	}
 	return nil

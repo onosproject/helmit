@@ -8,8 +8,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/onosproject/helmit/internal/console"
 	"github.com/onosproject/helmit/internal/k8s"
+	"github.com/onosproject/helmit/internal/task"
 	"io"
 	"k8s.io/client-go/kubernetes"
 	"path"
@@ -56,31 +56,76 @@ type Manager[C any] struct {
 }
 
 // Start starts the given job
-func (m *Manager[C]) Start(job Job[C], context *console.Context) error {
-	if err := m.startJob(job, context); err != nil {
+func (m *Manager[C]) Start(job Job[C], status task.Status) error {
+	if job.CreateNamespace {
+		status.Set("Creating namespace")
+		if err := m.createNamespace(job); err != nil {
+			return err
+		}
+	}
+	status.Set("Creating Job")
+	if err := m.createJob(job); err != nil {
+		return err
+	}
+	status.Set("Creating ServiceAccount")
+	if err := m.createServiceAccount(job); err != nil {
+		return err
+	}
+	status.Set("Creating ClusterRoleBinding")
+	if err := m.createClusterRoleBinding(job); err != nil {
+		return err
+	}
+	status.Set("Creating Secret")
+	if err := m.createSecrets(job); err != nil {
+		return err
+	}
+	status.Set("Waiting for job to start")
+	if err := m.awaitJobRunning(job); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (m *Manager[C]) Run(job Job[C], context *console.Context) (int, error) {
-	err := context.Fork("Running job", func(context *console.Context) error {
-		reader, err := m.streamLogs(job)
-		if err != nil {
+// Run runs the given job
+func (m *Manager[C]) Run(job Job[C], status task.Status) error {
+	if job.Executable != "" {
+		status.Setf("Copying %s", job.Executable)
+		if err := m.copyBinary(job); err != nil {
 			return err
 		}
-		defer reader.Close()
-		return context.Restore(reader)
-	}).Join()
-	if err != nil {
-		return 0, err
 	}
-	_, status, err := m.getStatus(job)
-	return status, err
+	if job.Context != "" {
+		status.Setf("Copying %s", job.Context)
+		if err := m.copyContext(job); err != nil {
+			return err
+		}
+	}
+	if len(job.ValueFiles) != 0 {
+		for _, valueFiles := range job.ValueFiles {
+			for _, valueFile := range valueFiles {
+				status.Setf("Copying %s", valueFile)
+				if err := m.copyValuesFile(job, valueFile); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	status.Set("Waiting for job to become ready")
+	if err := m.runBinary(job); err != nil {
+		return err
+	}
+	if err := m.runJob(job); err != nil {
+		return err
+	}
+	if err := m.awaitJobReady(job); err != nil {
+		return err
+	}
+	return nil
 }
 
-// streamLogs streams logs from the given pod
-func (m *Manager[C]) streamLogs(job Job[C]) (io.ReadCloser, error) {
+// Stream streams logs from the given pod
+func (m *Manager[C]) Stream(job Job[C]) (io.ReadCloser, error) {
 	// Get the stream of logs for the pod
 	pod, err := m.getPod(job, func(pod corev1.Pod) bool {
 		return len(pod.Status.ContainerStatuses) > 0 &&
@@ -100,13 +145,18 @@ func (m *Manager[C]) streamLogs(job Job[C]) (io.ReadCloser, error) {
 }
 
 // Stop stops the job and waits for it to exit
-func (m *Manager[C]) Stop(job Job[C], context *console.Context) error {
-	return context.Fork("Cleaning up job", func(context *console.Context) error {
-		if err := m.finishJob(job); err != nil {
+func (m *Manager[C]) Stop(job Job[C], status task.Status) error {
+	status.Set("Deleting job")
+	if err := m.deleteJob(job); err != nil {
+		return err
+	}
+	if job.CreateNamespace && !job.NoTeardown {
+		status.Set("Deleting namespace")
+		if err := m.deleteNamespace(job); err != nil {
 			return err
 		}
-		return nil
-	}).Join()
+	}
+	return nil
 }
 
 // createServiceAccount creates a ServiceAccount used by the test manager
@@ -182,98 +232,6 @@ func (m *Manager[C]) createClusterRoleBinding(job Job[C]) error {
 		return m.createClusterRoleBinding(job)
 	}
 	return err
-}
-
-// startJob starts running a test job
-func (m *Manager[C]) startJob(job Job[C], context *console.Context) error {
-	err := context.Fork("Setting up cluster", func(context *console.Context) error {
-		return context.Run(func(status *console.Status) error {
-			if job.CreateNamespace {
-				status.Report("Creating namespace")
-				if err := m.createNamespace(job); err != nil {
-					return err
-				}
-			}
-			status.Report("Creating Job")
-			if err := m.createJob(job); err != nil {
-				return err
-			}
-			status.Report("Creating ServiceAccount")
-			if err := m.createServiceAccount(job); err != nil {
-				return err
-			}
-			status.Report("Creating ClusterRoleBinding")
-			if err := m.createClusterRoleBinding(job); err != nil {
-				return err
-			}
-			status.Report("Creating Secret")
-			if err := m.createSecrets(job); err != nil {
-				return err
-			}
-			status.Report("Waiting for job to start")
-			if err := m.awaitJobRunning(job); err != nil {
-				return err
-			}
-			return nil
-		}).Await()
-	}).Join()
-	if err != nil {
-		return err
-	}
-
-	err = context.Fork("Starting job", func(context *console.Context) error {
-		var waiters []console.Task
-		if job.Executable != "" {
-			waiters = append(waiters, context.Run(func(status *console.Status) error {
-				status.Reportf("Copying %s", job.Executable)
-				return m.copyBinary(job)
-			}))
-		}
-		if job.Context != "" {
-			waiters = append(waiters, context.Run(func(status *console.Status) error {
-				status.Reportf("Copying %s", job.Context)
-				return m.copyContext(job)
-			}))
-		}
-		if len(job.ValueFiles) != 0 {
-			for _, valueFiles := range job.ValueFiles {
-				for _, valueFile := range valueFiles {
-					waiters = append(waiters, func(file string) console.Task {
-						return context.Run(func(status *console.Status) error {
-							status.Reportf("Copying %s", file)
-							return m.copyValuesFile(job, valueFile)
-						})
-					}(valueFile))
-				}
-			}
-		}
-		err := console.Await(waiters...)
-		if err != nil {
-			return err
-		}
-
-		err = context.Run(func(status *console.Status) error {
-			status.Report("Waiting for ready")
-			if err := m.runBinary(job); err != nil {
-				return err
-			}
-			if err := m.runJob(job); err != nil {
-				return err
-			}
-			if err := m.awaitJobReady(job); err != nil {
-				return err
-			}
-			return nil
-		}).Await()
-		if err != nil {
-			return err
-		}
-		return nil
-	}).Join()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (m *Manager[C]) createNamespace(job Job[C]) error {
@@ -711,8 +669,8 @@ func (m *Manager[C]) runJob(job Job[C]) error {
 	return nil
 }
 
-// getStatus gets the status message and exit code of the given pod
-func (m *Manager[C]) getStatus(job Job[C]) (string, int, error) {
+// GetStatus gets the status message and exit code of the given pod
+func (m *Manager[C]) GetStatus(job Job[C]) (string, int, error) {
 	for {
 		pod, err := m.getPod(job, func(pod corev1.Pod) bool {
 			return len(pod.Status.ContainerStatuses) > 0 &&
@@ -745,19 +703,6 @@ func (m *Manager[C]) getPod(job Job[C], predicate func(pod corev1.Pod) bool) (*c
 		}
 	}
 	return nil, nil
-}
-
-// stopJob stops a job
-func (m *Manager[C]) finishJob(job Job[C]) error {
-	if err := m.deleteJob(job); err != nil {
-		return err
-	}
-	if job.CreateNamespace && !job.NoTeardown {
-		if err := m.deleteNamespace(job); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // deleteJob deletes a job

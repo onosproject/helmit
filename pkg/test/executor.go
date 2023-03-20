@@ -10,11 +10,13 @@ import (
 	"fmt"
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 	api "github.com/onosproject/helmit/api/v1"
-	"github.com/onosproject/helmit/internal/console"
 	"github.com/onosproject/helmit/internal/job"
+	"github.com/onosproject/helmit/internal/log"
+	"github.com/onosproject/helmit/internal/task"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"io"
 	"path"
 	"time"
 )
@@ -22,40 +24,56 @@ import (
 const managementPort = 5000
 
 // newExecutor returns a new test job
-func newExecutor(spec job.Spec) (*testExecutor, error) {
+func newExecutor(spec job.Spec, writer log.Writer) (*testExecutor, error) {
 	return &testExecutor{
-		spec: spec,
-		jobs: job.NewManager[WorkerConfig](job.WorkerType),
+		spec:   spec,
+		jobs:   job.NewManager[WorkerConfig](job.WorkerType),
+		writer: writer,
 	}, nil
 }
 
 // testExecutor coordinates workers for suites of tests
 type testExecutor struct {
-	spec job.Spec
-	jobs *job.Manager[WorkerConfig]
+	spec   job.Spec
+	jobs   *job.Manager[WorkerConfig]
+	writer log.Writer
 }
 
 // Run runs the tests
-func (e *testExecutor) run(config Config, context *console.Context) error {
-	err := context.Fork("Starting workers", func(context *console.Context) error {
-		var joiners []console.Fork
+func (e *testExecutor) run(config Config) error {
+	jobs := make(map[int]job.Job[WorkerConfig])
+	for worker := 0; worker < config.Workers; worker++ {
+		jobID := newWorkerName(e.spec.ID, worker)
+		jobs[worker] = e.newJob(jobID, config)
+	}
+
+	err := task.New(e.writer, "Setup test workers").Run(func(context task.Context) error {
+		var futures []task.Future
 		for i := 0; i < config.Workers; i++ {
-			joiners = append(joiners, func(worker int) console.Fork {
-				return context.Fork(fmt.Sprintf("Starting worker %d", worker), func(context *console.Context) error {
-					return e.createWorker(config, worker, context)
+			futures = append(futures, func(worker int) task.Future {
+				return context.NewTask("Setup test worker %d", worker).Start(func(context task.Context) error {
+					context.Status().Setf("Starting worker %d", worker)
+					if err := e.jobs.Start(jobs[worker], context.Status()); err != nil {
+						return err
+					}
+					context.Status().Setf("Running worker %d", worker)
+					if err := e.jobs.Run(jobs[worker], context.Status()); err != nil {
+						return err
+					}
+					return nil
 				})
 			}(i))
 		}
-		return console.Join(joiners...)
-	}).Join()
+		return task.Await(futures...)
+	})
 	if err != nil {
 		return err
 	}
 
-	workers := make(map[int]api.TesterClient)
-	for i := 0; i < config.Workers; i++ {
-		worker, err := grpc.Dial(
-			fmt.Sprintf("%s:%d", newWorkerName(e.spec.ID, i), managementPort),
+	clients := make(map[int]api.TesterClient)
+	for worker := 0; worker < config.Workers; worker++ {
+		client, err := grpc.Dial(
+			fmt.Sprintf("%s:%d", newWorkerName(e.spec.ID, worker), managementPort),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithUnaryInterceptor(
 				grpc_retry.UnaryClientInterceptor(
@@ -65,11 +83,20 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 		if err != nil {
 			return err
 		}
-		workers[i] = api.NewTesterClient(worker)
+		clients[worker] = api.NewTesterClient(client)
+	}
+
+	streams := make(map[int]io.ReadCloser)
+	for worker := 0; worker < config.Workers; worker++ {
+		stream, err := e.jobs.Stream(jobs[worker])
+		if err != nil {
+			return err
+		}
+		streams[worker] = stream
 	}
 
 	var allSuites []*api.TestSuite
-	for _, worker := range workers {
+	for _, worker := range clients {
 		response, err := worker.GetTestSuites(e.newContext(config), &api.GetTestSuitesRequest{})
 		if err == nil {
 			allSuites = response.Suites
@@ -106,102 +133,129 @@ func (e *testExecutor) run(config Config, context *console.Context) error {
 		}
 	}
 
+	var tasks []task.Task
+	for _, suite := range suites {
+		tasks = append(tasks, task.New(e.writer, "Run suite '%s'", suite.Name))
+	}
+
+	var testErr error
 	for i, suite := range suites {
-		client := workers[i%len(workers)]
-		err := context.Fork(fmt.Sprintf("Running suite '%s'", suite.Name), func(context *console.Context) error {
-			err := context.Fork("Setting up the suite", func(context *console.Context) error {
-				_, err := client.SetupTestSuite(e.newContext(config), &api.SetupTestSuiteRequest{
-					Suite: suite.Name,
-				})
-				return err
-			}).Join()
+		client := clients[i%len(clients)]
+		stream := streams[i%len(streams)]
+		err := tasks[i].Run(func(c task.Context) error {
+			c.Status().Setf("Setting up '%s'", suite.Name)
+			_, err := client.SetupTestSuite(e.newContext(config), &api.SetupTestSuiteRequest{
+				Suite: suite.Name,
+			})
 			if err != nil {
 				return err
 			}
 
-			err = context.Fork("Running tests", func(context *console.Context) error {
-				var tests []console.Fork
-				for _, test := range suite.Tests {
-					tests = append(tests, context.Fork(test.Name, func(context *console.Context) error {
-						return context.Run(func(status *console.Status) error {
-							status.Report("Setting up the test")
-							_, err := client.SetupTest(e.newContext(config), &api.SetupTestRequest{
-								Suite: suite.Name,
-								Test:  test.Name,
-							})
-							if err != nil {
-								return err
-							}
+			var tests []task.Task
+			for _, test := range suite.Tests {
+				tests = append(tests, c.NewTask(test.Name))
+			}
 
-							status.Report("Running the test")
-							response, err := client.RunTest(e.newContext(config), &api.RunTestRequest{
-								Suite: suite.Name,
-								Test:  test.Name,
-							})
-							if err != nil {
-								return err
-							}
+			var newTestRunner = func(test *api.Test) func(task.Context) error {
+				return func(c task.Context) error {
+					c.Status().Setf("Setting up '%s'", test.Name)
+					c.Writer()
 
-							status.Report("Tearing down the test")
-							_, _ = client.TearDownTest(e.newContext(config), &api.TearDownTestRequest{
-								Suite: suite.Name,
-								Test:  test.Name,
-							})
-							if err != nil {
-								return err
-							}
-
-							if !response.Succeeded {
-								status.Report("Test failed")
-								return errors.New("test failed")
-							}
-							return nil
-						}).Await()
-					}))
-				}
-
-				if !config.Parallel {
-					var err error
-					for _, test := range tests {
-						if e := test.Join(); e != nil {
-							err = e
-						}
+					if config.Verbose {
+						ctx, cancel := context.WithCancel(context.Background())
+						defer cancel()
+						go copyContext(ctx, c.Writer(), stream)
 					}
-					return err
-				}
-				return console.Join(tests...)
-			}).Join()
 
-			_ = context.Fork("Tearing down the suite", func(context *console.Context) error {
-				_, err := client.TearDownTestSuite(e.newContext(config), &api.TearDownTestSuiteRequest{
-					Suite: suite.Name,
-				})
-				return err
-			}).Join()
-			return err
-		}).Join()
+					_, err = client.SetupTest(e.newContext(config), &api.SetupTestRequest{
+						Suite: suite.Name,
+						Test:  test.Name,
+					})
+					if err != nil {
+						return err
+					}
+
+					c.Status().Setf("Running '%s'", test.Name)
+					response, err := client.RunTest(e.newContext(config), &api.RunTestRequest{
+						Suite: suite.Name,
+						Test:  test.Name,
+					})
+					if err != nil {
+						return err
+					}
+
+					c.Status().Setf("Tearing down '%s'", test.Name)
+					_, _ = client.TearDownTest(e.newContext(config), &api.TearDownTestRequest{
+						Suite: suite.Name,
+						Test:  test.Name,
+					})
+					if err != nil {
+						return err
+					}
+
+					if !response.Succeeded {
+						return errors.New("test failed")
+					}
+					return nil
+				}
+			}
+
+			c.Status().Set("Running tests")
+			var testErr error
+			if config.Parallel {
+				var futures []task.Future
+				for j, test := range suite.Tests {
+					futures = append(futures, tests[j].Start(newTestRunner(test)))
+				}
+				err := task.Await(futures...)
+				if testErr == nil {
+					testErr = err
+				}
+			} else {
+				for j, test := range suite.Tests {
+					err := tests[j].Run(newTestRunner(test))
+					if testErr == nil {
+						testErr = err
+					}
+				}
+			}
+
+			c.Status().Setf("Tearing down '%s'", suite.Name)
+			_, err = client.TearDownTestSuite(e.newContext(config), &api.TearDownTestSuiteRequest{
+				Suite: suite.Name,
+			})
+			if testErr == nil {
+				testErr = err
+			}
+			return testErr
+		})
 		if err != nil {
-			return err
+			testErr = err
 		}
 	}
 
-	err = context.Fork("Tearing down workers", func(context *console.Context) error {
-		var tasks []console.Fork
+	for _, stream := range streams {
+		_ = stream.Close()
+	}
+
+	err = task.New(e.writer, "Tear down test workers").Run(func(context task.Context) error {
+		var futures []task.Future
 		for i := 0; i < config.Workers; i++ {
-			tasks = append(tasks, func(worker int) console.Fork {
-				return context.Fork(fmt.Sprintf("Stopping worker %d", worker), func(context *console.Context) error {
-					jobID := newWorkerName(e.spec.ID, worker)
-					job := e.newJob(jobID, config)
-					return e.jobs.Stop(job, context)
+			futures = append(futures, func(worker int) task.Future {
+				return context.NewTask("Tear down test worker %d", worker).Start(func(context task.Context) error {
+					if err := e.jobs.Stop(jobs[worker], context.Status()); err != nil {
+						return err
+					}
+					return nil
 				})
 			}(i))
 		}
-		return console.Join(tasks...)
-	}).Join()
-	if err != nil {
-		return err
+		return task.Await(futures...)
+	})
+	if testErr == nil {
+		testErr = err
 	}
-	return nil
+	return testErr
 }
 
 func newWorkerName(jobID string, worker int) string {
@@ -210,13 +264,6 @@ func newWorkerName(jobID string, worker int) string {
 
 func (e *testExecutor) getWorkerAddress(config Config, worker int) string {
 	return fmt.Sprintf("%s:%d", newWorkerName(e.spec.ID, worker), managementPort)
-}
-
-// createWorker creates the given worker
-func (e *testExecutor) createWorker(config Config, worker int, context *console.Context) error {
-	jobID := newWorkerName(e.spec.ID, worker)
-	job := e.newJob(jobID, config)
-	return e.jobs.Start(job, context)
 }
 
 func (e *testExecutor) newJob(id string, config Config) job.Job[WorkerConfig] {
@@ -269,4 +316,29 @@ func (e *testExecutor) newContext(config Config) context.Context {
 		ctx = context.WithValue(ctx, key, value)
 	}
 	return ctx
+}
+
+type contextReader struct {
+	reader io.Reader
+	ctx    context.Context
+}
+
+func (r *contextReader) Read(p []byte) (n int, err error) {
+	select {
+	case <-r.ctx.Done():
+		err := r.ctx.Err()
+		if err == nil || err == context.Canceled {
+			return 0, io.EOF
+		}
+		return 0, err
+	default:
+		return r.reader.Read(p)
+	}
+}
+
+func copyContext(ctx context.Context, writer io.Writer, reader io.Reader) (int64, error) {
+	return io.Copy(writer, &contextReader{
+		reader: reader,
+		ctx:    ctx,
+	})
 }
