@@ -15,22 +15,32 @@ import (
 // TestingSuite is a suite of tests
 type TestingSuite interface {
 	suite.TestingSuite
+	SetNamespace(namespace string)
+	Namespace() string
 	SetConfig(config *rest.Config)
 	Config() *rest.Config
 	SetHelm(helm *helm.Helm)
 	Helm() *helm.Helm
+	SetContext(ctx context.Context)
+	Context() context.Context
 }
 
 // Suite is the base for a test suite
 type Suite struct {
 	suite.Suite
 	*kubernetes.Clientset
-	config *rest.Config
-	helm   *helm.Helm
+	ctx       context.Context
+	namespace string
+	config    *rest.Config
+	helm      *helm.Helm
+}
+
+func (suite *Suite) SetNamespace(namespace string) {
+	suite.namespace = namespace
 }
 
 func (suite *Suite) Namespace() string {
-	return suite.helm.Namespace()
+	return suite.namespace
 }
 
 func (suite *Suite) SetConfig(config *rest.Config) {
@@ -42,40 +52,18 @@ func (suite *Suite) Config() *rest.Config {
 	return suite.config
 }
 
+func (suite *Suite) SetContext(ctx context.Context) {
+	suite.ctx = ctx
+}
+
+func (suite *Suite) Context() context.Context {
+	return suite.ctx
+}
+
 func (suite *Suite) SetHelm(helm *helm.Helm) {
 	suite.helm = helm
 }
 
 func (suite *Suite) Helm() *helm.Helm {
 	return suite.helm
-}
-
-// SetupSuite is an interface for setting up a suite of tests
-type SetupSuite interface {
-	SetupSuite(ctx context.Context) error
-}
-
-// SetupTest is an interface for setting up individual tests
-type SetupTest interface {
-	SetupTest(ctx context.Context) error
-}
-
-// TearDownSuite is an interface for tearing down a suite of tests
-type TearDownSuite interface {
-	TearDownSuite(ctx context.Context) error
-}
-
-// TearDownTest is an interface for tearing down individual tests
-type TearDownTest interface {
-	TearDownTest(ctx context.Context) error
-}
-
-// BeforeTest is an interface for executing code before every test
-type BeforeTest interface {
-	BeforeTest(testName string) error
-}
-
-// AfterTest is an interface for executing code after every test
-type AfterTest interface {
-	AfterTest(testName string) error
 }

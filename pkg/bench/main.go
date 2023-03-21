@@ -4,6 +4,7 @@
 
 package bench
 
+/*
 import (
 	"fmt"
 	jobs "github.com/onosproject/helmit/internal/job"
@@ -68,3 +69,5 @@ func runWorker(suites map[string]BenchmarkingSuite) error {
 	}
 	return worker.run()
 }
+
+*/

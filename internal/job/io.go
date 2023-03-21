@@ -1,87 +1,53 @@
-// SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
-//
-// SPDX-License-Identifier: Apache-2.0
-
-package files
+package job
 
 import (
 	"archive/tar"
 	"context"
-	"errors"
 	"fmt"
-	"github.com/onosproject/helmit/internal/k8s"
 	"io"
-	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 	"os"
 	"path"
 )
 
-// CopyOptions is options for copying files from a source to a destination
-type CopyOptions struct {
-	From      string
-	To        string
-	Namespace string
-	Pod       string
-	Container string
+func (j *Job) GetLogs(ctx context.Context) (io.ReadCloser, error) {
+	if err := j.init(); err != nil {
+		return nil, err
+	}
+
+	req := j.client.CoreV1().Pods(j.Namespace).GetLogs(j.pod.Name, &corev1.PodLogOptions{
+		Container: "job",
+		Follow:    true,
+	})
+	return req.Stream(ctx)
 }
 
-// Do executes the copy to the pod
-func (c *CopyOptions) Do(ctx context.Context) error {
-	if c.From == "" || c.Pod == "" {
-		return errors.New("source and destination cannot be empty")
-	}
-
-	config, err := k8s.GetConfig()
-	if err != nil {
+func (j *Job) Copy(ctx context.Context, dst, src string) error {
+	if err := j.init(); err != nil {
 		return err
-	}
-
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-
-	pod, err := client.CoreV1().Pods(c.Namespace).Get(ctx, c.Pod, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
-	containerName := c.Container
-	if len(containerName) == 0 {
-		if len(pod.Spec.Containers) > 1 {
-			return errors.New("destination container is ambiguous")
-		}
-		containerName = pod.Spec.Containers[0].Name
 	}
 
 	reader, writer := io.Pipe()
 
-	if c.To == "" {
-		c.To = c.From
-	}
-
 	go func() {
 		defer writer.Close()
-		err := makeTar(c.From, c.To, writer)
+		err := makeTar(src, dst, writer)
 		if err != nil {
 			fmt.Println(err)
 		}
 	}()
 
 	cmd := []string{"tar", "-xf", "-"}
-	req := client.CoreV1().RESTClient().
+	req := j.client.CoreV1().RESTClient().
 		Post().
 		Resource("pods").
-		Name(c.Pod).
-		Namespace(c.Namespace).
+		Name(j.pod.Name).
+		Namespace(j.pod.Namespace).
 		SubResource("exec").
 		VersionedParams(&corev1.PodExecOptions{
-			Container: containerName,
+			Container: "job",
 			Command:   cmd,
 			Stdin:     true,
 			Stdout:    true,
@@ -89,12 +55,48 @@ func (c *CopyOptions) Do(ctx context.Context) error {
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(j.config, "POST", req.URL())
 	if err != nil {
 		return err
 	}
-	err = exec.Stream(remotecommand.StreamOptions{
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdin:  reader,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+		Tty:    false,
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (j *Job) Echo(ctx context.Context, dst string, data []byte) error {
+	if err := j.init(); err != nil {
+		return err
+	}
+
+	cmd := []string{"/bin/sh", "-c", fmt.Sprintf("echo \"%s\" > %s", string(data), dst)}
+	req := j.client.CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(j.pod.Name).
+		Namespace(j.pod.Namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: "job",
+			Command:   cmd,
+			Stdin:     false,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       false,
+		}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(j.config, "POST", req.URL())
+	if err != nil {
+		return err
+	}
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 		Tty:    false,
@@ -121,7 +123,7 @@ func recursiveTar(srcBase, srcFile, destFile string, tw *tar.Writer) error {
 		return err
 	}
 	if stat.IsDir() {
-		files, err := ioutil.ReadDir(filepath)
+		files, err := os.ReadDir(filepath)
 		if err != nil {
 			return err
 		}

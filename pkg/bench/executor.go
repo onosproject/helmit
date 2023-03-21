@@ -4,6 +4,8 @@
 
 package bench
 
+/*
+
 import (
 	"context"
 	"fmt"
@@ -389,3 +391,5 @@ func (e *benchExecutor) newJob(id string, config Config) job.Job[WorkerConfig] {
 		},
 	}
 }
+
+*/

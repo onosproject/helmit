@@ -4,13 +4,8 @@
 
 package main
 
-import (
-	"github.com/onosproject/helmit/pkg/bench"
-	tests "github.com/onosproject/helmit/test"
-)
-
 func main() {
-	bench.Main(map[string]bench.BenchmarkingSuite{
-		"chart": &tests.ChartBenchmarkSuite{},
-	})
+	//bench.Main(map[string]bench.BenchmarkingSuite{
+	//	"chart": &tests.ChartBenchmarkSuite{},
+	//})
 }

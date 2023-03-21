@@ -4,6 +4,7 @@
 
 package bench
 
+/*
 import (
 	"context"
 	"fmt"
@@ -275,3 +276,5 @@ func (w *benchWorker) StopBenchmark(ctx context.Context, request *api.StopBenchm
 	w.stopped.Store(true)
 	return &api.StopBenchmarkResponse{}, nil
 }
+
+*/

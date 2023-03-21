@@ -4,6 +4,8 @@
 
 package cli
 
+/*
+
 import (
 	"errors"
 	petname "github.com/dustinkirkland/golang-petname"
@@ -236,7 +238,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	stream, err := manager.Stream(job)
+	stream, err := manager.GetLogs(job)
 	if err != nil {
 		return err
 	}
@@ -261,3 +263,5 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	os.Exit(code)
 	return nil
 }
+
+*/

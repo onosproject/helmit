@@ -23,7 +23,7 @@ func GetRootCommand() *cobra.Command {
 		SilenceUsage: true,
 	}
 	cmd.AddCommand(getTestCommand())
-	cmd.AddCommand(getBenchCommand())
+	//cmd.AddCommand(getBenchCommand())
 	cmd.PersistentFlags().BoolP("verbose", "v", false, "enable verbose output")
 	return cmd
 }
