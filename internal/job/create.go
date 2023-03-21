@@ -125,7 +125,7 @@ func (j *Job) createJob(ctx context.Context) error {
 
 	serviceAccount := j.ServiceAccount
 	if serviceAccount == "" {
-		serviceAccount = defaultServiceAccountName
+		serviceAccount = j.ID
 	}
 
 	labels := j.Labels
@@ -200,7 +200,7 @@ func (j *Job) createServiceAccount(ctx context.Context) error {
 
 	serviceAccountName := j.ServiceAccount
 	if serviceAccountName == "" {
-		serviceAccountName = defaultServiceAccountName
+		serviceAccountName = j.ID
 	}
 
 	serviceAccount := &corev1.ServiceAccount{
@@ -228,7 +228,7 @@ func (j *Job) createServiceAccount(ctx context.Context) error {
 func (j *Job) createClusterRoleBinding(ctx context.Context) error {
 	serviceAccountName := j.ServiceAccount
 	if serviceAccountName == "" {
-		serviceAccountName = defaultServiceAccountName
+		serviceAccountName = j.ID
 	}
 	roleBinding, err := j.client.RbacV1().ClusterRoleBindings().Get(ctx, defaultRoleBindingName, metav1.GetOptions{})
 	if err != nil {
@@ -253,10 +253,10 @@ func (j *Job) createClusterRoleBinding(ctx context.Context) error {
 			},
 		}
 		_, err = j.client.RbacV1().ClusterRoleBindings().Create(ctx, roleBinding, metav1.CreateOptions{})
-		if err != nil && k8serrors.IsAlreadyExists(err) || k8serrors.IsConflict(err) {
-			return j.createClusterRoleBinding(ctx)
+		if err != nil && !k8serrors.IsAlreadyExists(err) {
+			return err
 		}
-		return err
+		return nil
 	}
 
 	roleBinding.Subjects = append(roleBinding.Subjects, rbacv1.Subject{

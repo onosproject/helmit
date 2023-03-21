@@ -5,10 +5,10 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	petname "github.com/dustinkirkland/golang-petname"
-	"io"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -275,8 +275,9 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	defer stream.Close()
 
 	// Copy the job logs to stdout
-	if _, err := io.Copy(cmd.OutOrStdout(), stream); err != nil {
-		return err
+	scanner := bufio.NewScanner(stream)
+	for scanner.Scan() {
+		spinner.Log(scanner.Text())
 	}
 
 	// Mark the job complete

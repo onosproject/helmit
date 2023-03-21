@@ -11,6 +11,6 @@ import (
 
 func main() {
 	test.Main(map[string]test.TestingSuite{
-		"chart": &tests.ChartTestSuite{},
+		"chart": new(tests.ChartTestSuite),
 	})
 }

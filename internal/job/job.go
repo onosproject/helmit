@@ -19,9 +19,9 @@ const (
 )
 
 const (
-	defaultServiceAccountName = "helmit"
-	defaultRoleBindingName    = "helmit"
-	defaultRoleName           = "helmit"
+	defaultServiceAccountName = "cluster-test"
+	defaultRoleBindingName    = "cluster-test"
+	defaultRoleName           = "cluster-admin"
 	helmitSecretsName         = "helmit"
 )
 
@@ -117,7 +117,7 @@ func (j *Job) waitForRunning(ctx context.Context) error {
 		pod, err := j.getPod(ctx)
 		if err != nil {
 			return err
-		} else if pod != nil && pod.Status.ContainerStatuses[0].State.Running != nil {
+		} else if pod != nil && len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].State.Running != nil {
 			j.pod = pod
 			return nil
 		}
