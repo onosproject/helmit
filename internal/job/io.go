@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"context"
 	"fmt"
+	"github.com/onosproject/helmit/internal/logging"
 	"io"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -24,7 +25,7 @@ func (j *Job) GetLogs(ctx context.Context) (io.ReadCloser, error) {
 	return req.Stream(ctx)
 }
 
-func (j *Job) Copy(ctx context.Context, dst, src string) error {
+func (j *Job) Copy(ctx context.Context, dst, src string, log logging.Logger) error {
 	if err := j.init(); err != nil {
 		return err
 	}
@@ -55,6 +56,7 @@ func (j *Job) Copy(ctx context.Context, dst, src string) error {
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
+	log.Logf("Copying %s to %s", src, j.pod.Name)
 	exec, err := remotecommand.NewSPDYExecutor(j.config, "POST", req.URL())
 	if err != nil {
 		return err

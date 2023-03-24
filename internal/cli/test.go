@@ -8,7 +8,10 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	petname "github.com/dustinkirkland/golang-petname"
+	"github.com/fatih/color"
+	"github.com/onosproject/helmit/internal/logging"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -19,6 +22,16 @@ import (
 	"github.com/onosproject/helmit/pkg/test"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
+)
+
+var (
+	successColor = color.New(color.FgGreen)
+	failureColor = color.New(color.FgRed, color.Bold)
+)
+
+const (
+	successIcon = "✓"
+	failureIcon = "✗"
 )
 
 func init() {
@@ -87,10 +100,6 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
 
-	logger := NewLogger(cmd.OutOrStdout())
-	logger.Start()
-	defer logger.Stop()
-
 	pkgPath := ""
 	if len(args) > 0 {
 		pkgPath = args[0]
@@ -148,23 +157,23 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 
 	var executable string
 	if pkgPath != "" {
+		step := logging.NewStep(testID, "Preparing artifacts")
+		step.Start()
 		executable = filepath.Join(os.TempDir(), "helmit", testID)
 		defer os.RemoveAll(executable)
 		image = defaultRunnerImage
 
-		spinner := logger.NewSpinner("Building executable")
-		spinner.Start()
-		spinner.Logf("Validating package %s", pkgPath)
+		step.Logf("Validating %s", pkgPath)
 		if err := validatePackage(pkgPath); err != nil {
-			spinner.Fail()
+			step.Fail(err)
 			return err
 		}
-		spinner.Logf("Building %s", executable)
+		step.Logf("Building %s", pkgPath)
 		if err := buildBinary(pkgPath, executable); err != nil {
-			spinner.Fail()
+			step.Fail(err)
 			return err
 		}
-		spinner.Succeed()
+		step.Complete()
 	}
 
 	config := test.Config{
@@ -210,22 +219,21 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	spinner := logger.NewSpinner("Creating test resources")
-	spinner.Start()
-	if err := job.Create(ctx); err != nil {
-		spinner.Fail()
+	step := logging.NewStep(testID, "Creating test resources")
+	step.Start()
+	if err := job.Create(ctx, step); err != nil {
+		step.Fail(err)
 		return err
 	}
-	spinner.Succeed()
+	step.Complete()
 
+	step = logging.NewStep(testID, "Setting up test environment")
+	step.Start()
 	if executable != "" {
-		spinner = logger.NewSpinner("Copying executable into test pod")
-		spinner.Start()
-		if err := job.Copy(ctx, filepath.Base(executable), executable); err != nil {
-			spinner.Fail()
+		if err := job.Copy(ctx, filepath.Base(executable), executable, step); err != nil {
+			step.Fail(err)
 			return err
 		}
-		spinner.Succeed()
 	}
 
 	// If a context was provided, copy the context into the job
@@ -234,38 +242,32 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		spinner = logger.NewSpinner("Copying context into test pod")
-		spinner.Start()
-		if err := job.Copy(ctx, defaultContextPath, path); err != nil {
-			spinner.Fail()
+		if err := job.Copy(ctx, defaultContextPath, path, step); err != nil {
+			step.Fail(err)
 			return err
 		}
-		spinner.Succeed()
 	}
 
 	if len(valueFiles) > 0 {
-		spinner = logger.NewSpinner("Copying values files into test pod")
-		spinner.Start()
 		for _, files := range valueFiles {
 			for _, file := range files {
-				spinner.Logf("Copying %s", file)
-				if err := job.Copy(ctx, filepath.Base(file), file); err != nil {
-					spinner.Fail()
+				if err := job.Copy(ctx, filepath.Base(file), file, step); err != nil {
+					step.Fail(err)
 					return err
 				}
 			}
 		}
-		spinner.Succeed()
 	}
-
-	spinner = logger.NewSpinner("Starting tests")
-	spinner.Start()
 
 	// Inject the executable path into the job container via the bin-ready file
 	if err := job.Echo(ctx, readyFile, []byte(filepath.Base(executable))); err != nil {
-		spinner.Fail()
+		step.Fail(err)
 		return err
 	}
+	step.Complete()
+
+	step = logging.NewStep(testID, "Running tests")
+	step.Start()
 
 	// Open a log stream for the job
 	stream, err := job.GetLogs(context.Background())
@@ -274,29 +276,31 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	}
 	defer stream.Close()
 
-	// Copy the job logs to stdout
 	scanner := bufio.NewScanner(stream)
 	for scanner.Scan() {
-		spinner.Log(scanner.Text())
+		fmt.Fprintf(cmd.OutOrStdout(), "    %s\n", scanner.Text())
 	}
-
-	// Mark the job complete
-	spinner.Succeed()
 
 	// Get the exit code for the job.
 	_, code, err := job.GetStatus(ctx)
 	if err != nil {
 		return err
 	}
+	step.Complete()
 
-	spinner = logger.NewSpinner("Deleting test resources")
-	spinner.Start()
-	if err := job.Delete(ctx); err != nil {
-		spinner.Fail()
+	step = logging.NewStep(testID, "Cleaning up test environment")
+	step.Start()
+	if err := job.Delete(ctx, step); err != nil {
+		step.Fail(err)
 		return err
 	}
-	spinner.Succeed()
+	step.Complete()
 
+	if code == 0 {
+		successColor.Fprintf(cmd.OutOrStdout(), "%s Tests passed!\n", successIcon)
+	} else {
+		failureColor.Fprintf(cmd.OutOrStdout(), "%s Tests failed!\n", failureIcon)
+	}
 	os.Exit(code)
 	return nil
 }

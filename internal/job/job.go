@@ -3,6 +3,7 @@ package job
 import (
 	"encoding/json"
 	"github.com/onosproject/helmit/internal/k8s"
+	"github.com/onosproject/helmit/internal/logging"
 	"golang.org/x/net/context"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -112,7 +113,8 @@ func (j *Job) getPod(ctx context.Context) (*corev1.Pod, error) {
 	return nil, nil
 }
 
-func (j *Job) waitForRunning(ctx context.Context) error {
+func (j *Job) waitForRunning(ctx context.Context, log logging.Logger) error {
+	log.Logf("Waiting for Job to start running...")
 	for {
 		pod, err := j.getPod(ctx)
 		if err != nil {

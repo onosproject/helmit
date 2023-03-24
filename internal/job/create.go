@@ -3,6 +3,7 @@ package job
 import (
 	"context"
 	"encoding/json"
+	"github.com/onosproject/helmit/internal/logging"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -11,35 +12,35 @@ import (
 	"time"
 )
 
-func (j *Job) Create(ctx context.Context) error {
+func (j *Job) Create(ctx context.Context, log logging.Logger) error {
 	if err := j.init(); err != nil {
 		return err
 	}
 
 	if j.CreateNamespace {
-		if err := j.createNamespace(ctx); err != nil {
+		if err := j.createNamespace(ctx, log); err != nil {
 			return err
 		}
 	}
-	if err := j.createClusterRoleBinding(ctx); err != nil {
+	if err := j.createClusterRoleBinding(ctx, log); err != nil {
 		return err
 	}
-	if err := j.createJob(ctx); err != nil {
+	if err := j.createJob(ctx, log); err != nil {
 		return err
 	}
-	if err := j.createConfigMap(ctx); err != nil {
+	if err := j.createConfigMap(ctx, log); err != nil {
 		return err
 	}
-	if err := j.createServiceAccount(ctx); err != nil {
+	if err := j.createServiceAccount(ctx, log); err != nil {
 		return err
 	}
-	if err := j.createSecrets(ctx); err != nil {
+	if err := j.createSecrets(ctx, log); err != nil {
 		return err
 	}
-	return j.waitForRunning(ctx)
+	return j.waitForRunning(ctx, log)
 }
 
-func (j *Job) createNamespace(ctx context.Context) error {
+func (j *Job) createNamespace(ctx context.Context, log logging.Logger) error {
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: j.Namespace,
@@ -48,6 +49,7 @@ func (j *Job) createNamespace(ctx context.Context) error {
 			},
 		},
 	}
+	log.Logf("Creating Namespace %s", namespace.Name)
 	if _, err := j.client.CoreV1().Namespaces().Create(ctx, namespace, metav1.CreateOptions{}); err != nil {
 		return err
 	}
@@ -55,7 +57,7 @@ func (j *Job) createNamespace(ctx context.Context) error {
 }
 
 // createJob creates the job to run tests
-func (j *Job) createJob(ctx context.Context) error {
+func (j *Job) createJob(ctx context.Context, log logging.Logger) error {
 	env := make([]corev1.EnvVar, 0, len(j.Env))
 	for key, value := range j.Env {
 		env = append(env, corev1.EnvVar{
@@ -141,7 +143,7 @@ func (j *Job) createJob(ctx context.Context) error {
 
 	zero := int32(0)
 	one := int32(1)
-	batchJob := &batchv1.Job{
+	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      j.ID,
 			Namespace: j.Namespace,
@@ -181,10 +183,11 @@ func (j *Job) createJob(ctx context.Context) error {
 
 	if j.Timeout > 0 {
 		timeoutSeconds := int64(j.Timeout / time.Second)
-		batchJob.Spec.ActiveDeadlineSeconds = &timeoutSeconds
+		job.Spec.ActiveDeadlineSeconds = &timeoutSeconds
 	}
 
-	_, err := j.client.BatchV1().Jobs(j.Namespace).Create(ctx, batchJob, metav1.CreateOptions{})
+	log.Logf("Creating Job %s", job.Name)
+	_, err := j.client.BatchV1().Jobs(j.Namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -192,7 +195,7 @@ func (j *Job) createJob(ctx context.Context) error {
 }
 
 // createServiceAccount creates a ServiceAccount used by the test manager
-func (j *Job) createServiceAccount(ctx context.Context) error {
+func (j *Job) createServiceAccount(ctx context.Context, log logging.Logger) error {
 	jobObj, err := j.client.BatchV1().Jobs(j.Namespace).Get(ctx, j.ID, metav1.GetOptions{})
 	if err != nil {
 		return err
@@ -217,6 +220,7 @@ func (j *Job) createServiceAccount(ctx context.Context) error {
 			},
 		},
 	}
+	log.Logf("Creating ServiceAccount %s", serviceAccount.Name)
 	_, err = j.client.CoreV1().ServiceAccounts(j.Namespace).Create(ctx, serviceAccount, metav1.CreateOptions{})
 	if err != nil && !k8serrors.IsAlreadyExists(err) {
 		return err
@@ -225,7 +229,7 @@ func (j *Job) createServiceAccount(ctx context.Context) error {
 }
 
 // createClusterRoleBinding creates the ClusterRoleBinding required by the test manager
-func (j *Job) createClusterRoleBinding(ctx context.Context) error {
+func (j *Job) createClusterRoleBinding(ctx context.Context, log logging.Logger) error {
 	serviceAccountName := j.ServiceAccount
 	if serviceAccountName == "" {
 		serviceAccountName = j.ID
@@ -252,6 +256,7 @@ func (j *Job) createClusterRoleBinding(ctx context.Context) error {
 				APIGroup: "rbac.authorization.k8s.io",
 			},
 		}
+		log.Logf("Creating ClusterRoleBinding %s", roleBinding.Name)
 		_, err = j.client.RbacV1().ClusterRoleBindings().Create(ctx, roleBinding, metav1.CreateOptions{})
 		if err != nil && !k8serrors.IsAlreadyExists(err) {
 			return err
@@ -264,14 +269,15 @@ func (j *Job) createClusterRoleBinding(ctx context.Context) error {
 		Name:      serviceAccountName,
 		Namespace: j.Namespace,
 	})
+	log.Logf("Updating ClusterRoleBinding %s", roleBinding.Name)
 	_, err = j.client.RbacV1().ClusterRoleBindings().Update(ctx, roleBinding, metav1.UpdateOptions{})
 	if err != nil && k8serrors.IsConflict(err) {
-		return j.createClusterRoleBinding(ctx)
+		return j.createClusterRoleBinding(ctx, log)
 	}
 	return err
 }
 
-func (j *Job) createConfigMap(ctx context.Context) error {
+func (j *Job) createConfigMap(ctx context.Context, log logging.Logger) error {
 	configJSON, err := json.Marshal(j.Config)
 	if err != nil {
 		return err
@@ -303,6 +309,7 @@ func (j *Job) createConfigMap(ctx context.Context) error {
 		},
 	}
 
+	log.Logf("Creating ConfigMap %s", cm.Name)
 	if _, err := j.client.CoreV1().ConfigMaps(j.Namespace).Create(ctx, cm, metav1.CreateOptions{}); err != nil {
 		return err
 	}
@@ -310,7 +317,7 @@ func (j *Job) createConfigMap(ctx context.Context) error {
 }
 
 // createSecrets copies over the CLI secrets into the pod
-func (j *Job) createSecrets(ctx context.Context) error {
+func (j *Job) createSecrets(ctx context.Context, log logging.Logger) error {
 	if len(j.Secrets) == 0 {
 		return nil
 	}
@@ -343,6 +350,7 @@ func (j *Job) createSecrets(ctx context.Context) error {
 		},
 		Data: secretData,
 	}
+	log.Logf("Creating Secret %s", secret.Name)
 	_, _ = j.client.CoreV1().Secrets(j.Namespace).Create(ctx, secret, metav1.CreateOptions{})
 	return nil
 }
