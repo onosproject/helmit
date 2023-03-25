@@ -15,8 +15,10 @@ import (
 	"github.com/onosproject/helmit/internal/logging"
 	"github.com/onosproject/helmit/pkg/bench"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -285,67 +287,84 @@ func runBenchmark(job job.Job[bench.Config], workers int, maxIterations int, max
 	}
 	defer cancel()
 
-	ch := make(chan workerReport)
+	reportCh := make(chan workerReport)
 	wg := &sync.WaitGroup{}
 	for i := 0; i < workers; i++ {
 		wg.Add(1)
 		go func(worker int) {
-			_ = runBenchmarkWorker(ctx, job, worker, ch, timeout)
+			_ = runBenchmarkWorker(ctx, job, worker, reportCh, timeout)
 			wg.Done()
 		}(i)
 	}
 
 	go func() {
 		wg.Wait()
-		close(ch)
+		close(reportCh)
 	}()
 
 	uiwriter := uilive.New()
 	uiwriter.Out = os.Stdout
 
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
+
 	reports := make([]*workerReport, workers)
 	var canceled bool
 	var iterations int
-	for report := range ch {
-		reports[report.worker] = &report
+	for {
+		select {
+		case report, ok := <-reportCh:
+			if !ok {
+				return nil
+			}
+			if canceled {
+				continue
+			}
 
-		writer := new(tabwriter.Writer)
-		writer.Init(uiwriter, 0, 0, 3, ' ', tabwriter.FilterHTML)
+			reports[report.worker] = &report
 
-		fmt.Fprintln(writer, "WORKER\tITERATIONS\tDURATION\tTHROUGHPUT\tMEAN LATENCY\tMEDIAN LATENCY\t75% LATENCY\t95% LATENCY\t99% LATENCY")
-		var count int
-		var total bench.Report
-		for worker, report := range reports {
-			if report != nil {
-				fmt.Fprintf(writer, "%d\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
-					worker, report.Iterations, report.Duration,
-					float64(report.Iterations)/(float64(report.Duration)/float64(time.Second)),
-					report.MeanLatency, report.P50Latency, report.P75Latency, report.P95Latency, report.P99Latency)
-				iterations += report.Iterations
-				total.Iterations += report.Iterations
-				total.Duration += report.Duration
-				total.MeanLatency += report.MeanLatency
-				total.P50Latency += report.P50Latency
-				total.P75Latency += report.P75Latency
-				total.P95Latency += report.P95Latency
-				total.P99Latency += report.P99Latency
-				count++
+			writer := new(tabwriter.Writer)
+			writer.Init(uiwriter, 0, 0, 3, ' ', tabwriter.FilterHTML)
+
+			fmt.Fprintln(writer, "WORKER\tITERATIONS\tDURATION\tTHROUGHPUT\tMEAN LATENCY\tMEDIAN LATENCY\t75% LATENCY\t95% LATENCY\t99% LATENCY")
+			var count int
+			var total bench.Report
+			for worker, report := range reports {
+				if report != nil {
+					fmt.Fprintf(writer, "%d\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
+						worker, report.Iterations, report.Duration,
+						float64(report.Iterations)/(float64(report.Duration)/float64(time.Second)),
+						report.MeanLatency, report.P50Latency, report.P75Latency, report.P95Latency, report.P99Latency)
+					iterations += report.Iterations
+					total.Iterations += report.Iterations
+					total.Duration += report.Duration
+					total.MeanLatency += report.MeanLatency
+					total.P50Latency += report.P50Latency
+					total.P75Latency += report.P75Latency
+					total.P95Latency += report.P95Latency
+					total.P99Latency += report.P99Latency
+					count++
+				}
+			}
+			fmt.Fprintf(writer, "TOTAL\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n", total.Iterations, total.Duration,
+				float64(total.Iterations)/(float64(total.Duration)/float64(time.Second)),
+				total.MeanLatency/time.Duration(count), report.P50Latency/time.Duration(count),
+				report.P75Latency/time.Duration(count), report.P95Latency/time.Duration(count),
+				report.P99Latency/time.Duration(count))
+			writer.Flush()
+			uiwriter.Flush()
+
+			if !canceled && maxIterations > 0 && iterations > maxIterations {
+				cancel()
+				canceled = true
+			}
+		case <-signalCh:
+			if !canceled {
+				cancel()
+				canceled = true
 			}
 		}
-		fmt.Fprintf(writer, "TOTAL\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n", total.Iterations, total.Duration,
-			float64(total.Iterations)/(float64(total.Duration)/float64(time.Second)),
-			total.MeanLatency/time.Duration(count), report.P50Latency/time.Duration(count),
-			report.P75Latency/time.Duration(count), report.P95Latency/time.Duration(count),
-			report.P99Latency/time.Duration(count))
-		writer.Flush()
-		uiwriter.Flush()
-
-		if !canceled && maxIterations > 0 && iterations > maxIterations {
-			cancel()
-			canceled = true
-		}
 	}
-	return nil
 }
 
 func runBenchmarkWorker(ctx context.Context, job job.Job[bench.Config], worker int, ch chan<- workerReport, timeout time.Duration) error {
