@@ -63,6 +63,8 @@ func Main(suites map[string]TestingSuite) {
 
 func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 	return func(t *testing.T) {
+		defer recoverAndFailOnPanic(t)
+
 		ctx := context.Background()
 
 		suite.SetT(t)
