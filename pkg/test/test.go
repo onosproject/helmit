@@ -21,15 +21,12 @@ type TestingSuite interface {
 	Config() *rest.Config
 	SetHelm(helm *helm.Helm)
 	Helm() *helm.Helm
-	SetContext(ctx context.Context)
-	Context() context.Context
 }
 
 // Suite is the base for a test suite
 type Suite struct {
 	suite.Suite
 	*kubernetes.Clientset
-	ctx       context.Context
 	namespace string
 	config    *rest.Config
 	helm      *helm.Helm
@@ -52,18 +49,34 @@ func (suite *Suite) Config() *rest.Config {
 	return suite.config
 }
 
-func (suite *Suite) SetContext(ctx context.Context) {
-	suite.ctx = ctx
-}
-
-func (suite *Suite) Context() context.Context {
-	return suite.ctx
-}
-
 func (suite *Suite) SetHelm(helm *helm.Helm) {
 	suite.helm = helm
 }
 
 func (suite *Suite) Helm() *helm.Helm {
 	return suite.helm
+}
+
+// SetupSuite has a SetupSuite method, which will run before the
+// tests in the suite are run.
+type SetupSuite interface {
+	SetupSuite(ctx context.Context)
+}
+
+// SetupTest has a SetupTest method, which will run before each
+// test in the suite.
+type SetupTest interface {
+	SetupTest(ctx context.Context)
+}
+
+// TearDownSuite has a TearDownSuite method, which will run after
+// all the tests in the suite have been run.
+type TearDownSuite interface {
+	TearDownSuite(ctx context.Context)
+}
+
+// TearDownTest has a TearDownTest method, which will run after
+// each test in the suite.
+type TearDownTest interface {
+	TearDownTest(ctx context.Context)
 }

@@ -4,6 +4,8 @@
 
 package test
 
+import "time"
+
 // Config is a test configuration
 type Config struct {
 	Namespace  string              `json:"namespace,omitempty"`
@@ -16,5 +18,6 @@ type Config struct {
 	Context    string              `json:"context,omitempty"`
 	Values     map[string][]string `json:"values,omitempty"`
 	ValueFiles map[string][]string `json:"valueFiles,omitempty"`
+	Timeout    time.Duration       `json:"timeout,omitempty"`
 	NoTeardown bool                `json:"noTeardown,omitempty"`
 }

@@ -11,9 +11,10 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	"os"
 	"path"
+	"path/filepath"
 )
 
-func (j *Job) GetLogs(ctx context.Context) (io.ReadCloser, error) {
+func (j *Job[T]) GetLogs(ctx context.Context) (io.ReadCloser, error) {
 	if err := j.init(); err != nil {
 		return nil, err
 	}
@@ -25,7 +26,42 @@ func (j *Job) GetLogs(ctx context.Context) (io.ReadCloser, error) {
 	return req.Stream(ctx)
 }
 
-func (j *Job) Copy(ctx context.Context, dst, src string, log logging.Logger) error {
+func (j *Job[T]) copyExecutable(ctx context.Context, log logging.Logger) error {
+	if j.Executable != "" {
+		log.Logf("Copying %s to %s", j.Executable, j.pod.Name)
+		return j.copy(ctx, filepath.Base(j.Executable), j.Executable)
+	}
+	return nil
+}
+
+func (j *Job[T]) copyContext(ctx context.Context, log logging.Logger) error {
+	if j.Context != "" {
+		log.Logf("Copying %s to %s", j.Context, j.pod.Name)
+		return j.copy(ctx, contextDir, j.Context)
+	}
+	return nil
+}
+
+func (j *Job[T]) copyValueFiles(ctx context.Context, log logging.Logger) error {
+	for _, files := range j.ValueFiles {
+		for _, file := range files {
+			log.Logf("Copying %s to %s", file, j.pod.Name)
+			if err := j.copy(ctx, filepath.Base(file), file); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (j *Job[T]) runExecutable(ctx context.Context, log logging.Logger) error {
+	if j.Executable != "" {
+		return j.echo(ctx, readyFile, []byte(filepath.Base(j.Executable)))
+	}
+	return nil
+}
+
+func (j *Job[T]) copy(ctx context.Context, dst, src string) error {
 	if err := j.init(); err != nil {
 		return err
 	}
@@ -56,7 +92,6 @@ func (j *Job) Copy(ctx context.Context, dst, src string, log logging.Logger) err
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
-	log.Logf("Copying %s to %s", src, j.pod.Name)
 	exec, err := remotecommand.NewSPDYExecutor(j.config, "POST", req.URL())
 	if err != nil {
 		return err
@@ -73,7 +108,7 @@ func (j *Job) Copy(ctx context.Context, dst, src string, log logging.Logger) err
 	return nil
 }
 
-func (j *Job) Echo(ctx context.Context, dst string, data []byte) error {
+func (j *Job[T]) echo(ctx context.Context, dst string, data []byte) error {
 	if err := j.init(); err != nil {
 		return err
 	}

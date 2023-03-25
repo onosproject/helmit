@@ -17,6 +17,8 @@ import (
 const (
 	configPath = "/etc/helmit"
 	configFile = "config.json"
+	readyFile  = "/tmp/bin-ready"
+	contextDir = "context"
 )
 
 const (
@@ -44,7 +46,7 @@ func loadConfig(config any) error {
 	return nil
 }
 
-type Job struct {
+type Job[T any] struct {
 	ID              string
 	Namespace       string
 	CreateNamespace bool
@@ -57,14 +59,16 @@ type Job struct {
 	Args            []string
 	Env             map[string]string
 	Secrets         map[string]string
-	Timeout         time.Duration
-	Config          any
+	Context         string
+	ValueFiles      map[string][]string
+	Executable      string
+	Config          T
 	config          *rest.Config
 	client          *kubernetes.Clientset
 	pod             *corev1.Pod
 }
 
-func (j *Job) init() error {
+func (j *Job[T]) init() error {
 	if j.client != nil {
 		return nil
 	}
@@ -84,7 +88,7 @@ func (j *Job) init() error {
 }
 
 // GetStatus gets the status message and exit code of the given pod
-func (j *Job) GetStatus(ctx context.Context) (string, int, error) {
+func (j *Job[T]) GetStatus(ctx context.Context) (string, int, error) {
 	for {
 		pod, err := j.getPod(ctx)
 		if err != nil {
@@ -99,7 +103,7 @@ func (j *Job) GetStatus(ctx context.Context) (string, int, error) {
 	}
 }
 
-func (j *Job) getPod(ctx context.Context) (*corev1.Pod, error) {
+func (j *Job[T]) getPod(ctx context.Context) (*corev1.Pod, error) {
 	pods, err := j.client.CoreV1().Pods(j.Namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: "job=" + j.ID,
 	})
@@ -113,7 +117,7 @@ func (j *Job) getPod(ctx context.Context) (*corev1.Pod, error) {
 	return nil, nil
 }
 
-func (j *Job) waitForRunning(ctx context.Context, log logging.Logger) error {
+func (j *Job[T]) waitForRunning(ctx context.Context, log logging.Logger) error {
 	log.Logf("Waiting for Job to start running...")
 	for {
 		pod, err := j.getPod(ctx)

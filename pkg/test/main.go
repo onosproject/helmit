@@ -9,9 +9,11 @@ import (
 	"fmt"
 	"github.com/onosproject/helmit/internal/job"
 	"github.com/onosproject/helmit/pkg/helm"
-	"github.com/stretchr/testify/suite"
 	"k8s.io/client-go/rest"
 	"os"
+	"reflect"
+	"runtime/debug"
+	"strings"
 	"testing"
 )
 
@@ -59,36 +61,109 @@ func Main(suites map[string]TestingSuite) {
 	testing.Main(func(_, _ string) (bool, error) { return true, nil }, tests, nil, nil)
 }
 
-func getSuiteFunc(config Config, testingSuite TestingSuite) func(*testing.T) {
+func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 	return func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
 		deadline, ok := t.Deadline()
 		if ok {
-			ctx, cancel := context.WithDeadline(context.Background(), deadline)
-			defer cancel()
-			testingSuite.SetContext(ctx)
-		} else {
-			ctx := context.Background()
-			testingSuite.SetContext(ctx)
+			ctx, cancel = context.WithDeadline(context.Background(), deadline)
 		}
+		defer cancel()
 
-		testingSuite.SetNamespace(config.Namespace)
+		suite.SetNamespace(config.Namespace)
 		raftConfig, err := rest.InClusterConfig()
 		if err != nil {
 			t.Fatal(err)
 		}
-		testingSuite.SetConfig(raftConfig)
+		suite.SetConfig(raftConfig)
 
-		testingSuite.SetHelm(helm.NewClient(helm.Context{
+		suite.SetHelm(helm.NewClient(helm.Context{
 			Namespace:  config.Namespace,
 			WorkDir:    config.Context,
 			Values:     config.Values,
 			ValueFiles: config.ValueFiles,
 		}))
 
-		suite.Run(t, testingSuite)
+		var suiteSetupDone bool
+		methodFinder := reflect.TypeOf(suite)
+		testNames := config.Tests
+		if len(testNames) == 0 {
+			for i := 0; i < methodFinder.NumMethod(); i++ {
+				method := methodFinder.Method(i)
+				if strings.HasPrefix(method.Name, "Test") {
+					testNames = append(testNames, method.Name)
+				}
+			}
+		}
+
+		for _, name := range testNames {
+			method, ok := methodFinder.MethodByName(name)
+			if !ok {
+				continue
+			}
+
+			if !suiteSetupDone {
+				if setupAllSuite, ok := suite.(SetupSuite); ok {
+					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+					setupAllSuite.SetupSuite(ctx)
+					cancel()
+				}
+				suiteSetupDone = true
+			}
+
+			t.Run(name, func(t *testing.T) {
+				parentT := suite.T()
+				suite.SetT(t)
+				defer recoverAndFailOnPanic(t)
+				defer func() {
+					r := recover()
+
+					if tearDownTestSuite, ok := suite.(TearDownTest); ok {
+						ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+						defer cancel()
+						tearDownTestSuite.TearDownTest(ctx)
+					}
+
+					suite.SetT(parentT)
+					failOnPanic(t, r)
+				}()
+
+				if setupTestSuite, ok := suite.(SetupTest); ok {
+					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+					defer cancel()
+					setupTestSuite.SetupTest(ctx)
+				}
+
+				ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+				defer cancel()
+				method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
+			})
+		}
+
+		if suiteSetupDone {
+			defer func() {
+				if tearDownAllSuite, ok := suite.(TearDownSuite); ok {
+					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+					defer cancel()
+					tearDownAllSuite.TearDownSuite(ctx)
+				}
+			}()
+		}
 
 		if config.Parallel {
 			t.Parallel()
 		}
+	}
+}
+
+func recoverAndFailOnPanic(t *testing.T) {
+	r := recover()
+	failOnPanic(t, r)
+}
+
+func failOnPanic(t *testing.T, r interface{}) {
+	if r != nil {
+		t.Errorf("test panicked: %v\n%s", r, debug.Stack())
+		t.FailNow()
 	}
 }

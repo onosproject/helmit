@@ -185,6 +185,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		Values:     values,
 		Verbose:    verbose,
 		Args:       testArgs,
+		Timeout:    timeout,
 		NoTeardown: noTeardown,
 	}
 
@@ -203,7 +204,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	job := job.Job{
+	job := job.Job[test.Config]{
 		ID:              testID,
 		Namespace:       namespace,
 		CreateNamespace: createNamespace,
@@ -211,7 +212,9 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		ServiceAccount:  serviceAccount,
 		Image:           defaultRunnerImage,
 		ImagePullPolicy: pullPolicy,
-		Timeout:         timeout,
+		Executable:      executable,
+		Context:         contextPath,
+		ValueFiles:      valueFiles,
 		Secrets:         secrets,
 		Config:          config,
 	}
@@ -219,48 +222,9 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	step := logging.NewStep(testID, "Creating test resources")
+	step := logging.NewStep(testID, "Setting up tests")
 	step.Start()
 	if err := job.Create(ctx, step); err != nil {
-		step.Fail(err)
-		return err
-	}
-	step.Complete()
-
-	step = logging.NewStep(testID, "Setting up test environment")
-	step.Start()
-	if executable != "" {
-		if err := job.Copy(ctx, filepath.Base(executable), executable, step); err != nil {
-			step.Fail(err)
-			return err
-		}
-	}
-
-	// If a context was provided, copy the context into the job
-	if contextPath != "" {
-		path, err := filepath.Abs(contextPath)
-		if err != nil {
-			return err
-		}
-		if err := job.Copy(ctx, defaultContextPath, path, step); err != nil {
-			step.Fail(err)
-			return err
-		}
-	}
-
-	if len(valueFiles) > 0 {
-		for _, files := range valueFiles {
-			for _, file := range files {
-				if err := job.Copy(ctx, filepath.Base(file), file, step); err != nil {
-					step.Fail(err)
-					return err
-				}
-			}
-		}
-	}
-
-	// Inject the executable path into the job container via the bin-ready file
-	if err := job.Echo(ctx, readyFile, []byte(filepath.Base(executable))); err != nil {
 		step.Fail(err)
 		return err
 	}
@@ -288,7 +252,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	}
 	step.Complete()
 
-	step = logging.NewStep(testID, "Cleaning up test environment")
+	step = logging.NewStep(testID, "Cleaning up tests")
 	step.Start()
 	if err := job.Delete(ctx, step); err != nil {
 		step.Fail(err)
