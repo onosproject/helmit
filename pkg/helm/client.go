@@ -67,7 +67,7 @@ func getConfig(namespace string) (*action.Configuration, error) {
 		return config, nil
 	}
 	config := &action.Configuration{}
-	if err := config.Init(settings.RESTClientGetter(), namespace, "memory", log.Printf); err != nil {
+	if err := config.Init(settings.RESTClientGetter(), namespace, "configmap", log.Printf); err != nil {
 		return nil, err
 	}
 	namespaces[namespace] = config
