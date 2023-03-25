@@ -76,6 +76,25 @@ func mergeMaps(a, b map[string]any) map[string]any {
 	return out
 }
 
+// getValue gets the value for the given path
+func getValue(config map[string]any, path []string) any {
+	names, key := getPathAndKey(path)
+	parent := getMap(config, names)
+	return parent[key]
+}
+
+// getMap gets the map at the given path
+func getMap(parent map[string]any, path []string) map[string]any {
+	if len(path) == 0 {
+		return parent
+	}
+	child, ok := parent[path[0]]
+	if !ok {
+		return make(map[string]any)
+	}
+	return getMap(child.(map[string]any), path[1:])
+}
+
 // setKey sets a key in a map
 func setKey(config map[string]any, path []string, value any) {
 	names, key := getPathAndKey(path)

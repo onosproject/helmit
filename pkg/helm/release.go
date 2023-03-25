@@ -2,12 +2,14 @@ package helm
 
 import (
 	"context"
+	"fmt"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/downloader"
 	"helm.sh/helm/v3/pkg/getter"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -110,8 +112,31 @@ func (cmd *InstallCmd) Values(files ...string) *InstallCmd {
 	return cmd
 }
 
-// Do installs the Helm chart
 func (cmd *InstallCmd) Do(ctx context.Context) error {
+	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
+	if err != nil {
+		return err
+	}
+	return cmd.do(ctx, values)
+}
+
+func (cmd *InstallCmd) Get(ctx context.Context) (*Release, error) {
+	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.do(ctx, values); err != nil {
+		return nil, err
+	}
+	return &Release{
+		Namespace: cmd.namespace,
+		Name:      cmd.release,
+		values:    values,
+	}, nil
+}
+
+// do installs the Helm chart
+func (cmd *InstallCmd) do(ctx context.Context, values map[string]any) error {
 	config, err := getConfig(cmd.namespace)
 	if err != nil {
 		return err
@@ -172,10 +197,6 @@ func (cmd *InstallCmd) Do(ctx context.Context) error {
 		}
 	}
 
-	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
-	if err != nil {
-		return err
-	}
 	if _, err := install.RunWithContext(ctx, chart, values); err != nil {
 		return err
 	}
@@ -285,8 +306,31 @@ func (cmd *UpgradeCmd) Values(files ...string) *UpgradeCmd {
 	return cmd
 }
 
-// Do installs the Helm chart
 func (cmd *UpgradeCmd) Do(ctx context.Context) error {
+	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
+	if err != nil {
+		return err
+	}
+	return cmd.do(ctx, values)
+}
+
+func (cmd *UpgradeCmd) Get(ctx context.Context) (*Release, error) {
+	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.do(ctx, values); err != nil {
+		return nil, err
+	}
+	return &Release{
+		Namespace: cmd.namespace,
+		Name:      cmd.release,
+		values:    values,
+	}, nil
+}
+
+// do installs the Helm chart
+func (cmd *UpgradeCmd) do(ctx context.Context, values map[string]any) error {
 	config, err := getConfig(cmd.namespace)
 	if err != nil {
 		return err
@@ -347,10 +391,6 @@ func (cmd *UpgradeCmd) Do(ctx context.Context) error {
 		}
 	}
 
-	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
-	if err != nil {
-		return err
-	}
 	if _, err := upgrade.RunWithContext(ctx, cmd.release, chart, values); err != nil {
 		return err
 	}
@@ -400,4 +440,48 @@ func (cmd *UninstallCmd) Do(ctx context.Context) error {
 	uninstall.Timeout = cmd.timeout
 	_, err = uninstall.Run(cmd.release)
 	return err
+}
+
+type Release struct {
+	Namespace string
+	Name      string
+	values    map[string]any
+}
+
+func (r *Release) Get(path string) Value {
+	return Value{
+		value: getValue(r.values, getPathNames(path)),
+	}
+}
+
+type Value struct {
+	value any
+}
+
+func (v Value) String() string {
+	return fmt.Sprint(v.value)
+}
+
+func (v Value) Bool() bool {
+	b, err := strconv.ParseBool(fmt.Sprint(v.value))
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func (v Value) Int() int {
+	i, err := strconv.Atoi(fmt.Sprint(v.value))
+	if err != nil {
+		panic(err)
+	}
+	return i
+}
+
+func (v Value) Int32() int32 {
+	return int32(v.Int())
+}
+
+func (v Value) Int64() int64 {
+	return int64(v.Int())
 }
