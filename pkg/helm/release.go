@@ -8,6 +8,7 @@ import (
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/downloader"
 	"helm.sh/helm/v3/pkg/getter"
+	"helm.sh/helm/v3/pkg/release"
 	"os"
 	"strconv"
 	"time"
@@ -113,33 +114,27 @@ func (cmd *InstallCmd) Values(files ...string) *InstallCmd {
 }
 
 func (cmd *InstallCmd) Do(ctx context.Context) error {
-	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
-	if err != nil {
-		return err
-	}
-	return cmd.do(ctx, values)
+	_, err := cmd.run(ctx)
+	return err
 }
 
 func (cmd *InstallCmd) Get(ctx context.Context) (*Release, error) {
-	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
+	release, err := cmd.run(ctx)
 	if err != nil {
-		return nil, err
-	}
-	if err := cmd.do(ctx, values); err != nil {
 		return nil, err
 	}
 	return &Release{
-		Namespace: cmd.namespace,
-		Name:      cmd.release,
-		values:    values,
+		Namespace: release.Namespace,
+		Name:      release.Name,
+		values:    mergeValues(release.Chart.Values, release.Config),
 	}, nil
 }
 
-// do installs the Helm chart
-func (cmd *InstallCmd) do(ctx context.Context, values map[string]any) error {
+// run runs the command
+func (cmd *InstallCmd) run(ctx context.Context) (*release.Release, error) {
 	config, err := getConfig(cmd.namespace)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	install := action.NewInstall(config)
@@ -159,18 +154,18 @@ func (cmd *InstallCmd) do(ctx context.Context, values map[string]any) error {
 	// Locate the chart path
 	path, err := install.ChartPathOptions.LocateChart(cmd.chart, settings)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Check chart dependencies to make sure all are present in /charts
 	chart, err := loader.Load(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	valid, err := isChartInstallable(chart)
 	if !valid {
-		return err
+		return nil, err
 	}
 
 	if req := chart.Metadata.Dependencies; req != nil {
@@ -189,18 +184,19 @@ func (cmd *InstallCmd) do(ctx context.Context, values map[string]any) error {
 					RepositoryCache:  settings.RepositoryCache,
 				}
 				if err := man.Update(); err != nil {
-					return err
+					return nil, err
 				}
 			} else {
-				return err
+				return nil, err
 			}
 		}
 	}
 
-	if _, err := install.RunWithContext(ctx, chart, values); err != nil {
-		return err
+	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return install.RunWithContext(ctx, chart, values)
 }
 
 func newUpgrade(context Context, release string, chart string) *UpgradeCmd {
@@ -307,33 +303,27 @@ func (cmd *UpgradeCmd) Values(files ...string) *UpgradeCmd {
 }
 
 func (cmd *UpgradeCmd) Do(ctx context.Context) error {
-	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
-	if err != nil {
-		return err
-	}
-	return cmd.do(ctx, values)
+	_, err := cmd.run(ctx)
+	return err
 }
 
 func (cmd *UpgradeCmd) Get(ctx context.Context) (*Release, error) {
-	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
+	release, err := cmd.run(ctx)
 	if err != nil {
-		return nil, err
-	}
-	if err := cmd.do(ctx, values); err != nil {
 		return nil, err
 	}
 	return &Release{
-		Namespace: cmd.namespace,
-		Name:      cmd.release,
-		values:    values,
+		Namespace: release.Namespace,
+		Name:      release.Name,
+		values:    mergeValues(release.Chart.Values, release.Config),
 	}, nil
 }
 
-// do installs the Helm chart
-func (cmd *UpgradeCmd) do(ctx context.Context, values map[string]any) error {
+// run runs the command
+func (cmd *UpgradeCmd) run(ctx context.Context) (*release.Release, error) {
 	config, err := getConfig(cmd.namespace)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	upgrade := action.NewUpgrade(config)
@@ -353,18 +343,18 @@ func (cmd *UpgradeCmd) do(ctx context.Context, values map[string]any) error {
 	// Locate the chart path
 	path, err := upgrade.ChartPathOptions.LocateChart(cmd.chart, settings)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Check chart dependencies to make sure all are present in /charts
 	chart, err := loader.Load(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	valid, err := isChartUpgradable(chart)
 	if !valid {
-		return err
+		return nil, err
 	}
 
 	if req := chart.Metadata.Dependencies; req != nil {
@@ -383,18 +373,19 @@ func (cmd *UpgradeCmd) do(ctx context.Context, values map[string]any) error {
 					RepositoryCache:  settings.RepositoryCache,
 				}
 				if err := man.Update(); err != nil {
-					return err
+					return nil, err
 				}
 			} else {
-				return err
+				return nil, err
 			}
 		}
 	}
 
-	if _, err := upgrade.RunWithContext(ctx, cmd.release, chart, values); err != nil {
-		return err
+	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	return upgrade.RunWithContext(ctx, cmd.release, chart, values)
 }
 
 func newUninstall(context Context, release string) *UninstallCmd {
@@ -459,10 +450,16 @@ type Value struct {
 }
 
 func (v Value) String() string {
+	if v.value == nil {
+		return ""
+	}
 	return fmt.Sprint(v.value)
 }
 
 func (v Value) Bool() bool {
+	if v.value == nil {
+		return false
+	}
 	b, err := strconv.ParseBool(fmt.Sprint(v.value))
 	if err != nil {
 		panic(err)
@@ -471,6 +468,9 @@ func (v Value) Bool() bool {
 }
 
 func (v Value) Int() int {
+	if v.value == nil {
+		return 0
+	}
 	i, err := strconv.Atoi(fmt.Sprint(v.value))
 	if err != nil {
 		panic(err)
