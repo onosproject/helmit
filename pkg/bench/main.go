@@ -14,6 +14,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"sort"
 	"sync/atomic"
 	"time"
 )
@@ -125,6 +126,10 @@ func run(suites map[string]BenchmarkingSuite) error {
 		for {
 			select {
 			case <-ticker.C:
+				sort.Slice(calls, func(i, j int) bool {
+					return calls[i] < calls[j]
+				})
+
 				// Calculate the total latency from latency results
 				var totalCallRTT time.Duration
 				for _, rtt := range calls {
