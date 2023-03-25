@@ -60,23 +60,23 @@ func (suite *Suite) Helm() *helm.Helm {
 // SetupSuite has a SetupSuite method, which will run before the
 // tests in the suite are run.
 type SetupSuite interface {
-	SetupSuite(ctx context.Context) error
+	SetupSuite(ctx context.Context)
 }
 
 // SetupTest has a SetupTest method, which will run before each
 // test in the suite.
 type SetupTest interface {
-	SetupTest(ctx context.Context) error
+	SetupTest(ctx context.Context)
 }
 
 // TearDownSuite has a TearDownSuite method, which will run after
 // all the tests in the suite have been run.
 type TearDownSuite interface {
-	TearDownSuite(ctx context.Context) error
+	TearDownSuite(ctx context.Context)
 }
 
 // TearDownTest has a TearDownTest method, which will run after
 // each test in the suite.
 type TearDownTest interface {
-	TearDownTest(ctx context.Context) error
+	TearDownTest(ctx context.Context)
 }
