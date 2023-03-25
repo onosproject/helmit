@@ -6,17 +6,15 @@ package bench
 
 import (
 	"context"
-	"fmt"
 	"github.com/onosproject/helmit/pkg/helm"
-	"io"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
 // BenchmarkingSuite is a suite of benchmarks
 type BenchmarkingSuite interface {
-	SetB(b *B)
-	B() *B
+	SetNamespace(namespace string)
+	Namespace() string
 	SetConfig(config *rest.Config)
 	Config() *rest.Config
 	SetHelm(helm *helm.Helm)
@@ -26,21 +24,17 @@ type BenchmarkingSuite interface {
 // Suite is the base for a benchmark suite
 type Suite struct {
 	*kubernetes.Clientset
-	b      *B
-	config *rest.Config
-	helm   *helm.Helm
+	namespace string
+	config    *rest.Config
+	helm      *helm.Helm
+}
+
+func (suite *Suite) SetNamespace(namespace string) {
+	suite.namespace = namespace
 }
 
 func (suite *Suite) Namespace() string {
-	return suite.helm.Namespace()
-}
-
-func (suite *Suite) SetB(b *B) {
-	suite.b = b
-}
-
-func (suite *Suite) B() *B {
-	return suite.b
+	return suite.namespace
 }
 
 func (suite *Suite) SetConfig(config *rest.Config) {
@@ -88,20 +82,4 @@ type SetupBenchmark interface {
 // TearDownBenchmark is an interface for executing code after every benchmark
 type TearDownBenchmark interface {
 	TearDownBenchmark(ctx context.Context) error
-}
-
-// B is a benchmark runner
-type B struct {
-	Suite  string
-	Name   string
-	Worker int
-	out    io.Writer
-}
-
-func (b *B) Log(msg string) {
-	fmt.Fprintf(b.out, "%s\n", msg)
-}
-
-func (b *B) Logf(msg string, args ...any) {
-	b.Log(fmt.Sprintf(msg, args...))
 }

@@ -5,27 +5,29 @@
 package bench
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	"time"
+)
+
+type Type string
+
+const (
+	SetupType    Type = "Setup"
+	WorkerType   Type = "Worker"
+	TearDownType Type = "TearDown"
 )
 
 // Config is a benchmark configuration
 type Config struct {
-	WorkerConfig   `json:"workerConfig"`
-	Suite          string            `json:"suite,omitempty"`
-	Benchmark      string            `json:"benchmark,omitempty"`
-	Workers        int               `json:"workers,omitempty"`
-	Parallelism    int               `json:"parallelism,omitempty"`
-	Iterations     int               `json:"iterations,omitempty"`
-	Duration       *time.Duration    `json:"duration,omitempty"`
-	ReportInterval time.Duration     `json:"reportInterval"`
-	Args           map[string]string `json:"args,omitempty"`
-	NoTeardown     bool              `json:"verbose,omitempty"`
-}
-
-// WorkerConfig is a benchmark worker configuration
-type WorkerConfig struct {
-	Image           string            `json:"workerImage"`
-	ImagePullPolicy corev1.PullPolicy `json:"WorkerImagePullPolicy"`
-	Env             map[string]string `json:"env"`
+	Type           Type                `json:"type,omitempty"`
+	Namespace      string              `json:"namespace,omitempty"`
+	Suite          string              `json:"suite,omitempty"`
+	Benchmark      string              `json:"benchmark,omitempty"`
+	Parallelism    int                 `json:"parallelism,omitempty"`
+	ReportInterval time.Duration       `json:"reportInterval,omitempty"`
+	Timeout        time.Duration       `json:"timeout,omitempty"`
+	Context        string              `json:"context,omitempty"`
+	Values         map[string][]string `json:"values,omitempty"`
+	ValueFiles     map[string][]string `json:"valueFiles,omitempty"`
+	Args           map[string]string   `json:"args,omitempty"`
+	NoTeardown     bool                `json:"verbose,omitempty"`
 }

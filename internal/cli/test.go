@@ -133,9 +133,6 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	if pkgPath == "" && image == "" {
 		return errors.New("must specify either a test package or --image to run")
 	}
-	if image == "" {
-		image = defaultRunnerImage
-	}
 
 	valueFiles, err := parseFiles(files)
 	if err != nil {
@@ -210,7 +207,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		CreateNamespace: createNamespace,
 		DeleteNamespace: createNamespace && !noTeardown,
 		ServiceAccount:  serviceAccount,
-		Image:           defaultRunnerImage,
+		Image:           image,
 		ImagePullPolicy: pullPolicy,
 		Executable:      executable,
 		Context:         contextPath,

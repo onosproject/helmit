@@ -4,13 +4,21 @@
 
 package bench
 
-/*
 import (
+	"context"
+	"encoding/json"
 	"fmt"
-	jobs "github.com/onosproject/helmit/internal/job"
-	"github.com/onosproject/helmit/internal/log"
+	"github.com/onosproject/helmit/internal/job"
+	"github.com/onosproject/helmit/pkg/helm"
+	"k8s.io/client-go/rest"
+	"math"
 	"os"
+	"reflect"
+	"sync/atomic"
+	"time"
 )
+
+const shutdownFile = "/tmp/shutdown"
 
 // The executor is the entrypoint for benchmark images. It takes the input and environment and runs
 // the image in the appropriate context according to the arguments.
@@ -26,48 +34,174 @@ func Main(suites map[string]BenchmarkingSuite) {
 
 // run runs a benchmark
 func run(suites map[string]BenchmarkingSuite) error {
-	switch jobs.GetType() {
-	case jobs.ExecutorType:
-		return runExecutor()
-	case jobs.WorkerType:
-		return runWorker(suites)
-	}
-	return nil
-}
-
-// runExecutor runs a test image in the executor context
-func runExecutor() error {
-	writer := log.NewJSONWriter(os.Stdout)
-
-	job, err := jobs.Bootstrap[Config]()
-	if err != nil {
-		return err
-	}
-
-	executor, err := newExecutor(job.Spec, writer)
-	if err != nil {
-		return err
-	}
-
-	if err := executor.run(job.Config); err != nil {
+	var config Config
+	if err := job.Bootstrap(&config); err != nil {
 		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	suite, ok := suites[config.Suite]
+	if !ok {
+		return fmt.Errorf("unknown suite %s", config.Suite)
+	}
+
+	suite.SetNamespace(config.Namespace)
+	raftConfig, err := rest.InClusterConfig()
+	if err != nil {
 		return err
+	}
+	suite.SetConfig(raftConfig)
+
+	suite.SetHelm(helm.NewClient(helm.Context{
+		Namespace:  config.Namespace,
+		WorkDir:    config.Context,
+		Values:     config.Values,
+		ValueFiles: config.ValueFiles,
+	}))
+
+	methodFinder := reflect.TypeOf(suite)
+	method, ok := methodFinder.MethodByName(config.Benchmark)
+	if !ok {
+		return fmt.Errorf("unknown benchmark %s", config.Benchmark)
+	}
+
+	switch config.Type {
+	case SetupType:
+		if setupSuite, ok := suite.(SetupSuite); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			defer cancel()
+			if err := setupSuite.SetupSuite(ctx); err != nil {
+				return err
+			}
+		}
+		if setupBench, ok := suite.(SetupBenchmark); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			defer cancel()
+			if err := setupBench.SetupBenchmark(ctx); err != nil {
+				return err
+			}
+		}
+	case WorkerType:
+		if setupWorker, ok := suite.(SetupWorker); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			defer cancel()
+			if err := setupWorker.SetupWorker(ctx); err != nil {
+				return err
+			}
+		}
+
+		f := func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			defer cancel()
+			values := method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
+			if len(values) == 0 || values[0].Interface() == nil {
+				return nil
+			}
+			return values[0].Interface().(error)
+		}
+
+		shutdownCh := make(chan struct{})
+		go func() {
+			awaitShutdown()
+			close(shutdownCh)
+		}()
+
+		stopped := &atomic.Bool{}
+		results := make(chan time.Duration, 1000)
+		for i := 0; i < config.Parallelism; i++ {
+			go func() {
+				for !stopped.Load() {
+					start := time.Now()
+					if err := f(); err == nil {
+						results <- time.Since(start)
+					}
+				}
+			}()
+		}
+
+		ticker := time.NewTicker(config.ReportInterval)
+		start := time.Now()
+		var calls []time.Duration
+		for {
+			select {
+			case <-ticker.C:
+				// Calculate the total latency from latency results
+				var totalCallRTT time.Duration
+				for _, rtt := range calls {
+					totalCallRTT += rtt
+				}
+
+				// Compute the report statistics
+				report := Report{
+					Iterations:  len(calls),
+					Duration:    time.Since(start),
+					MeanLatency: time.Duration(int64(totalCallRTT) / int64(len(calls))),
+					P50Latency:  calls[int(math.Max(float64(len(calls)/2)-1, 0))],
+					P75Latency:  calls[int(math.Max(float64(len(calls)-(len(calls)/4)-1), 0))],
+					P95Latency:  calls[int(math.Max(float64(len(calls)-(len(calls)/20)-1), 0))],
+					P99Latency:  calls[int(math.Max(float64(len(calls)-(len(calls)/100)-1), 0))],
+				}
+
+				bytes, err := json.Marshal(&report)
+				if err != nil {
+					return err
+				}
+				fmt.Println(string(bytes))
+
+				start = time.Now()
+				calls = []time.Duration{}
+			case result := <-results:
+				calls = append(calls, result)
+			case <-shutdownCh:
+				stopped.Store(true)
+				if tearDownWorker, ok := suite.(TearDownWorker); ok {
+					ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+					defer cancel()
+					if err := tearDownWorker.TearDownWorker(ctx); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	case TearDownType:
+		if tearDownBench, ok := suite.(TearDownBenchmark); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			defer cancel()
+			if err := tearDownBench.TearDownBenchmark(ctx); err != nil {
+				return err
+			}
+		}
+		if tearDownSuite, ok := suite.(TearDownSuite); ok {
+			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			defer cancel()
+			if err := tearDownSuite.TearDownSuite(ctx); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
 
-// runWorker runs a test image in the worker context
-func runWorker(suites map[string]BenchmarkingSuite) error {
-	job, err := jobs.Bootstrap[WorkerConfig]()
-	if err != nil {
-		return err
+func awaitShutdown() {
+	for {
+		if isShutdown() {
+			return
+		}
+		time.Sleep(time.Second)
 	}
-
-	worker, err := newWorker(job.Spec, suites)
-	if err != nil {
-		return err
-	}
-	return worker.run()
 }
 
-*/
+func isShutdown() bool {
+	info, err := os.Stat(shutdownFile)
+	return err == nil && !info.IsDir()
+}
+
+type Report struct {
+	Iterations  int           `json:"iterations"`
+	Duration    time.Duration `json:"duration"`
+	MeanLatency time.Duration `json:"meanLatency"`
+	P50Latency  time.Duration `json:"p50Latency"`
+	P75Latency  time.Duration `json:"p75Latency"`
+	P95Latency  time.Duration `json:"p95Latency"`
+	P99Latency  time.Duration `json:"p99Latency"`
+}

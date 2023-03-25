@@ -4,16 +4,20 @@
 
 package cli
 
-/*
-
 import (
+	"bufio"
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	petname "github.com/dustinkirkland/golang-petname"
-	"github.com/onosproject/helmit/internal/log"
-	"github.com/onosproject/helmit/internal/task"
+	"github.com/gosuri/uilive"
+	"github.com/onosproject/helmit/internal/logging"
 	"github.com/onosproject/helmit/pkg/bench"
 	"os"
 	"path/filepath"
+	"sync"
+	"text/tabwriter"
 	"time"
 
 	"github.com/onosproject/helmit/internal/job"
@@ -78,7 +82,6 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().IntP("workers", "w", 1, "the number of workers to run")
 	cmd.Flags().Int("parallel", 1, "the number of concurrent goroutines per client")
 	cmd.Flags().IntP("iterations", "", 0, "the number of iterations to run")
-	cmd.Flags().DurationP("max-latency", "m", 0, "maximum latency allowed")
 	cmd.Flags().DurationP("duration", "d", 0, "the duration for which to run the test")
 	cmd.Flags().DurationP("report-interval", "r", 5*time.Second, "the interval at which to report benchmark results")
 	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named benchmark arguments")
@@ -91,8 +94,8 @@ func getBenchCommand() *cobra.Command {
 }
 
 func runBenchCommand(cmd *cobra.Command, args []string) error {
-	writer := log.NewUIWriter(cmd.OutOrStdout())
-	defer writer.Close()
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
 
 	pkgPath := ""
 	if len(args) > 0 {
@@ -126,9 +129,6 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	if pkgPath == "" && image == "" {
 		return errors.New("must specify either a benchmark package or --image to run")
 	}
-	if image == "" {
-		image = defaultRunnerImage
-	}
 
 	// If a context was provided, convert the context to its absolute path
 	if contextPath != "" {
@@ -149,11 +149,6 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var d *time.Duration
-	if duration != 0 {
-		d = &duration
-	}
-
 	secrets, err := parseSecrets(secretsArray)
 	if err != nil {
 		return err
@@ -164,104 +159,253 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 
 	var executable string
 	if pkgPath != "" {
+		step := logging.NewStep(benchID, "Preparing artifacts")
+		step.Start()
 		executable = filepath.Join(os.TempDir(), "helmit", benchID)
 		defer os.RemoveAll(executable)
-		err := task.New(writer, "Prepare artifacts").
-			Run(func(context task.Context) error {
-				context.Status().Setf("Validating package %s", pkgPath)
-				if err := validatePackage(pkgPath); err != nil {
-					return err
-				}
+		image = defaultRunnerImage
 
-				context.Status().Setf("Building %s", executable)
-				if err := buildBinary(pkgPath, executable); err != nil {
-					return err
-				}
-				return nil
-			})
-		if err != nil {
-			cmd.SilenceUsage = true
-			cmd.SilenceErrors = true
+		step.Logf("Validating %s", pkgPath)
+		if err := validatePackage(pkgPath); err != nil {
+			step.Fail(err)
 			return err
+		}
+		step.Logf("Building %s", pkgPath)
+		if err := buildBinary(pkgPath, executable); err != nil {
+			step.Fail(err)
+			return err
+		}
+		step.Complete()
+	}
+
+	config := bench.Config{
+		Namespace:      namespace,
+		Suite:          suite,
+		Benchmark:      benchmarkName,
+		Parallelism:    parallelism,
+		Values:         values,
+		ReportInterval: reportInterval,
+		Timeout:        timeout,
+		Args:           benchArgs,
+		NoTeardown:     noTeardown,
+	}
+
+	if contextPath != "" {
+		config.Context = defaultContextPath
+	}
+
+	if len(valueFiles) > 0 {
+		config.ValueFiles = make(map[string][]string)
+		for release, files := range valueFiles {
+			var baseFiles []string
+			for _, file := range files {
+				baseFiles = append(baseFiles, filepath.Base(file))
+			}
+			config.ValueFiles[release] = baseFiles
 		}
 	}
 
-	manager := job.NewManager[bench.Config](job.ExecutorType)
 	job := job.Job[bench.Config]{
-		Spec: job.Spec{
-			ID:              benchID,
-			Namespace:       namespace,
-			CreateNamespace: createNamespace,
-			ServiceAccount:  serviceAccount,
-			Labels:          labels,
-			Annotations:     annotations,
-			Executable:      executable,
-			Image:           defaultRunnerImage,
-			ImagePullPolicy: pullPolicy,
-			Context:         contextPath,
-			ValueFiles:      valueFiles,
-			Values:          values,
-			Timeout:         timeout,
-			NoTeardown:      noTeardown,
-			Secrets:         secrets,
-		},
-		Config: bench.Config{
-			WorkerConfig: bench.WorkerConfig{
-				Image:           image,
-				ImagePullPolicy: pullPolicy,
-				// TODO: Add environment variables?
-				// Env: ...
-			},
-			Suite:          suite,
-			Benchmark:      benchmarkName,
-			Workers:        workers,
-			Parallelism:    parallelism,
-			Iterations:     iterations,
-			Duration:       d,
-			ReportInterval: reportInterval,
-			Args:           benchArgs,
-			NoTeardown:     noTeardown,
-		},
+		ID:              benchID,
+		Namespace:       namespace,
+		Labels:          labels,
+		Annotations:     annotations,
+		CreateNamespace: createNamespace,
+		DeleteNamespace: createNamespace && !noTeardown,
+		ServiceAccount:  serviceAccount,
+		Image:           image,
+		ImagePullPolicy: pullPolicy,
+		Executable:      executable,
+		Context:         contextPath,
+		ValueFiles:      valueFiles,
+		Secrets:         secrets,
+		Config:          config,
 	}
 
-	err = task.New(writer, "Setup benchmark executor").Run(func(context task.Context) error {
-		return manager.Start(job, context.Status())
-	})
-	if err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	if duration > 0 {
+		ctx, cancel = context.WithTimeout(ctx, duration)
+	}
+	defer cancel()
+
+	if err := setupBenchmark(job, timeout); err != nil {
+		return err
+	}
+	if err := runBenchmark(job, workers, iterations, duration, timeout); err != nil {
+		return err
+	}
+	if err := tearDownBenchmark(job, timeout); err != nil {
+		return err
+	}
+	return nil
+}
+
+func runJob(ctx context.Context, job job.Job[bench.Config], log logging.Logger) error {
+	if err := job.Create(ctx, log); err != nil {
 		return err
 	}
 
-	err = task.New(writer, "Start benchmark executor").Run(func(context task.Context) error {
-		return manager.Run(job, context.Status())
-	})
-	if err != nil {
-		return err
-	}
-
-	stream, err := manager.GetLogs(job)
+	stream, err := job.GetLogs(ctx)
 	if err != nil {
 		return err
 	}
 	defer stream.Close()
 
-	// Convert the job logs into UI format for the console.
-	reader := log.NewJSONReader(stream)
-	err = log.Copy(writer, reader)
-	if err != nil {
-		return err
+	scanner := bufio.NewScanner(stream)
+	for scanner.Scan() {
+		fmt.Fprintf(os.Stdout, "    %s\n", scanner.Text())
 	}
 
-	// Get the exit code for the job.
-	_, code, err := manager.GetStatus(job)
-	if err != nil {
+	if err := job.Delete(ctx, log); err != nil {
 		return err
 	}
-
-	_ = task.New(writer, "Tear down benchmark executor").Run(func(context task.Context) error {
-		return manager.Stop(job, context.Status())
-	})
-	os.Exit(code)
 	return nil
 }
 
-*/
+func setupBenchmark(job job.Job[bench.Config], timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	job.Config.Type = bench.SetupType
+	step := logging.NewStep(job.ID, "Setting up benchmark")
+	step.Start()
+	if err := runJob(ctx, job, step); err != nil {
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+	return nil
+}
+
+func runBenchmark(job job.Job[bench.Config], workers int, iterations int, duration time.Duration, timeout time.Duration) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	if duration > 0 {
+		ctx, cancel = context.WithTimeout(ctx, duration)
+	}
+	defer cancel()
+
+	ch := make(chan workerReport)
+	wg := &sync.WaitGroup{}
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			_ = runBenchmarkWorker(ctx, job, worker, ch, timeout)
+			wg.Done()
+		}(i)
+	}
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	uiwriter := uilive.New()
+	uiwriter.Out = os.Stdout
+
+	reports := make([]*workerReport, workers)
+	var canceled bool
+	for report := range ch {
+		reports[report.worker] = &report
+
+		writer := new(tabwriter.Writer)
+		writer.Init(uiwriter, 0, 0, 3, ' ', tabwriter.FilterHTML)
+
+		fmt.Fprintln(writer, "WORKER\tITERATIONS\tDURATION\tTHROUGHPUT\tMEAN LATENCY\tMEDIAN LATENCY\t75% LATENCY\t95% LATENCY\t99% LATENCY")
+		var count int
+		var total bench.Report
+		for worker, report := range reports {
+			if report != nil {
+				fmt.Fprintf(writer, "%d\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
+					worker, report.Iterations, report.Duration,
+					float64(report.Iterations)/(float64(report.Duration)/float64(time.Second)),
+					report.MeanLatency, report.P50Latency, report.P75Latency, report.P95Latency, report.P99Latency)
+				total.Iterations += report.Iterations
+				total.Duration += report.Duration
+				total.MeanLatency += report.MeanLatency
+				total.P50Latency += report.P50Latency
+				total.P75Latency += report.P75Latency
+				total.P95Latency += report.P95Latency
+				total.P99Latency += report.P99Latency
+				count++
+			}
+		}
+		fmt.Fprintf(writer, "TOTAL\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n", total.Iterations, total.Duration,
+			float64(total.Iterations)/(float64(total.Duration)/float64(time.Second)),
+			total.MeanLatency/time.Duration(count), report.P50Latency/time.Duration(count),
+			report.P75Latency/time.Duration(count), report.P95Latency/time.Duration(count),
+			report.P99Latency/time.Duration(count))
+		writer.Flush()
+		uiwriter.Flush()
+
+		if !canceled && iterations > 0 && total.Iterations > iterations {
+			cancel()
+			canceled = true
+		}
+	}
+	return nil
+}
+
+func runBenchmarkWorker(ctx context.Context, job job.Job[bench.Config], worker int, ch chan<- workerReport, timeout time.Duration) error {
+	job.ID = fmt.Sprintf("%s-worker-%d", job.ID, worker)
+	job.Config.Type = bench.WorkerType
+	job.CreateNamespace = false
+	job.DeleteNamespace = false
+
+	step := logging.NewStep(job.ID, "Setting up worker %d", worker)
+	step.Start()
+	if err := job.Create(ctx, step); err != nil {
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+
+	step = logging.NewStep(job.ID, "Running worker %d", worker)
+	step.Start()
+	stream, err := job.GetLogs(ctx)
+	if err != nil {
+		step.Fail(err)
+		return err
+	}
+	defer stream.Close()
+
+	scanner := bufio.NewScanner(stream)
+	for scanner.Scan() {
+		var report bench.Report
+		if err := json.Unmarshal(scanner.Bytes(), &report); err == nil {
+			ch <- workerReport{
+				Report: report,
+				worker: worker,
+			}
+		}
+	}
+	step.Complete()
+
+	step = logging.NewStep(job.ID, "Tearing down worker %d", worker)
+	step.Start()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	if err := job.Delete(ctx, step); err != nil {
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+	return nil
+}
+
+func tearDownBenchmark(job job.Job[bench.Config], timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	job.Config.Type = bench.TearDownType
+	step := logging.NewStep(job.ID, "Tearing down benchmark")
+	step.Start()
+	if err := runJob(ctx, job, step); err != nil {
+		step.Fail(err)
+		return err
+	}
+	step.Complete()
+	return nil
+}
+
+type workerReport struct {
+	bench.Report
+	worker int
+}
