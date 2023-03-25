@@ -41,6 +41,11 @@ func run(suites map[string]BenchmarkingSuite) error {
 		os.Exit(1)
 	}
 
+	ctx := context.Background()
+	for key, value := range config.Args {
+		ctx = context.WithValue(ctx, key, value)
+	}
+
 	suite, ok := suites[config.Suite]
 	if !ok {
 		return fmt.Errorf("unknown suite %s", config.Suite)
@@ -69,14 +74,14 @@ func run(suites map[string]BenchmarkingSuite) error {
 	switch config.Type {
 	case SetupType:
 		if setupSuite, ok := suite.(SetupSuite); ok {
-			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 			defer cancel()
 			if err := setupSuite.SetupSuite(ctx); err != nil {
 				return err
 			}
 		}
 		if setupBench, ok := suite.(SetupBenchmark); ok {
-			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 			defer cancel()
 			if err := setupBench.SetupBenchmark(ctx); err != nil {
 				return err
@@ -84,7 +89,7 @@ func run(suites map[string]BenchmarkingSuite) error {
 		}
 	case WorkerType:
 		if setupWorker, ok := suite.(SetupWorker); ok {
-			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 			defer cancel()
 			if err := setupWorker.SetupWorker(ctx); err != nil {
 				return err
@@ -92,7 +97,7 @@ func run(suites map[string]BenchmarkingSuite) error {
 		}
 
 		f := func() error {
-			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 			defer cancel()
 			values := method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
 			if len(values) == 0 || values[0].Interface() == nil {
@@ -160,7 +165,7 @@ func run(suites map[string]BenchmarkingSuite) error {
 			case <-shutdownCh:
 				stopped.Store(true)
 				if tearDownWorker, ok := suite.(TearDownWorker); ok {
-					ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 					defer cancel()
 					if err := tearDownWorker.TearDownWorker(ctx); err != nil {
 						return err
@@ -170,14 +175,14 @@ func run(suites map[string]BenchmarkingSuite) error {
 		}
 	case TearDownType:
 		if tearDownBench, ok := suite.(TearDownBenchmark); ok {
-			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 			defer cancel()
 			if err := tearDownBench.TearDownBenchmark(ctx); err != nil {
 				return err
 			}
 		}
 		if tearDownSuite, ok := suite.(TearDownSuite); ok {
-			ctx, cancel := context.WithTimeout(context.Background(), config.Timeout)
+			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 			defer cancel()
 			if err := tearDownSuite.TearDownSuite(ctx); err != nil {
 				return err

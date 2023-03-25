@@ -66,6 +66,9 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 		defer recoverAndFailOnPanic(t)
 
 		ctx := context.Background()
+		for key, value := range config.Args {
+			ctx = context.WithValue(ctx, key, value)
+		}
 
 		suite.SetT(t)
 		suite.SetNamespace(config.Namespace)
