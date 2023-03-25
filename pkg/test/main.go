@@ -138,7 +138,7 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 			})
 		}
 
-		if suiteSetupDone {
+		if suiteSetupDone && !config.NoTeardown {
 			defer func() {
 				if tearDownAllSuite, ok := suite.(TearDownSuite); ok {
 					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
