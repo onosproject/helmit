@@ -131,7 +131,7 @@ func (j *Job[T]) createJob(ctx context.Context, log logging.Logger) error {
 			Exec: &corev1.ExecAction{
 				Command: []string{
 					"stat",
-					"/tmp/job-ready",
+					readyFile,
 				},
 			},
 		},
