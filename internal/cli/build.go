@@ -14,7 +14,7 @@ const (
 )
 
 func buildBinary(pkgPath, binPath string) error {
-	build := exec.Command("go", "build", "-o", binPath, pkgPath)
+	build := exec.Command("go", "build", "-mod=readonly", "-trimpath", "-o", binPath, pkgPath)
 	build.Stderr = os.Stderr
 	build.Stdout = os.Stdout
 	env := os.Environ()
