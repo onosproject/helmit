@@ -63,13 +63,9 @@ func Main(suites map[string]TestingSuite) {
 
 func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 	return func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		deadline, ok := t.Deadline()
-		if ok {
-			ctx, cancel = context.WithDeadline(context.Background(), deadline)
-		}
-		defer cancel()
+		ctx := context.Background()
 
+		suite.SetT(t)
 		suite.SetNamespace(config.Namespace)
 		raftConfig, err := rest.InClusterConfig()
 		if err != nil {
