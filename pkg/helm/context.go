@@ -54,7 +54,7 @@ func (c *Context) getReleaseValues(release string, defaultValues map[string]any,
 }
 
 func mergeValues(a, b map[string]any) map[string]any {
-	return mergeMaps(normalize[map[string]any](a), b)
+	return mergeMaps(normalizeMap(a), b)
 }
 
 func mergeMaps(a, b map[string]any) map[string]any {
@@ -129,17 +129,14 @@ func getPathAndKey(path []string) ([]string, string) {
 	return path[:len(path)-1], path[len(path)-1]
 }
 
-func normalize[T any](value T) T {
-	return normalizeAny(value).(T)
-}
-
-func normalizeAny(value any) any {
+func normalize(value any) any {
 	kind := reflect.ValueOf(value).Kind()
-	if kind == reflect.Struct {
+	switch kind {
+	case reflect.Struct:
 		return normalizeStruct(value.(struct{}))
-	} else if kind == reflect.Map {
+	case reflect.Map:
 		return normalizeMap(value.(map[string]any))
-	} else if kind == reflect.Slice {
+	case reflect.Slice:
 		return normalizeSlice(value.([]any))
 	}
 	return value
@@ -157,7 +154,7 @@ func normalizeStruct(value struct{}) any {
 	return normalized
 }
 
-func normalizeMap(values map[string]any) any {
+func normalizeMap(values map[string]any) map[string]any {
 	normalized := make(map[string]any)
 	for key, value := range values {
 		normalized[key] = normalize(value)
