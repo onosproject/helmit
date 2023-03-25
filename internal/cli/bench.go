@@ -58,6 +58,8 @@ const benchExamples = `
   helmit bench ./cmd/benchmarks -c ./charts -f atomix-controller=./atomix-controller.yaml --suite atomix --duration 1m
 `
 
+const shutdownFile = "/tmp/shutdown"
+
 func getBenchCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "bench",
@@ -276,10 +278,10 @@ func setupBenchmark(job job.Job[bench.Config], timeout time.Duration) error {
 	return nil
 }
 
-func runBenchmark(job job.Job[bench.Config], workers int, iterations int, duration time.Duration, timeout time.Duration) error {
+func runBenchmark(job job.Job[bench.Config], workers int, maxIterations int, maxDuration time.Duration, timeout time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
-	if duration > 0 {
-		ctx, cancel = context.WithTimeout(ctx, duration)
+	if maxDuration > 0 {
+		ctx, cancel = context.WithTimeout(ctx, maxDuration)
 	}
 	defer cancel()
 
@@ -303,6 +305,7 @@ func runBenchmark(job job.Job[bench.Config], workers int, iterations int, durati
 
 	reports := make([]*workerReport, workers)
 	var canceled bool
+	var iterations int
 	for report := range ch {
 		reports[report.worker] = &report
 
@@ -318,6 +321,7 @@ func runBenchmark(job job.Job[bench.Config], workers int, iterations int, durati
 					worker, report.Iterations, report.Duration,
 					float64(report.Iterations)/(float64(report.Duration)/float64(time.Second)),
 					report.MeanLatency, report.P50Latency, report.P75Latency, report.P95Latency, report.P99Latency)
+				iterations += report.Iterations
 				total.Iterations += report.Iterations
 				total.Duration += report.Duration
 				total.MeanLatency += report.MeanLatency
@@ -336,7 +340,7 @@ func runBenchmark(job job.Job[bench.Config], workers int, iterations int, durati
 		writer.Flush()
 		uiwriter.Flush()
 
-		if !canceled && iterations > 0 && total.Iterations > iterations {
+		if !canceled && maxIterations > 0 && iterations > maxIterations {
 			cancel()
 			canceled = true
 		}
@@ -383,6 +387,14 @@ func runBenchmarkWorker(ctx context.Context, job job.Job[bench.Config], worker i
 	step.Start()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	if err := job.Echo(ctx, shutdownFile, []byte(job.ID)); err != nil {
+		step.Fail(err)
+		return err
+	}
+	if _, _, err := job.GetStatus(ctx); err != nil {
+		step.Fail(err)
+		return err
+	}
 	if err := job.Delete(ctx, step); err != nil {
 		step.Fail(err)
 		return err

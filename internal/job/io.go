@@ -56,7 +56,7 @@ func (j *Job[T]) copyValueFiles(ctx context.Context, log logging.Logger) error {
 
 func (j *Job[T]) runExecutable(ctx context.Context, log logging.Logger) error {
 	if j.Executable != "" {
-		return j.echo(ctx, readyFile, []byte(filepath.Base(j.Executable)))
+		return j.Echo(ctx, readyFile, []byte(filepath.Base(j.Executable)))
 	}
 	return nil
 }
@@ -108,7 +108,7 @@ func (j *Job[T]) copy(ctx context.Context, dst, src string) error {
 	return nil
 }
 
-func (j *Job[T]) echo(ctx context.Context, dst string, data []byte) error {
+func (j *Job[T]) Echo(ctx context.Context, dst string, data []byte) error {
 	if err := j.init(); err != nil {
 		return err
 	}
