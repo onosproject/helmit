@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/onosproject/helmit/internal/job"
 	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/rest"
 	"os"
 	"reflect"
@@ -105,7 +106,7 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 			if !suiteSetupDone {
 				if setupAllSuite, ok := suite.(SetupSuite); ok {
 					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
-					setupAllSuite.SetupSuite(ctx)
+					assert.NoError(t, setupAllSuite.SetupSuite(ctx))
 					cancel()
 				}
 				suiteSetupDone = true
@@ -121,7 +122,7 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 					if tearDownTestSuite, ok := suite.(TearDownTest); ok {
 						ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 						defer cancel()
-						tearDownTestSuite.TearDownTest(ctx)
+						assert.NoError(t, tearDownTestSuite.TearDownTest(ctx))
 					}
 
 					suite.SetT(parentT)
@@ -131,7 +132,7 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 				if setupTestSuite, ok := suite.(SetupTest); ok {
 					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 					defer cancel()
-					setupTestSuite.SetupTest(ctx)
+					assert.NoError(t, setupTestSuite.SetupTest(ctx))
 				}
 
 				ctx, cancel := context.WithTimeout(ctx, config.Timeout)
@@ -145,7 +146,7 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 				if tearDownAllSuite, ok := suite.(TearDownSuite); ok {
 					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 					defer cancel()
-					tearDownAllSuite.TearDownSuite(ctx)
+					assert.NoError(t, tearDownAllSuite.TearDownSuite(ctx))
 				}
 			}()
 		}
