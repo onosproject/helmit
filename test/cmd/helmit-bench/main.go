@@ -5,12 +5,12 @@
 package main
 
 import (
-	"github.com/onosproject/helmit/pkg/bench"
+	"github.com/onosproject/helmit/pkg/benchmark"
 	tests "github.com/onosproject/helmit/test"
 )
 
 func main() {
-	bench.Main(map[string]bench.BenchmarkingSuite{
-		"chart": &tests.ChartBenchmarkSuite{},
+	benchmark.Main(map[string]benchmark.BenchmarkingSuite{
+		"chart": new(tests.ChartBenchmarkSuite),
 	})
 }

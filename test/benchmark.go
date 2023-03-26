@@ -7,14 +7,14 @@ package test
 import (
 	"context"
 	"github.com/brianvoe/gofakeit/v6"
-	"github.com/onosproject/helmit/pkg/bench"
+	"github.com/onosproject/helmit/pkg/benchmark"
 	"math/rand"
 	"time"
 )
 
 // ChartBenchmarkSuite benchmarks a Helm chart
 type ChartBenchmarkSuite struct {
-	bench.Suite
+	benchmark.Suite
 }
 
 func (s *ChartBenchmarkSuite) SetupSuite(ctx context.Context) error {

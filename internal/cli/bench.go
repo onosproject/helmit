@@ -13,7 +13,7 @@ import (
 	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/gosuri/uilive"
 	"github.com/onosproject/helmit/internal/logging"
-	"github.com/onosproject/helmit/pkg/bench"
+	"github.com/onosproject/helmit/pkg/benchmark"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -182,7 +182,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		step.Complete()
 	}
 
-	config := bench.Config{
+	config := benchmark.Config{
 		Namespace:      namespace,
 		Suite:          suite,
 		Benchmark:      benchmarkName,
@@ -209,7 +209,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	job := job.Job[bench.Config]{
+	job := job.Job[benchmark.Config]{
 		ID:              benchID,
 		Namespace:       namespace,
 		Labels:          labels,
@@ -244,7 +244,7 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runJob(ctx context.Context, job job.Job[bench.Config], log logging.Logger) error {
+func runJob(ctx context.Context, job job.Job[benchmark.Config], log logging.Logger) error {
 	if err := job.Create(ctx, log); err != nil {
 		return err
 	}
@@ -266,10 +266,10 @@ func runJob(ctx context.Context, job job.Job[bench.Config], log logging.Logger) 
 	return nil
 }
 
-func setupBenchmark(job job.Job[bench.Config], timeout time.Duration) error {
+func setupBenchmark(job job.Job[benchmark.Config], timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	job.Config.Type = bench.SetupType
+	job.Config.Type = benchmark.SetupType
 	step := logging.NewStep(job.ID, "Setting up benchmark")
 	step.Start()
 	if err := runJob(ctx, job, step); err != nil {
@@ -280,7 +280,7 @@ func setupBenchmark(job job.Job[bench.Config], timeout time.Duration) error {
 	return nil
 }
 
-func runBenchmark(job job.Job[bench.Config], workers int, maxIterations int, maxDuration time.Duration, timeout time.Duration) error {
+func runBenchmark(job job.Job[benchmark.Config], workers int, maxIterations int, maxDuration time.Duration, timeout time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	if maxDuration > 0 {
 		ctx, cancel = context.WithTimeout(ctx, maxDuration)
@@ -328,7 +328,7 @@ func runBenchmark(job job.Job[bench.Config], workers int, maxIterations int, max
 
 			fmt.Fprintln(writer, "WORKER\tITERATIONS\tDURATION\tTHROUGHPUT\tMEAN LATENCY\tMEDIAN LATENCY\t75% LATENCY\t95% LATENCY\t99% LATENCY")
 			var count int
-			var total bench.Report
+			var total benchmark.Report
 			for worker, report := range reports {
 				if report != nil {
 					fmt.Fprintf(writer, "%d\t%d\t%s\t%f/sec\t%s\t%s\t%s\t%s\t%s\n",
@@ -367,9 +367,9 @@ func runBenchmark(job job.Job[bench.Config], workers int, maxIterations int, max
 	}
 }
 
-func runBenchmarkWorker(ctx context.Context, job job.Job[bench.Config], worker int, ch chan<- workerReport, timeout time.Duration) error {
+func runBenchmarkWorker(ctx context.Context, job job.Job[benchmark.Config], worker int, ch chan<- workerReport, timeout time.Duration) error {
 	job.ID = fmt.Sprintf("%s-worker-%d", job.ID, worker)
-	job.Config.Type = bench.WorkerType
+	job.Config.Type = benchmark.WorkerType
 	job.CreateNamespace = false
 	job.DeleteNamespace = false
 
@@ -392,7 +392,7 @@ func runBenchmarkWorker(ctx context.Context, job job.Job[bench.Config], worker i
 
 	scanner := bufio.NewScanner(stream)
 	for scanner.Scan() {
-		var report bench.Report
+		var report benchmark.Report
 		if err := json.Unmarshal(scanner.Bytes(), &report); err == nil {
 			ch <- workerReport{
 				Report: report,
@@ -422,10 +422,10 @@ func runBenchmarkWorker(ctx context.Context, job job.Job[bench.Config], worker i
 	return nil
 }
 
-func tearDownBenchmark(job job.Job[bench.Config], timeout time.Duration) error {
+func tearDownBenchmark(job job.Job[benchmark.Config], timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	job.Config.Type = bench.TearDownType
+	job.Config.Type = benchmark.TearDownType
 	step := logging.NewStep(job.ID, "Tearing down benchmark")
 	step.Start()
 	if err := runJob(ctx, job, step); err != nil {
@@ -437,6 +437,6 @@ func tearDownBenchmark(job job.Job[bench.Config], timeout time.Duration) error {
 }
 
 type workerReport struct {
-	bench.Report
+	benchmark.Report
 	worker int
 }
