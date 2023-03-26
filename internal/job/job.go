@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package job
 
 import (
@@ -46,6 +50,7 @@ func loadConfig(config any) error {
 	return nil
 }
 
+// Job manages the lifecycle of a Kubernetes job
 type Job[T any] struct {
 	ID              string
 	Namespace       string

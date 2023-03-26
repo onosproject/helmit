@@ -1,9 +1,14 @@
+// SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package helm
 
 import (
 	"context"
 	"fmt"
 	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/downloader"
@@ -16,108 +21,171 @@ import (
 
 const defaultTimeout = 10 * time.Minute
 
-func newInstall(context Context, release string, chart string) *InstallCmd {
-	return &InstallCmd{
+func newReleaseCmd[T any](cmd T, context Context, release string, chart string) *ReleaseCmd[T] {
+	return &ReleaseCmd[T]{
 		context:   context,
 		namespace: context.Namespace,
 		release:   release,
 		chart:     chart,
 		values:    make(map[string]any),
 		timeout:   defaultTimeout,
+		cmd:       cmd,
 	}
 }
 
-type InstallCmd struct {
-	context    Context
-	namespace  string
-	release    string
-	chart      string
-	version    string
-	repoURL    string
-	username   string
-	password   string
-	skipCRDs   bool
-	atomic     bool
-	verify     bool
-	dryRun     bool
-	wait       bool
-	timeout    time.Duration
-	values     map[string]any
-	valueFiles []string
+// ReleaseCmd is a base command for install/upgrade commands
+type ReleaseCmd[T any] struct {
+	context            Context
+	namespace          string
+	release            string
+	chart              string
+	version            string
+	repoURL            string
+	username           string
+	password           string
+	skipCRDs           bool
+	atomic             bool
+	verify             bool
+	dryRun             bool
+	wait               bool
+	timeout            time.Duration
+	updateDependencies bool
+	values             map[string]any
+	valueFiles         []string
+	cmd                T
 }
 
-func (cmd *InstallCmd) Namespace(namespace string) *InstallCmd {
+// Namespace sets the namespace to which to install the chart
+func (cmd *ReleaseCmd[T]) Namespace(namespace string) T {
 	cmd.namespace = namespace
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) Version(version string) *InstallCmd {
+// Version sets the version of the chart to install
+func (cmd *ReleaseCmd[T]) Version(version string) T {
 	cmd.version = version
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) Username(username string) *InstallCmd {
+// Username sets the chart repo username
+func (cmd *ReleaseCmd[T]) Username(username string) T {
 	cmd.username = username
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) Password(password string) *InstallCmd {
+// Password sets the password for the chart repo
+func (cmd *ReleaseCmd[T]) Password(password string) T {
 	cmd.password = password
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) RepoURL(repoURL string) *InstallCmd {
+// RepoURL sets the URL of the repository from which to install the Helm chart
+func (cmd *ReleaseCmd[T]) RepoURL(repoURL string) T {
 	cmd.repoURL = repoURL
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) SkipCRDs() *InstallCmd {
+// SkipCRDs skips installing CRDs in the chart
+func (cmd *ReleaseCmd[T]) SkipCRDs() T {
 	cmd.skipCRDs = true
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) Atomic() *InstallCmd {
+// Atomic enables atomic install
+func (cmd *ReleaseCmd[T]) Atomic() T {
 	cmd.atomic = true
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) Verify() *InstallCmd {
+// Verify configures the command for verifying the installation
+func (cmd *ReleaseCmd[T]) Verify() T {
 	cmd.verify = true
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) DryRun() *InstallCmd {
+// DryRun sets the command to dry run mode
+func (cmd *ReleaseCmd[T]) DryRun() T {
 	cmd.dryRun = true
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) Wait() *InstallCmd {
+// Wait configures the command to wait for all resources to be running before returning Get or Do calls
+func (cmd *ReleaseCmd[T]) Wait() T {
 	cmd.wait = true
-	return cmd
+	return cmd.cmd
 }
 
-func (cmd *InstallCmd) Timeout(timeout time.Duration) *InstallCmd {
+// Timeout sets the installation timeout
+func (cmd *ReleaseCmd[T]) Timeout(timeout time.Duration) T {
 	cmd.timeout = timeout
-	return cmd
+	return cmd.cmd
 }
 
-// Set sets a value
-func (cmd *InstallCmd) Set(path string, value interface{}) *InstallCmd {
+// Set sets a Helm chart value override
+func (cmd *ReleaseCmd[T]) Set(path string, value interface{}) T {
 	setKey(cmd.values, getPathNames(path), value)
-	return cmd
+	return cmd.cmd
 }
 
 // Values adds values files to the release
-func (cmd *InstallCmd) Values(files ...string) *InstallCmd {
+func (cmd *ReleaseCmd[T]) Values(files ...string) T {
 	cmd.valueFiles = append(cmd.valueFiles, files...)
+	return cmd.cmd
+}
+
+func (cmd *ReleaseCmd[T]) loadChart(options action.ChartPathOptions) (*chart.Chart, error) {
+	// Locate the chart path
+	path, err := options.LocateChart(cmd.chart, settings)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check chart dependencies to make sure all are present in /charts
+	chart, err := loader.Load(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if req := chart.Metadata.Dependencies; req != nil {
+		// If CheckDependencies returns an error, we have unfulfilled dependencies.
+		// As of Helm 2.4.0, this is treated as a stopping condition:
+		// https://github.com/helm/helm/issues/2209
+		if err := action.CheckDependencies(chart, req); err != nil {
+			man := &downloader.Manager{
+				Out:              os.Stdout,
+				ChartPath:        path,
+				Keyring:          options.Keyring,
+				SkipUpdate:       false,
+				Getters:          getter.All(cli.New()),
+				RepositoryConfig: settings.RepositoryConfig,
+				RepositoryCache:  settings.RepositoryCache,
+			}
+			if err := man.Update(); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return chart, nil
+}
+
+func newInstallCmd(context Context, release string, chart string) *InstallCmd {
+	cmd := &InstallCmd{}
+	cmd.ReleaseCmd = newReleaseCmd[*InstallCmd](cmd, context, release, chart)
 	return cmd
 }
 
+// InstallCmd is a command for installing a Helm chart
+type InstallCmd struct {
+	*ReleaseCmd[*InstallCmd]
+}
+
+// Do runs the command
 func (cmd *InstallCmd) Do(ctx context.Context) error {
 	_, err := cmd.run(ctx)
 	return err
 }
 
+// Get runs the command and returns the resulting Release
 func (cmd *InstallCmd) Get(ctx context.Context) (*Release, error) {
 	release, err := cmd.run(ctx)
 	if err != nil {
@@ -151,14 +219,7 @@ func (cmd *InstallCmd) run(ctx context.Context) (*release.Release, error) {
 	install.DryRun = cmd.dryRun
 	install.Timeout = cmd.timeout
 
-	// Locate the chart path
-	path, err := install.ChartPathOptions.LocateChart(cmd.chart, settings)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check chart dependencies to make sure all are present in /charts
-	chart, err := loader.Load(path)
+	chart, err := cmd.loadChart(install.ChartPathOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -168,30 +229,6 @@ func (cmd *InstallCmd) run(ctx context.Context) (*release.Release, error) {
 		return nil, err
 	}
 
-	if req := chart.Metadata.Dependencies; req != nil {
-		// If CheckDependencies returns an error, we have unfulfilled dependencies.
-		// As of Helm 2.4.0, this is treated as a stopping condition:
-		// https://github.com/helm/helm/issues/2209
-		if err := action.CheckDependencies(chart, req); err != nil {
-			if install.DependencyUpdate {
-				man := &downloader.Manager{
-					Out:              os.Stdout,
-					ChartPath:        path,
-					Keyring:          install.ChartPathOptions.Keyring,
-					SkipUpdate:       false,
-					Getters:          getter.All(cli.New()),
-					RepositoryConfig: settings.RepositoryConfig,
-					RepositoryCache:  settings.RepositoryCache,
-				}
-				if err := man.Update(); err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, err
-			}
-		}
-	}
-
 	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
 	if err != nil {
 		return nil, err
@@ -199,106 +236,19 @@ func (cmd *InstallCmd) run(ctx context.Context) (*release.Release, error) {
 	return install.RunWithContext(ctx, chart, values)
 }
 
-func newUpgrade(context Context, release string, chart string) *UpgradeCmd {
-	return &UpgradeCmd{
-		context:   context,
-		namespace: context.Namespace,
-		release:   release,
-		chart:     chart,
-		values:    make(map[string]any),
-		timeout:   defaultTimeout,
-	}
+func newUpgradeCmd(context Context, release string, chart string) *UpgradeCmd {
+	cmd := &UpgradeCmd{}
+	cmd.ReleaseCmd = newReleaseCmd[*UpgradeCmd](cmd, context, release, chart)
+	return cmd
 }
 
 type UpgradeCmd struct {
-	context    Context
-	namespace  string
-	release    string
-	chart      string
-	version    string
-	install    bool
-	repoURL    string
-	username   string
-	password   string
-	skipCRDs   bool
-	atomic     bool
-	wait       bool
-	timeout    time.Duration
-	verify     bool
-	dryRun     bool
-	values     map[string]any
-	valueFiles []string
-}
-
-func (cmd *UpgradeCmd) Namespace(namespace string) *UpgradeCmd {
-	cmd.namespace = namespace
-	return cmd
+	*ReleaseCmd[*UpgradeCmd]
+	install bool
 }
 
 func (cmd *UpgradeCmd) Install() *UpgradeCmd {
 	cmd.install = true
-	return cmd
-}
-
-func (cmd *UpgradeCmd) Version(version string) *UpgradeCmd {
-	cmd.version = version
-	return cmd
-}
-
-func (cmd *UpgradeCmd) Username(username string) *UpgradeCmd {
-	cmd.username = username
-	return cmd
-}
-
-func (cmd *UpgradeCmd) Password(password string) *UpgradeCmd {
-	cmd.password = password
-	return cmd
-}
-
-func (cmd *UpgradeCmd) RepoURL(repoURL string) *UpgradeCmd {
-	cmd.repoURL = repoURL
-	return cmd
-}
-
-func (cmd *UpgradeCmd) SkipCRDs() *UpgradeCmd {
-	cmd.skipCRDs = true
-	return cmd
-}
-
-func (cmd *UpgradeCmd) Atomic() *UpgradeCmd {
-	cmd.atomic = true
-	return cmd
-}
-
-func (cmd *UpgradeCmd) Verify() *UpgradeCmd {
-	cmd.verify = true
-	return cmd
-}
-
-func (cmd *UpgradeCmd) DryRun() *UpgradeCmd {
-	cmd.dryRun = true
-	return cmd
-}
-
-func (cmd *UpgradeCmd) Wait() *UpgradeCmd {
-	cmd.wait = true
-	return cmd
-}
-
-func (cmd *UpgradeCmd) Timeout(timeout time.Duration) *UpgradeCmd {
-	cmd.timeout = timeout
-	return cmd
-}
-
-// Set sets a value
-func (cmd *UpgradeCmd) Set(path string, value interface{}) *UpgradeCmd {
-	setKey(cmd.values, getPathNames(path), value)
-	return cmd
-}
-
-// Values adds values files to the release
-func (cmd *UpgradeCmd) Values(files ...string) *UpgradeCmd {
-	cmd.valueFiles = append(cmd.valueFiles, files...)
 	return cmd
 }
 
@@ -340,14 +290,7 @@ func (cmd *UpgradeCmd) run(ctx context.Context) (*release.Release, error) {
 	upgrade.Wait = cmd.wait
 	upgrade.Timeout = cmd.timeout
 
-	// Locate the chart path
-	path, err := upgrade.ChartPathOptions.LocateChart(cmd.chart, settings)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check chart dependencies to make sure all are present in /charts
-	chart, err := loader.Load(path)
+	chart, err := cmd.loadChart(upgrade.ChartPathOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -355,30 +298,6 @@ func (cmd *UpgradeCmd) run(ctx context.Context) (*release.Release, error) {
 	valid, err := isChartUpgradable(chart)
 	if !valid {
 		return nil, err
-	}
-
-	if req := chart.Metadata.Dependencies; req != nil {
-		// If CheckDependencies returns an error, we have unfulfilled dependencies.
-		// As of Helm 2.4.0, this is treated as a stopping condition:
-		// https://github.com/helm/helm/issues/2209
-		if err := action.CheckDependencies(chart, req); err != nil {
-			if upgrade.DependencyUpdate {
-				man := &downloader.Manager{
-					Out:              os.Stdout,
-					ChartPath:        path,
-					Keyring:          upgrade.ChartPathOptions.Keyring,
-					SkipUpdate:       false,
-					Getters:          getter.All(cli.New()),
-					RepositoryConfig: settings.RepositoryConfig,
-					RepositoryCache:  settings.RepositoryCache,
-				}
-				if err := man.Update(); err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, err
-			}
-		}
 	}
 
 	values, err := cmd.context.getReleaseValues(cmd.release, cmd.values, cmd.valueFiles)
@@ -433,22 +352,26 @@ func (cmd *UninstallCmd) Do(ctx context.Context) error {
 	return err
 }
 
+// Release is a release configuration
 type Release struct {
 	Namespace string
 	Name      string
 	values    map[string]any
 }
 
+// Get gets a value from the release
 func (r *Release) Get(path string) Value {
 	return Value{
 		value: getValue(r.values, getPathNames(path)),
 	}
 }
 
+// Value is a Helm release value
 type Value struct {
 	value any
 }
 
+// String returns the value as a string
 func (v Value) String() string {
 	if v.value == nil {
 		return ""
@@ -456,6 +379,7 @@ func (v Value) String() string {
 	return fmt.Sprint(v.value)
 }
 
+// Bool returns the value as a boolean
 func (v Value) Bool() bool {
 	if v.value == nil {
 		return false
@@ -467,6 +391,7 @@ func (v Value) Bool() bool {
 	return b
 }
 
+// Int returns the value as an int
 func (v Value) Int() int {
 	if v.value == nil {
 		return 0
@@ -478,10 +403,12 @@ func (v Value) Int() int {
 	return i
 }
 
+// Int32 returns the value as an int32
 func (v Value) Int32() int32 {
 	return int32(v.Int())
 }
 
+// Int64 returns the value as an int64
 func (v Value) Int64() int64 {
 	return int64(v.Int())
 }

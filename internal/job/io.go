@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package job
 
 import (
@@ -108,6 +112,7 @@ func (j *Job[T]) copy(ctx context.Context, dst, src string) error {
 	return nil
 }
 
+// Echo echos bytes to a file in the job pod
 func (j *Job[T]) Echo(ctx context.Context, dst string, data []byte) error {
 	if err := j.init(); err != nil {
 		return err

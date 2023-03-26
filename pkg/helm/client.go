@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package helm
 
 import (
@@ -14,6 +18,7 @@ var settings = cli.New()
 var namespaces = make(map[string]*action.Configuration)
 var namespacesMu = &sync.Mutex{}
 
+// NewClient creates a new Helm client from the given Context
 func NewClient(context Context) *Helm {
 	if err := setContextDir(context); err != nil {
 		panic(err)
@@ -23,38 +28,32 @@ func NewClient(context Context) *Helm {
 	}
 }
 
+// Helm is a Helm client
 type Helm struct {
 	context Context
 }
 
-func (helm *Helm) setContextDir() error {
-	dir := helm.context.WorkDir
-	if dir != "" {
-		if absDir, err := filepath.Abs(dir); err != nil {
-			return err
-		} else if err := os.Chdir(absDir); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
+// Namespace returns the Helm namespace
 func (helm *Helm) Namespace() string {
 	return helm.context.Namespace
 }
 
+// Repo creates a new repo command
 func (helm *Helm) Repo() *RepoCmd {
-	return newRepo(helm.context)
+	return newRepoCmd(helm.context)
 }
 
+// Install creates a new command for installing a Helm chart
 func (helm *Helm) Install(release string, chart string) *InstallCmd {
-	return newInstall(helm.context, release, chart)
+	return newInstallCmd(helm.context, release, chart)
 }
 
+// Upgrade creates a new command for upgrading a Helm chart release
 func (helm *Helm) Upgrade(release string, chart string) *UpgradeCmd {
-	return newUpgrade(helm.context, release, chart)
+	return newUpgradeCmd(helm.context, release, chart)
 }
 
+// Uninstall creates a new command for uninstalling a Helm chart release
 func (helm *Helm) Uninstall(release string) *UninstallCmd {
 	return newUninstall(helm.context, release)
 }

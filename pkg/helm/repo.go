@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package helm
 
 import (
@@ -14,20 +18,23 @@ import (
 	"time"
 )
 
-func newRepo(context Context) *RepoCmd {
+func newRepoCmd(context Context) *RepoCmd {
 	return &RepoCmd{
 		context: context,
 	}
 }
 
+// RepoCmd is a Helm repository command
 type RepoCmd struct {
 	context Context
 }
 
+// Add creates a Helm repository add command
 func (repo *RepoCmd) Add(name string, url string) *RepoAddCmd {
 	return newRepoAdd(repo.context, name, url)
 }
 
+// Remove creates a Helm repository remove command
 func (repo *RepoCmd) Remove(name string) *RepoRemoveCmd {
 	return newRepoRemove(repo.context, name)
 }
@@ -40,6 +47,7 @@ func newRepoAdd(context Context, name string, url string) *RepoAddCmd {
 	}
 }
 
+// RepoAddCmd is a Helm repository add command
 type RepoAddCmd struct {
 	context  Context
 	name     string
@@ -48,16 +56,19 @@ type RepoAddCmd struct {
 	password string
 }
 
+// Username sets the Helm repository username
 func (cmd *RepoAddCmd) Username(username string) *RepoAddCmd {
 	cmd.username = username
 	return cmd
 }
 
+// Password sets the Helm repository password
 func (cmd *RepoAddCmd) Password(password string) *RepoAddCmd {
 	cmd.password = password
 	return cmd
 }
 
+// Do runs the Helm repository add command
 func (cmd *RepoAddCmd) Do(ctx context.Context) error {
 	repoFile := settings.RepositoryConfig
 
@@ -131,11 +142,13 @@ func newRepoRemove(context Context, names ...string) *RepoRemoveCmd {
 	}
 }
 
+// RepoRemoveCmd is a Helm repository remove command
 type RepoRemoveCmd struct {
 	context Context
 	names   []string
 }
 
+// Do runs the Helm repository remove command
 func (cmd *RepoRemoveCmd) Do(ctx context.Context) error {
 	repoFile := settings.RepositoryConfig
 	repoCache := settings.RepositoryCache

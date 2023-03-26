@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2020-present Open Networking Foundation <info@opennetworking.org>
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package job
 
 import (
@@ -11,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Create creates the job resources
 func (j *Job[T]) Create(ctx context.Context, log logging.Logger) error {
 	if err := j.init(); err != nil {
 		return err
