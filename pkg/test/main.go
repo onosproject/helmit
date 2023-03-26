@@ -104,9 +104,9 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 			}
 
 			if !suiteSetupDone {
-				if setupAllSuite, ok := suite.(SetupSuite); ok {
+				if setupSuite, ok := suite.(SetupSuite); ok {
 					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
-					setupAllSuite.SetupSuite(ctx)
+					setupSuite.SetupSuite(ctx)
 					cancel()
 				}
 				suiteSetupDone = true
@@ -119,20 +119,32 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 				defer func() {
 					r := recover()
 
-					if tearDownTestSuite, ok := suite.(TearDownTest); ok {
+					if tearDownMethod, ok := methodFinder.MethodByName("TearDown" + method.Name); ok {
 						ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 						defer cancel()
-						tearDownTestSuite.TearDownTest(ctx)
+						tearDownMethod.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
+					}
+
+					if tearDownTest, ok := suite.(TearDownTest); ok {
+						ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+						defer cancel()
+						tearDownTest.TearDownTest(ctx)
 					}
 
 					suite.SetT(parentT)
 					failOnPanic(t, r)
 				}()
 
-				if setupTestSuite, ok := suite.(SetupTest); ok {
+				if setupTest, ok := suite.(SetupTest); ok {
 					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 					defer cancel()
-					setupTestSuite.SetupTest(ctx)
+					setupTest.SetupTest(ctx)
+				}
+
+				if setupMethod, ok := methodFinder.MethodByName("Setup" + method.Name); ok {
+					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+					defer cancel()
+					setupMethod.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
 				}
 
 				ctx, cancel := context.WithTimeout(ctx, config.Timeout)
@@ -143,10 +155,10 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 
 		if suiteSetupDone && !config.NoTeardown {
 			defer func() {
-				if tearDownAllSuite, ok := suite.(TearDownSuite); ok {
+				if tearDownSuite, ok := suite.(TearDownSuite); ok {
 					ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 					defer cancel()
-					tearDownAllSuite.TearDownSuite(ctx)
+					tearDownSuite.TearDownSuite(ctx)
 				}
 			}()
 		}

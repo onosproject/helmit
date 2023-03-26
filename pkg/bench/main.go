@@ -87,6 +87,17 @@ func run(suites map[string]BenchmarkingSuite) error {
 				return err
 			}
 		}
+		if setupMethod, ok := methodFinder.MethodByName("Setup" + method.Name); ok {
+			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+			defer cancel()
+			values := setupMethod.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
+			if len(values) > 0 {
+				value := values[0]
+				if !value.IsNil() {
+					return value.Interface().(error)
+				}
+			}
+		}
 	case WorkerType:
 		if setupWorker, ok := suite.(SetupWorker); ok {
 			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
@@ -174,6 +185,17 @@ func run(suites map[string]BenchmarkingSuite) error {
 			}
 		}
 	case TearDownType:
+		if tearDownMethod, ok := methodFinder.MethodByName("TearDown" + method.Name); ok {
+			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
+			defer cancel()
+			values := tearDownMethod.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(ctx)})
+			if len(values) > 0 {
+				value := values[0]
+				if !value.IsNil() {
+					return value.Interface().(error)
+				}
+			}
+		}
 		if tearDownBench, ok := suite.(TearDownBenchmark); ok {
 			ctx, cancel := context.WithTimeout(ctx, config.Timeout)
 			defer cancel()
