@@ -22,15 +22,16 @@ const (
 	configPath = "/etc/helmit"
 	configFile = "config.json"
 	readyFile  = "/tmp/bin-ready"
-	HomeDir    = "/home/helmit"
+	// HomeDir is the home directory of the helmit-runner container
+	HomeDir = "/home/helmit"
+	// ContextDir is the directory to which job contexts will be copied if specified
 	ContextDir = "context"
 )
 
 const (
-	defaultServiceAccountName = "cluster-test"
-	defaultRoleBindingName    = "cluster-test"
-	defaultRoleName           = "cluster-admin"
-	helmitSecretsName         = "helmit"
+	defaultRoleBindingName = "cluster-test"
+	defaultRoleName        = "cluster-admin"
+	helmitSecretsName      = "helmit"
 )
 
 // Bootstrap bootstraps the job

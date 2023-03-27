@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// NewLogger creates a new logger to the given io.Writer
 func NewLogger(writer io.Writer) Logger {
 	return &logger{
 		writer: writer,

@@ -8,11 +8,15 @@ import (
 	"time"
 )
 
+// Type is a benchmark job type
 type Type string
 
 const (
-	SetupType    Type = "Setup"
-	WorkerType   Type = "Worker"
+	// SetupType is a benchmark setup job type
+	SetupType Type = "Setup"
+	// WorkerType is a benchmark worker job type
+	WorkerType Type = "Worker"
+	// TearDownType is a benchmark tear down job type
 	TearDownType Type = "TearDown"
 )
 
