@@ -7,6 +7,7 @@ package test
 import (
 	"context"
 	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/types"
 	"github.com/stretchr/testify/suite"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -23,6 +24,12 @@ type TestingSuite interface {
 	SetConfig(config *rest.Config)
 	// Config returns the Kubernetes REST configuration
 	Config() *rest.Config
+	// SetArgs sets the test arguments
+	SetArgs(args map[string]types.Value)
+	// Arg gets an argument by name
+	Arg(name string) types.Value
+	// Args returns a map of all test arguments
+	Args() map[string]types.Value
 	// SetHelm sets the Helm client
 	SetHelm(helm *helm.Helm)
 	// Helm returns the Helm client
@@ -36,6 +43,7 @@ type Suite struct {
 	namespace string
 	config    *rest.Config
 	helm      *helm.Helm
+	args      map[string]types.Value
 }
 
 // SetNamespace sets the suite namespace
@@ -67,6 +75,25 @@ func (suite *Suite) SetHelm(helm *helm.Helm) {
 // Helm returns the Helm client
 func (suite *Suite) Helm() *helm.Helm {
 	return suite.helm
+}
+
+// SetArgs sets the test arguments
+func (suite *Suite) SetArgs(args map[string]types.Value) {
+	suite.args = args
+}
+
+// Arg returns a test argument by name
+func (suite *Suite) Arg(name string) types.Value {
+	value, ok := suite.args[name]
+	if !ok {
+		return types.NewValue(nil)
+	}
+	return value
+}
+
+// Args returns the test arguments
+func (suite *Suite) Args() map[string]types.Value {
+	return suite.args
 }
 
 // SetupSuite has a SetupSuite method, which will run before the

@@ -6,7 +6,7 @@ package helm
 
 import (
 	"context"
-	"fmt"
+	"github.com/onosproject/helmit/pkg/types"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -15,7 +15,6 @@ import (
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/release"
 	"os"
-	"strconv"
 	"time"
 )
 
@@ -370,53 +369,13 @@ type Release struct {
 // Get gets a value from the release
 func (r *Release) Get(path string) Value {
 	return Value{
-		value: getValue(r.values, getPathNames(path)),
+		Path:  path,
+		Value: types.NewValue(getValue(r.values, getPathNames(path))),
 	}
 }
 
 // Value is a Helm release value
 type Value struct {
-	value any
-}
-
-// String returns the value as a string
-func (v Value) String() string {
-	if v.value == nil {
-		return ""
-	}
-	return fmt.Sprint(v.value)
-}
-
-// Bool returns the value as a boolean
-func (v Value) Bool() bool {
-	if v.value == nil {
-		return false
-	}
-	b, err := strconv.ParseBool(fmt.Sprint(v.value))
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
-
-// Int returns the value as an int
-func (v Value) Int() int {
-	if v.value == nil {
-		return 0
-	}
-	i, err := strconv.Atoi(fmt.Sprint(v.value))
-	if err != nil {
-		panic(err)
-	}
-	return i
-}
-
-// Int32 returns the value as an int32
-func (v Value) Int32() int32 {
-	return int32(v.Int())
-}
-
-// Int64 returns the value as an int64
-func (v Value) Int64() int64 {
-	return int64(v.Int())
+	Path string
+	types.Value
 }

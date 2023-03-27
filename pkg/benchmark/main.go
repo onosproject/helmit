@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"github.com/onosproject/helmit/internal/job"
 	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/types"
 	"k8s.io/client-go/rest"
 	"math"
 	"os"
@@ -42,11 +43,6 @@ func run(suites []InternalBenchmarkSuite) error {
 		os.Exit(1)
 	}
 
-	ctx := context.Background()
-	for key, value := range config.Args {
-		ctx = context.WithValue(ctx, key, value)
-	}
-
 	var suite BenchmarkingSuite
 	for _, s := range suites {
 		if ok, _ := regexp.MatchString(config.Suite, s.Name); ok {
@@ -57,6 +53,15 @@ func run(suites []InternalBenchmarkSuite) error {
 	if suite == nil {
 		return fmt.Errorf("unknown suite %s", config.Suite)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	args := make(map[string]types.Value)
+	for key, value := range config.Args {
+		args[key] = types.NewValue(value)
+	}
+	suite.SetArgs(args)
 
 	suite.SetNamespace(config.Namespace)
 	raftConfig, err := rest.InClusterConfig()

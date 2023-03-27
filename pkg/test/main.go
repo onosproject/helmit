@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/onosproject/helmit/internal/job"
 	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/types"
 	"k8s.io/client-go/rest"
 	"os"
 	"reflect"
@@ -65,12 +66,17 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 	return func(t *testing.T) {
 		defer recoverAndFailOnPanic(t)
 
-		ctx := context.Background()
-		for key, value := range config.Args {
-			ctx = context.WithValue(ctx, key, value)
-		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
 		suite.SetT(t)
+
+		args := make(map[string]types.Value)
+		for key, value := range config.Args {
+			args[key] = types.NewValue(value)
+		}
+		suite.SetArgs(args)
+
 		suite.SetNamespace(config.Namespace)
 		raftConfig, err := rest.InClusterConfig()
 		if err != nil {
