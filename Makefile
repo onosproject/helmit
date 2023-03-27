@@ -26,13 +26,6 @@ jenkins-test:  # @HELP run the unit tests and source code validation producing a
 jenkins-test: deps license linters
 	TEST_PACKAGES=NONE ./build/build-tools/build/jenkins/make-unit
 
-proto: # @HELP build Protobuf/gRPC input types
-proto:
-	docker run -it -v `pwd`:/go/src/github.com/onosproject/helmit \
-		-w /go/src/github.com/onosproject/helmit \
-		--entrypoint build/bin/compile_protos.sh \
-		onosproject/protoc-go:stable
-
 images: # @HELP build all Docker images
 images:
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o build/helmit-runner/_output/bin/helmit-runner ./cmd/helmit-runner
