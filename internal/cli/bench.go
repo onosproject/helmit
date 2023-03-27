@@ -215,12 +215,6 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		Config:          config,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	if duration > 0 {
-		ctx, cancel = context.WithTimeout(ctx, duration)
-	}
-	defer cancel()
-
 	if err := setupBenchmark(job, timeout); err != nil {
 		return err
 	}

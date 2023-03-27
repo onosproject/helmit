@@ -35,24 +35,23 @@ func newReleaseCmd[T any](cmd T, context Context, release string, chart string) 
 
 // ReleaseCmd is a base command for install/upgrade commands
 type ReleaseCmd[T any] struct {
-	context            Context
-	namespace          string
-	release            string
-	chart              string
-	version            string
-	repoURL            string
-	username           string
-	password           string
-	skipCRDs           bool
-	atomic             bool
-	verify             bool
-	dryRun             bool
-	wait               bool
-	timeout            time.Duration
-	updateDependencies bool
-	values             map[string]any
-	valueFiles         []string
-	cmd                T
+	context    Context
+	namespace  string
+	release    string
+	chart      string
+	version    string
+	repoURL    string
+	username   string
+	password   string
+	skipCRDs   bool
+	atomic     bool
+	verify     bool
+	dryRun     bool
+	wait       bool
+	timeout    time.Duration
+	values     map[string]any
+	valueFiles []string
+	cmd        T
 }
 
 // Namespace sets the namespace to which to install the chart
