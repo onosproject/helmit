@@ -61,29 +61,29 @@ type Step struct {
 // Log logs a progress message
 func (s *Step) Log(message string) {
 	if s.verbose {
-		fmt.Fprintf(writer, "  %s %s %s\n", time.Now().Format(time.RFC3339), s.job, message)
+		_, _ = fmt.Fprintf(writer, "  %s %s %s\n", time.Now().Format(time.RFC3339), s.job, message)
 	}
 }
 
 // Logf logs a progress message
 func (s *Step) Logf(message string, args ...interface{}) {
 	if s.verbose {
-		fmt.Fprintf(writer, "  %s %s %s\n", time.Now().Format(time.RFC3339), s.job, fmt.Sprintf(message, args...))
+		_, _ = fmt.Fprintf(writer, "  %s %s %s\n", time.Now().Format(time.RFC3339), s.job, fmt.Sprintf(message, args...))
 	}
 }
 
 // Start starts the step
 func (s *Step) Start() {
-	runningColor.Fprintf(writer, "%s %s %s %s...\n", startIcon, time.Now().Format(time.RFC3339), s.job, s.message)
+	_, _ = runningColor.Fprintf(writer, "%s %s %s %s...\n", startIcon, time.Now().Format(time.RFC3339), s.job, s.message)
 }
 
 // Complete completes the step
 func (s *Step) Complete() {
-	successColor.Fprintf(writer, "%s %s %s %s\n", successIcon, time.Now().Format(time.RFC3339), s.job, s.message)
+	_, _ = successColor.Fprintf(writer, "%s %s %s %s\n", successIcon, time.Now().Format(time.RFC3339), s.job, s.message)
 }
 
 // Fail fails the step with the given error
 func (s *Step) Fail(err error) {
-	failureColor.Fprintf(writer, "%s %s %s %s\n", failureIcon, time.Now().Format(time.RFC3339), s.job, s.message)
-	errorColor.Fprintf(writer, "  %s\n", err.Error())
+	_, _ = failureColor.Fprintf(writer, "%s %s %s %s\n", failureIcon, time.Now().Format(time.RFC3339), s.job, s.message)
+	_, _ = errorColor.Fprintf(writer, "  %s\n", err.Error())
 }

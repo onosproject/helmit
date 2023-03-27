@@ -53,7 +53,9 @@ func (b *Builder) Build(binPath string, pkgPaths ...string) error {
 		return err
 	}
 	mainFile := filepath.Join(mainDir, "main.go")
-	defer os.RemoveAll(mainDir)
+	defer func() {
+		_ = os.RemoveAll(mainDir)
+	}()
 
 	if err := b.applyTemplate(mainFile, info); err != nil {
 		return err

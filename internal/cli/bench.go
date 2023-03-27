@@ -162,7 +162,9 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		step := logging.NewStep(benchID, "Preparing artifacts")
 		step.Start()
 		executable = filepath.Join(os.TempDir(), "helmit", benchID)
-		defer os.RemoveAll(executable)
+		defer func() {
+			_ = os.RemoveAll(executable)
+		}()
 		image = defaultRunnerImage
 		if err := build.Benchmarks(step, suite).Build(executable, pkgPaths...); err != nil {
 			step.Fail(err)

@@ -91,7 +91,9 @@ func (cmd *RepoAddCmd) Do(ctx context.Context) error {
 	defer cancel()
 	locked, err := fileLock.TryLockContext(lockCtx, time.Second)
 	if err == nil && locked {
-		defer fileLock.Unlock()
+		defer func() {
+			_ = fileLock.Unlock()
+		}()
 	}
 	if err != nil {
 		return err
@@ -176,7 +178,7 @@ func (cmd *RepoRemoveCmd) Do(ctx context.Context) error {
 func removeRepoCache(root, name string) error {
 	idx := filepath.Join(root, helmpath.CacheChartsFile(name))
 	if _, err := os.Stat(idx); err == nil {
-		os.Remove(idx)
+		_ = os.Remove(idx)
 	}
 
 	idx = filepath.Join(root, helmpath.CacheIndexFile(name))

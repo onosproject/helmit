@@ -151,7 +151,9 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		step := logging.NewStep(testID, "Preparing artifacts")
 		step.Start()
 		executable = filepath.Join(os.TempDir(), "helmit", testID)
-		defer os.RemoveAll(executable)
+		defer func() {
+			_ = os.RemoveAll(executable)
+		}()
 		image = defaultRunnerImage
 		if err := build.Tests(step, suites...).Build(executable, pkgPaths...); err != nil {
 			step.Fail(err)
@@ -245,9 +247,9 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	step.Complete()
 
 	if code == 0 {
-		successColor.Fprintf(cmd.OutOrStdout(), "%s Tests passed!\n", successIcon)
+		_, _ = successColor.Fprintf(cmd.OutOrStdout(), "%s Tests passed!\n", successIcon)
 	} else {
-		failureColor.Fprintf(cmd.OutOrStdout(), "%s Tests failed!\n", failureIcon)
+		_, _ = failureColor.Fprintf(cmd.OutOrStdout(), "%s Tests failed!\n", failureIcon)
 	}
 	os.Exit(code)
 	return nil
