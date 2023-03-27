@@ -35,7 +35,7 @@ func Main(suites []InternalTestSuite) {
 			for _, suite := range suites {
 				if ok, _ := regexp.MatchString(match, suite.Name); ok {
 					tests = append(tests, testing.InternalTest{
-						Name: match,
+						Name: suite.Name,
 						F:    getSuiteFunc(config, suite.Suite),
 					})
 				}
