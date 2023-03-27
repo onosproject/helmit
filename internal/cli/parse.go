@@ -6,43 +6,10 @@ package cli
 
 import (
 	"errors"
-	"go/build"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
-
-const (
-	defaultRunnerImage = "onosproject/helmit-runner"
-)
-
-func buildBinary(pkgPath, binPath string) error {
-	build := exec.Command("go", "build", "-mod=readonly", "-trimpath", "-o", binPath, pkgPath)
-	build.Stderr = os.Stderr
-	build.Stdout = os.Stdout
-	env := os.Environ()
-	env = append(env, "GOOS=linux", "CGO_ENABLED=0")
-	build.Env = env
-	return build.Run()
-}
-
-func validatePackage(pkgPath string) error {
-	workDir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	pkg, err := build.Import(pkgPath, workDir, build.ImportComment)
-	if err != nil {
-		return err
-	}
-
-	if !pkg.IsCommand() {
-		return errors.New("main not found in package")
-	}
-	return nil
-}
 
 func parseFiles(files []string) (map[string][]string, error) {
 	if len(files) == 0 {

@@ -12,6 +12,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	defaultRunnerImage = "onosproject/helmit-runner"
+	binFile            = "/var/helmit/bin/run"
+	contextDir         = "/var/helmit/context"
+	valuesDir          = "/var/helmit/values"
+)
+
 func init() {
 	rand.Seed(time.Now().UTC().UnixNano())
 }

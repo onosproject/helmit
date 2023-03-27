@@ -101,3 +101,9 @@ type TearDownBenchmark interface {
 	// TearDownBenchmark is called at the end of a benchmark run to tear down the benchmark
 	TearDownBenchmark(ctx context.Context) error
 }
+
+// InternalBenchmarkSuite is an internal named benchmark suite
+type InternalBenchmarkSuite struct {
+	Name  string
+	Suite BenchmarkingSuite
+}

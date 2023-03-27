@@ -32,6 +32,11 @@ func (j *Job[T]) GetLogs(ctx context.Context) (io.ReadCloser, error) {
 
 func (j *Job[T]) copyExecutable(ctx context.Context, log logging.Logger) error {
 	if j.Executable != "" {
+		if fileInfo, err := os.Stat(j.Executable); err != nil {
+			return err
+		} else if fileInfo.IsDir() {
+			return fmt.Errorf("%s is not a valid file", j.Executable)
+		}
 		log.Logf("Copying %s to %s", j.Executable, j.pod.Name)
 		return j.copy(ctx, filepath.Base(j.Executable), j.Executable)
 	}
@@ -40,8 +45,13 @@ func (j *Job[T]) copyExecutable(ctx context.Context, log logging.Logger) error {
 
 func (j *Job[T]) copyContext(ctx context.Context, log logging.Logger) error {
 	if j.Context != "" {
+		if fileInfo, err := os.Stat(j.Context); err != nil {
+			return err
+		} else if !fileInfo.IsDir() {
+			return fmt.Errorf("%s is not a valid directory", j.Context)
+		}
 		log.Logf("Copying %s to %s", j.Context, j.pod.Name)
-		return j.copy(ctx, contextDir, j.Context)
+		return j.copy(ctx, filepath.Base(ContextDir), j.Context)
 	}
 	return nil
 }
@@ -49,6 +59,11 @@ func (j *Job[T]) copyContext(ctx context.Context, log logging.Logger) error {
 func (j *Job[T]) copyValueFiles(ctx context.Context, log logging.Logger) error {
 	for _, files := range j.ValueFiles {
 		for _, file := range files {
+			if fileInfo, err := os.Stat(file); err != nil {
+				return err
+			} else if fileInfo.IsDir() {
+				return fmt.Errorf("%s is not a valid file", file)
+			}
 			log.Logf("Copying %s to %s", file, j.pod.Name)
 			if err := j.copy(ctx, filepath.Base(file), file); err != nil {
 				return err
@@ -60,7 +75,7 @@ func (j *Job[T]) copyValueFiles(ctx context.Context, log logging.Logger) error {
 
 func (j *Job[T]) runExecutable(ctx context.Context, log logging.Logger) error {
 	if j.Executable != "" {
-		return j.Echo(ctx, readyFile, []byte(filepath.Base(j.Executable)))
+		return j.Echo(ctx, readyFile, []byte(filepath.Join(HomeDir, filepath.Base(j.Executable))))
 	}
 	return nil
 }

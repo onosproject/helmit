@@ -12,6 +12,7 @@ import (
 	"fmt"
 	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/gosuri/uilive"
+	"github.com/onosproject/helmit/internal/build"
 	"github.com/onosproject/helmit/internal/logging"
 	"github.com/onosproject/helmit/pkg/benchmark"
 	"os"
@@ -68,7 +69,7 @@ func getBenchCommand() *cobra.Command {
 		Aliases: []string{"benchmark", "benchmarks"},
 		Short:   "Run benchmarks on Kubernetes",
 		Example: benchExamples,
-		Args:    cobra.MaximumNArgs(1),
+		Args:    cobra.ArbitraryArgs,
 		RunE:    runBenchCommand,
 	}
 	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the benchmarks")
@@ -82,7 +83,7 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().StringArrayP("values", "f", []string{}, "release values paths")
 	cmd.Flags().StringArray("set", []string{}, "cluster argument overrides")
 	cmd.Flags().StringP("suite", "s", "", "the benchmark suite to run")
-	cmd.Flags().StringP("benchmark", "b", "", "the name of the benchmark to run")
+	cmd.Flags().StringP("benchmark", "b", "BenchmarkSuite$", "the name of the benchmark to run")
 	cmd.Flags().IntP("workers", "w", 1, "the number of workers to run")
 	cmd.Flags().Int("parallel", 1, "the number of concurrent goroutines per client")
 	cmd.Flags().IntP("iterations", "", 0, "the number of iterations to run")
@@ -92,7 +93,6 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().Duration("timeout", 10*time.Minute, "benchmark timeout")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following benchmarks")
 	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
-	_ = cmd.MarkFlagRequired("suite")
 	_ = cmd.MarkFlagRequired("benchmark")
 	return cmd
 }
@@ -100,11 +100,6 @@ func getBenchCommand() *cobra.Command {
 func runBenchCommand(cmd *cobra.Command, args []string) error {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
-
-	pkgPath := ""
-	if len(args) > 0 {
-		pkgPath = args[0]
-	}
 
 	namespace, _ := cmd.Flags().GetString("namespace")
 	createNamespace, _ := cmd.Flags().GetBool("create-namespace")
@@ -130,7 +125,8 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	secretsArray, _ := cmd.Flags().GetStringSlice("secret")
 
 	// Either a command package or image must be specified
-	if pkgPath == "" && image == "" {
+	pkgPaths := args
+	if len(pkgPaths) == 0 && image == "" {
 		return errors.New("must specify either a benchmark package or --image to run")
 	}
 
@@ -162,20 +158,13 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	benchID := petname.Generate(2, "-")
 
 	var executable string
-	if pkgPath != "" {
+	if len(pkgPaths) > 0 {
 		step := logging.NewStep(benchID, "Preparing artifacts")
 		step.Start()
 		executable = filepath.Join(os.TempDir(), "helmit", benchID)
 		defer os.RemoveAll(executable)
 		image = defaultRunnerImage
-
-		step.Logf("Validating %s", pkgPath)
-		if err := validatePackage(pkgPath); err != nil {
-			step.Fail(err)
-			return err
-		}
-		step.Logf("Building %s", pkgPath)
-		if err := buildBinary(pkgPath, executable); err != nil {
+		if err := build.Benchmarks(step, suite).Build(executable, pkgPaths...); err != nil {
 			step.Fail(err)
 			return err
 		}
@@ -195,17 +184,17 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	if contextPath != "" {
-		config.Context = defaultContextPath
+		config.Context = filepath.Join(job.HomeDir, job.ContextDir)
 	}
 
 	if len(valueFiles) > 0 {
 		config.ValueFiles = make(map[string][]string)
-		for release, files := range valueFiles {
-			var baseFiles []string
-			for _, file := range files {
-				baseFiles = append(baseFiles, filepath.Base(file))
+		for release, releaseFiles := range valueFiles {
+			var absFiles []string
+			for _, releaseFile := range releaseFiles {
+				absFiles = append(absFiles, filepath.Join(job.HomeDir, filepath.Base(releaseFile)))
 			}
-			config.ValueFiles[release] = baseFiles
+			config.ValueFiles[release] = absFiles
 		}
 	}
 

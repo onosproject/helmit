@@ -14,6 +14,7 @@ import (
 	"math"
 	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -25,7 +26,7 @@ const shutdownFile = "/tmp/shutdown"
 // the image in the appropriate context according to the arguments.
 
 // Main runs a benchmark
-func Main(suites map[string]BenchmarkingSuite) {
+func Main(suites []InternalBenchmarkSuite) {
 	if err := run(suites); err != nil {
 		println("Benchmark failed " + err.Error())
 		os.Exit(1)
@@ -34,7 +35,7 @@ func Main(suites map[string]BenchmarkingSuite) {
 }
 
 // run runs a benchmark
-func run(suites map[string]BenchmarkingSuite) error {
+func run(suites []InternalBenchmarkSuite) error {
 	var config Config
 	if err := job.Bootstrap(&config); err != nil {
 		fmt.Println(err)
@@ -46,8 +47,14 @@ func run(suites map[string]BenchmarkingSuite) error {
 		ctx = context.WithValue(ctx, key, value)
 	}
 
-	suite, ok := suites[config.Suite]
-	if !ok {
+	var suite BenchmarkingSuite
+	for _, s := range suites {
+		if ok, _ := regexp.MatchString(config.Suite, s.Name); ok {
+			suite = s.Suite
+			break
+		}
+	}
+	if suite == nil {
 		return fmt.Errorf("unknown suite %s", config.Suite)
 	}
 

@@ -96,3 +96,9 @@ type TearDownTest interface {
 	// TearDownTest is called at the end of each test run to tear down the test
 	TearDownTest(ctx context.Context)
 }
+
+// InternalTestSuite is an internal named test suite
+type InternalTestSuite struct {
+	Name  string
+	Suite TestingSuite
+}

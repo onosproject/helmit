@@ -11,6 +11,7 @@ import (
 	"fmt"
 	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/fatih/color"
+	"github.com/onosproject/helmit/internal/build"
 	"github.com/onosproject/helmit/internal/logging"
 	"math/rand"
 	"os"
@@ -64,16 +65,13 @@ const testExamples = `
   helmit test ./cmd/tests -c ./charts -f atomix-controller=./atomix-controller.yaml --suite atomix
 `
 
-const defaultContextPath = "context"
-const readyFile = "/tmp/bin-ready"
-
 func getTestCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "test",
 		Aliases: []string{"tests"},
 		Short:   "Run tests on Kubernetes",
 		Example: testExamples,
-		Args:    cobra.MaximumNArgs(1),
+		Args:    cobra.ArbitraryArgs,
 		RunE:    runTestCommand,
 	}
 	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the tests")
@@ -84,7 +82,7 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
 	cmd.Flags().StringArrayP("values", "f", []string{}, "release values paths")
 	cmd.Flags().StringArray("set", []string{}, "chart value overrides")
-	cmd.Flags().StringSliceP("suite", "s", []string{}, "the name of test suite to run")
+	cmd.Flags().StringSliceP("suite", "s", []string{"TestSuite$"}, "regular expressions to filter the names of test suite(s)")
 	cmd.Flags().StringSliceP("test", "t", []string{}, "the name of the test method to run")
 	cmd.Flags().BoolP("parallel", "p", false, "whether to run test tests in parallel")
 	cmd.Flags().Duration("timeout", 10*time.Minute, "test timeout")
@@ -99,11 +97,6 @@ func getTestCommand() *cobra.Command {
 func runTestCommand(cmd *cobra.Command, args []string) error {
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
-
-	pkgPath := ""
-	if len(args) > 0 {
-		pkgPath = args[0]
-	}
 
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	namespace, _ := cmd.Flags().GetString("namespace")
@@ -130,7 +123,8 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Either a command package or image must be specified
-	if pkgPath == "" && image == "" {
+	pkgPaths := args
+	if len(pkgPaths) == 0 && image == "" {
 		return errors.New("must specify either a test package or --image to run")
 	}
 
@@ -153,20 +147,13 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	testID := petname.Generate(2, "-")
 
 	var executable string
-	if pkgPath != "" {
+	if len(pkgPaths) > 0 {
 		step := logging.NewStep(testID, "Preparing artifacts")
 		step.Start()
 		executable = filepath.Join(os.TempDir(), "helmit", testID)
 		defer os.RemoveAll(executable)
 		image = defaultRunnerImage
-
-		step.Logf("Validating %s", pkgPath)
-		if err := validatePackage(pkgPath); err != nil {
-			step.Fail(err)
-			return err
-		}
-		step.Logf("Building %s", pkgPath)
-		if err := buildBinary(pkgPath, executable); err != nil {
+		if err := build.Tests(step, suites...).Build(executable, pkgPaths...); err != nil {
 			step.Fail(err)
 			return err
 		}
@@ -187,17 +174,17 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	if contextPath != "" {
-		config.Context = defaultContextPath
+		config.Context = filepath.Join(job.HomeDir, job.ContextDir)
 	}
 
 	if len(valueFiles) > 0 {
 		config.ValueFiles = make(map[string][]string)
-		for release, files := range valueFiles {
-			var baseFiles []string
-			for _, file := range files {
-				baseFiles = append(baseFiles, filepath.Base(file))
+		for release, releaseFiles := range valueFiles {
+			var absFiles []string
+			for _, releaseFile := range releaseFiles {
+				absFiles = append(absFiles, filepath.Join(job.HomeDir, filepath.Base(releaseFile)))
 			}
-			config.ValueFiles[release] = baseFiles
+			config.ValueFiles[release] = absFiles
 		}
 	}
 

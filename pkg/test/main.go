@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/rest"
 	"os"
 	"reflect"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"testing"
@@ -21,7 +22,7 @@ import (
 // the image in the appropriate context according to the arguments.
 
 // Main runs a test
-func Main(suites map[string]TestingSuite) {
+func Main(suites []InternalTestSuite) {
 	var config Config
 	if err := job.Bootstrap(&config); err != nil {
 		fmt.Println(err)
@@ -30,22 +31,21 @@ func Main(suites map[string]TestingSuite) {
 
 	var tests []testing.InternalTest
 	if len(config.Suites) > 0 {
-		for _, name := range config.Suites {
-			suite, ok := suites[name]
-			if !ok {
-				continue
+		for _, match := range config.Suites {
+			for _, suite := range suites {
+				if ok, _ := regexp.MatchString(match, suite.Name); ok {
+					tests = append(tests, testing.InternalTest{
+						Name: match,
+						F:    getSuiteFunc(config, suite.Suite),
+					})
+				}
 			}
-			tests = append(tests, testing.InternalTest{
-				Name: name,
-				F:    getSuiteFunc(config, suite),
-			})
 		}
 	} else {
-		for name := range suites {
-			suite := suites[name]
+		for _, suite := range suites {
 			tests = append(tests, testing.InternalTest{
-				Name: name,
-				F:    getSuiteFunc(config, suite),
+				Name: suite.Name,
+				F:    getSuiteFunc(config, suite.Suite),
 			})
 		}
 	}

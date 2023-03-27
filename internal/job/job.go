@@ -22,7 +22,8 @@ const (
 	configPath = "/etc/helmit"
 	configFile = "config.json"
 	readyFile  = "/tmp/bin-ready"
-	contextDir = "context"
+	HomeDir    = "/home/helmit"
+	ContextDir = "context"
 )
 
 const (
