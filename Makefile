@@ -16,7 +16,7 @@ build: # @HELP build the Go binaries and run all validations (default)
 build: build-helmit
 
 build-helmit:
-	go build -o build/_output/helmit ./cmd/helmit
+	go build -o build/_output/helmit .
 
 test: # @HELP run the unit tests and source code validation
 test: linters license build deps
