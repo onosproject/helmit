@@ -241,21 +241,25 @@ func newUpgradeCmd(context Context, release string, chart string) *UpgradeCmd {
 	return cmd
 }
 
+// UpgradeCmd is a command for upgrading a Helm chart
 type UpgradeCmd struct {
 	*ReleaseCmd[*UpgradeCmd]
 	install bool
 }
 
+// Install sets the upgrade command to install mode
 func (cmd *UpgradeCmd) Install() *UpgradeCmd {
 	cmd.install = true
 	return cmd
 }
 
+// Do runs the command
 func (cmd *UpgradeCmd) Do(ctx context.Context) error {
 	_, err := cmd.run(ctx)
 	return err
 }
 
+// Get runs the command and returns the resulting Release
 func (cmd *UpgradeCmd) Get(ctx context.Context) (*Release, error) {
 	release, err := cmd.run(ctx)
 	if err != nil {
@@ -315,6 +319,7 @@ func newUninstall(context Context, release string) *UninstallCmd {
 	}
 }
 
+// UninstallCmd is a command for uninstalling a Helm chart release
 type UninstallCmd struct {
 	context   Context
 	namespace string
@@ -323,21 +328,25 @@ type UninstallCmd struct {
 	timeout   time.Duration
 }
 
+// Namespace sets the namespace in which to run the command
 func (cmd *UninstallCmd) Namespace(namespace string) *UninstallCmd {
 	cmd.namespace = namespace
 	return cmd
 }
 
+// Wait sets the command to block until complete
 func (cmd *UninstallCmd) Wait() *UninstallCmd {
 	cmd.wait = true
 	return cmd
 }
 
+// Timeout sets the command timeout
 func (cmd *UninstallCmd) Timeout(timeout time.Duration) *UninstallCmd {
 	cmd.timeout = timeout
 	return cmd
 }
 
+// Do runs the command
 func (cmd *UninstallCmd) Do(ctx context.Context) error {
 	config, err := getConfig(cmd.namespace)
 	if err != nil {

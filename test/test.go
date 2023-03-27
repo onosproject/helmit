@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// ChartTestSuite is a test for chart deployment
+// ChartTestSuite is an example of a Helm chart test suite
 type ChartTestSuite struct {
 	test.Suite
 }
