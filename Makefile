@@ -41,7 +41,7 @@ kind: images
 all: build images tests
 
 publish: # @HELP publish version on github and dockerhub
-	./build/build-tools/publish-version ${VERSION} onosproject/helmit-runner onosproject/helmit-tests
+	./build/build-tools/publish-version ${VERSION} onosproject/helmit-runner
 
 jenkins-publish: # @HELP Jenkins calls this to publish artifacts
 	./build/bin/push-images
