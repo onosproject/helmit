@@ -31,10 +31,10 @@ type logger struct {
 
 // Log logs a progress message
 func (l *logger) Log(message string) {
-	_, _ = fmt.Fprintf(writer, "  %s %s\n", time.Now().Format(time.RFC3339), message)
+	fmt.Fprintf(writer, "  %s %s\n", time.Now().Format(time.RFC3339), message)
 }
 
 // Logf logs a progress message
 func (l *logger) Logf(message string, args ...interface{}) {
-	_, _ = fmt.Fprintf(writer, "  %s %s\n", time.Now().Format(time.RFC3339), fmt.Sprintf(message, args...))
+	fmt.Fprintf(writer, "  %s %s\n", time.Now().Format(time.RFC3339), fmt.Sprintf(message, args...))
 }
