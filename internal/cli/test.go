@@ -80,6 +80,8 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().StringP("context", "c", "", "the test context")
 	cmd.Flags().StringP("image", "i", "", "the test image to run")
 	cmd.Flags().String("image-pull-policy", string(corev1.PullIfNotPresent), "the Docker image pull policy")
+	cmd.Flags().StringToStringP("label", "l", map[string]string{}, "labels to apply to the test pod")
+	cmd.Flags().StringToStringP("annotation", "a", map[string]string{}, "annotations to apply to the test pod")
 	cmd.Flags().StringArrayP("values", "f", []string{}, "release values paths")
 	cmd.Flags().StringArray("set", []string{}, "chart value overrides")
 	cmd.Flags().StringSliceP("suite", "s", []string{"TestSuite$"}, "regular expressions to filter the names of test suite(s)")
@@ -90,7 +92,7 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().Bool("until-failure", false, "run until an error is detected")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following tests")
 	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
-	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named test arguments")
+	cmd.Flags().StringToString("args", map[string]string{}, "a mapping of named test arguments")
 	return cmd
 }
 
@@ -104,6 +106,8 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	serviceAccount, _ := cmd.Flags().GetString("service-account")
 	contextPath, _ := cmd.Flags().GetString("context")
 	image, _ := cmd.Flags().GetString("image")
+	labels, _ := cmd.Flags().GetStringToString("label")
+	annotations, _ := cmd.Flags().GetStringToString("annotation")
 	files, _ := cmd.Flags().GetStringArray("values")
 	sets, _ := cmd.Flags().GetStringArray("set")
 	suites, _ := cmd.Flags().GetStringSlice("suite")
@@ -196,6 +200,8 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		ServiceAccount:  serviceAccount,
 		Image:           image,
 		ImagePullPolicy: pullPolicy,
+		Labels:          labels,
+		Annotations:     annotations,
 		Executable:      executable,
 		Context:         contextPath,
 		ValueFiles:      valueFiles,

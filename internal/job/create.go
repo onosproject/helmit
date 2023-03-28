@@ -164,11 +164,10 @@ func (j *Job[T]) createJob(ctx context.Context, log logging.Logger) error {
 	one := int32(1)
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      j.ID,
-			Namespace: j.Namespace,
-			Annotations: map[string]string{
-				"job": j.ID,
-			},
+			Name:        j.ID,
+			Namespace:   j.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: batchv1.JobSpec{
 			Parallelism:  &one,
