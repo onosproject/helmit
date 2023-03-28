@@ -4,39 +4,20 @@
 
 package test
 
-import (
-	"github.com/onosproject/helmit/pkg/job"
-	"os"
-)
-
-type testType string
-
-const (
-	testTypeEnv = "TEST_TYPE"
-	testJobType = "test"
-)
-
-const (
-	testTypeCoordinator testType = "coordinator"
-	testTypeWorker      testType = "worker"
-)
+import "time"
 
 // Config is a test configuration
 type Config struct {
-	*job.Config `json:",inline"`
-	Suites      []string          `json:"suites,omitempty"`
-	Tests       []string          `json:"tests,omitempty"`
-	Iterations  int               `json:"iterations,omitempty"`
-	Verbose     bool              `json:"verbose,omitempty"`
-	NoTeardown  bool              `json:"noteardown,omitempty"`
-	Args        map[string]string `json:"args,omitempty"`
-}
-
-// getTestContext returns the current test context
-func getTestType() testType {
-	context := os.Getenv(testTypeEnv)
-	if context != "" {
-		return testType(context)
-	}
-	return testTypeCoordinator
+	Namespace  string              `json:"namespace,omitempty"`
+	Suites     []string            `json:"suites,omitempty"`
+	Tests      []string            `json:"tests,omitempty"`
+	Parallel   bool                `json:"parallel,omitempty"`
+	Iterations int                 `json:"iterations,omitempty"`
+	Verbose    bool                `json:"verbose,omitempty"`
+	Args       map[string]string   `json:"args,omitempty"`
+	Context    string              `json:"context,omitempty"`
+	Values     map[string][]string `json:"values,omitempty"`
+	ValueFiles map[string][]string `json:"valueFiles,omitempty"`
+	Timeout    time.Duration       `json:"timeout,omitempty"`
+	NoTeardown bool                `json:"noTeardown,omitempty"`
 }

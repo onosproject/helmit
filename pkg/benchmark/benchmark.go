@@ -5,250 +5,132 @@
 package benchmark
 
 import (
-	"fmt"
-	"github.com/onosproject/helmit/pkg/input"
-	"math"
-	"reflect"
-	"sort"
-	"sync"
-	"time"
+	"context"
+	"github.com/onosproject/helmit/pkg/helm"
+	"github.com/onosproject/helmit/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
-const warmUpDuration = 30 * time.Second
-const aggBatchSize = 100
-
 // BenchmarkingSuite is a suite of benchmarks
-type BenchmarkingSuite interface{}
+type BenchmarkingSuite interface {
+	// SetNamespace sets the suite namespace
+	SetNamespace(namespace string)
+	// Namespace returns the suite namespace
+	Namespace() string
+	// SetConfig sets the Kubernetes REST configuration
+	SetConfig(config *rest.Config)
+	// Config returns the Kubernetes REST configuration
+	Config() *rest.Config
+	// SetHelm sets the Helm client
+	SetHelm(helm *helm.Helm)
+	// Helm returns the Helm client
+	Helm() *helm.Helm
+	// SetArgs sets the test arguments
+	SetArgs(args map[string]types.Value)
+	// Arg gets an argument by name
+	Arg(name string) types.Value
+	// Args returns a map of all test arguments
+	Args() map[string]types.Value
+}
 
-// Suite is an identifier interface for benchmark suites
-type Suite struct{}
+// Suite is the base for a benchmark suite
+type Suite struct {
+	*kubernetes.Clientset
+	namespace string
+	config    *rest.Config
+	helm      *helm.Helm
+	args      map[string]types.Value
+}
+
+// SetNamespace sets the suite namespace
+func (suite *Suite) SetNamespace(namespace string) {
+	suite.namespace = namespace
+}
+
+// Namespace returns the suite namespace
+func (suite *Suite) Namespace() string {
+	return suite.namespace
+}
+
+// SetConfig sets the Kubernetes REST configuration
+func (suite *Suite) SetConfig(config *rest.Config) {
+	suite.config = config
+	suite.Clientset = kubernetes.NewForConfigOrDie(config)
+}
+
+// Config returns the Kubernetes REST configuration
+func (suite *Suite) Config() *rest.Config {
+	return suite.config
+}
+
+// SetHelm sets the Helm client
+func (suite *Suite) SetHelm(helm *helm.Helm) {
+	suite.helm = helm
+}
+
+// Helm returns the Helm client
+func (suite *Suite) Helm() *helm.Helm {
+	return suite.helm
+}
+
+// SetArgs sets the test arguments
+func (suite *Suite) SetArgs(args map[string]types.Value) {
+	suite.args = args
+}
+
+// Arg returns a test argument by name
+func (suite *Suite) Arg(name string) types.Value {
+	value, ok := suite.args[name]
+	if !ok {
+		return types.NewValue(nil)
+	}
+	return value
+}
+
+// Args returns the test arguments
+func (suite *Suite) Args() map[string]types.Value {
+	return suite.args
+}
 
 // SetupSuite is an interface for setting up a suite of benchmarks
 type SetupSuite interface {
-	SetupSuite(c *input.Context) error
+	// SetupSuite is called at the beginning of a benchmark run to set up the benchmark suite
+	SetupSuite(ctx context.Context) error
 }
 
 // TearDownSuite is an interface for tearing down a suite of benchmarks
 type TearDownSuite interface {
-	TearDownSuite(c *input.Context) error
+	// TearDownSuite is called at the end of a benchmark run to tear down the benchmark suite
+	TearDownSuite(ctx context.Context) error
 }
 
 // SetupWorker is an interface for setting up individual benchmarks
 type SetupWorker interface {
-	SetupWorker(c *input.Context) error
+	// SetupWorker is called on each benchmark worker at the start of a benchmark run
+	SetupWorker(ctx context.Context) error
 }
 
 // TearDownWorker is an interface for tearing down individual benchmarks
 type TearDownWorker interface {
-	TearDownWorker(c *input.Context) error
+	// TearDownWorker is called on each benchmark worker at the end of a benchmark run
+	TearDownWorker(ctx context.Context) error
 }
 
 // SetupBenchmark is an interface for executing code before every benchmark
 type SetupBenchmark interface {
-	SetupBenchmark(c *input.Context) error
+	// SetupBenchmark is called at the beginning of a benchmark run to set up the benchmark
+	SetupBenchmark(ctx context.Context) error
 }
 
 // TearDownBenchmark is an interface for executing code after every benchmark
 type TearDownBenchmark interface {
-	TearDownBenchmark(c *input.Context) error
+	// TearDownBenchmark is called at the end of a benchmark run to tear down the benchmark
+	TearDownBenchmark(ctx context.Context) error
 }
 
-// newBenchmark creates a new benchmark
-func newBenchmark(requests int, duration *time.Duration, parallelism int, maxLatency *time.Duration, context *input.Context) *Benchmark {
-	return &Benchmark{
-		Context:     context,
-		requests:    requests,
-		duration:    duration,
-		maxLatency:  maxLatency,
-		parallelism: parallelism,
-	}
-}
-
-// Benchmark is a benchmark runner
-type Benchmark struct {
-	*input.Context
-
-	requests    int
-	duration    *time.Duration
-	parallelism int
-	maxLatency  *time.Duration
-}
-
-// Run runs the benchmark with the given parameters
-func (b *Benchmark) run(suite BenchmarkingSuite) (*RunResponse, error) {
-	var f func() error
-	methods := reflect.TypeOf(suite)
-	if method, ok := methods.MethodByName(b.Name); ok {
-		f = func() error {
-			values := method.Func.Call([]reflect.Value{reflect.ValueOf(suite), reflect.ValueOf(b)})
-			if len(values) == 0 {
-				return nil
-			} else if values[0].Interface() == nil {
-				return nil
-			}
-			return values[0].Interface().(error)
-		}
-	} else {
-		return nil, fmt.Errorf("unknown benchmark method %s", b.Name)
-	}
-
-	// Warm the benchmark
-	b.warmRequests(f)
-
-	// Run the benchmark
-	requests, runTime, results := b.runRequests(f)
-
-	// Calculate the total latency from latency results
-	var totalLatency time.Duration
-	for _, result := range results {
-		totalLatency += result
-	}
-
-	// Calculate latency percentiles
-	meanLatency := time.Duration(int64(totalLatency) / int64(len(results)))
-	latency50 := results[int(math.Max(float64(len(results)/2)-1, 0))]
-	latency75 := results[int(math.Max(float64(len(results)-(len(results)/4)-1), 0))]
-	latency95 := results[int(math.Max(float64(len(results)-(len(results)/20)-1), 0))]
-	latency99 := results[int(math.Max(float64(len(results)-(len(results)/100)-1), 0))]
-
-	return &RunResponse{
-		Requests:  uint32(requests),
-		Duration:  runTime,
-		Latency:   meanLatency,
-		Latency50: latency50,
-		Latency75: latency75,
-		Latency95: latency95,
-		Latency99: latency99,
-	}, nil
-}
-
-// warm warms up the benchmark
-func (b *Benchmark) warmRequests(f func() error) {
-	// Create an iteration channel and wait group and create a goroutine for each client
-	wg := &sync.WaitGroup{}
-	requestCh := make(chan struct{}, b.parallelism)
-	for i := 0; i < b.parallelism; i++ {
-		wg.Add(1)
-		go func() {
-			for range requestCh {
-				_ = f()
-			}
-			wg.Done()
-		}()
-	}
-
-	// Run for the warm up duration to prepare the benchmark
-	start := time.Now()
-	for time.Since(start) < warmUpDuration {
-		requestCh <- struct{}{}
-	}
-	close(requestCh)
-
-	// Wait for the tests to finish and close the result channel
-	wg.Wait()
-}
-
-// run runs the benchmark
-func (b *Benchmark) runRequests(f func() error) (int, time.Duration, []time.Duration) {
-	// Create an iteration channel and wait group and create a goroutine for each client
-	wg := &sync.WaitGroup{}
-	requestCh := make(chan struct{}, b.parallelism)
-	resultCh := make(chan time.Duration, aggBatchSize)
-	for i := 0; i < b.parallelism; i++ {
-		wg.Add(1)
-		go func() {
-			for range requestCh {
-				start := time.Now()
-				_ = f()
-				end := time.Now()
-				resultCh <- end.Sub(start)
-			}
-			wg.Done()
-		}()
-	}
-
-	// Start an aggregator goroutine
-	results := make([]time.Duration, 0, aggBatchSize*aggBatchSize)
-	aggWg := &sync.WaitGroup{}
-	aggWg.Add(1)
-	go func() {
-		var total time.Duration
-		var count = 0
-		// Iterate through results and aggregate durations
-		for duration := range resultCh {
-			total += duration
-			count++
-			// Average out the durations in batches
-			if count == aggBatchSize {
-				results = append(results, total/time.Duration(count))
-
-				// If the total number of batches reaches the batch size ^ 2, aggregate the aggregated results
-				if len(results) == aggBatchSize*aggBatchSize {
-					newResults := make([]time.Duration, 0, aggBatchSize*aggBatchSize)
-					for _, result := range results {
-						total += result
-						count++
-						if count == aggBatchSize {
-							newResults = append(newResults, total/time.Duration(count))
-							total = 0
-							count = 0
-						}
-					}
-					results = newResults
-				}
-				total = 0
-				count = 0
-			}
-		}
-		if count > 0 {
-			results = append(results, total/time.Duration(count))
-		}
-		aggWg.Done()
-	}()
-
-	// Record the start time and write arguments to the channel
-	start := time.Now()
-
-	// Iterate through the request count or until the time duration has been met
-	requests := 0
-	for (b.requests == 0 || requests < b.requests) && (b.duration == nil || time.Since(start) < *b.duration) {
-		requestCh <- struct{}{}
-		requests++
-	}
-	close(requestCh)
-
-	// Wait for the tests to finish and close the result channel
-	wg.Wait()
-
-	// Record the end time
-	end := time.Now()
-	duration := end.Sub(start)
-
-	// Close the output channel
-	close(resultCh)
-
-	// Wait for the results to be aggregated
-	aggWg.Wait()
-
-	// Sort the aggregated results
-	sort.Slice(results, func(i, j int) bool {
-		return results[i] < results[j]
-	})
-	return requests, duration, results
-}
-
-// getBenchmarks returns a list of benchmarks in the given suite
-func getBenchmarks(suite BenchmarkingSuite) []string {
-	methodFinder := reflect.TypeOf(suite)
-	benchmarks := []string{}
-	for index := 0; index < methodFinder.NumMethod(); index++ {
-		method := methodFinder.Method(index)
-		ok, err := benchmarkFilter(method.Name)
-		if ok {
-			benchmarks = append(benchmarks, method.Name)
-		} else if err != nil {
-			panic(err)
-		}
-	}
-	return benchmarks
+// InternalBenchmarkSuite is an internal named benchmark suite
+type InternalBenchmarkSuite struct {
+	Name  string
+	Suite BenchmarkingSuite
 }

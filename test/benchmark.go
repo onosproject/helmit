@@ -5,47 +5,57 @@
 package test
 
 import (
-	"time"
-
+	"context"
+	"github.com/brianvoe/gofakeit/v6"
 	"github.com/onosproject/helmit/pkg/benchmark"
-	"github.com/onosproject/helmit/pkg/helm"
-	"github.com/onosproject/helmit/pkg/input"
+	"math/rand"
+	"time"
 )
 
-// ChartBenchmarkSuite benchmarks a Helm chart
+// ChartBenchmarkSuite is an example of a Helm chart benchmarking suite
 type ChartBenchmarkSuite struct {
 	benchmark.Suite
-	value input.Source
 }
 
-// SetupSuite :: benchmark
-func (s *ChartBenchmarkSuite) SetupSuite(b *input.Context) error {
-	atomix := helm.Chart("kubernetes-controller").
-		Release("atomix-controller").
-		Set("scope", "Namespace")
-
-	err := atomix.Install(true)
-	if err != nil {
-		return err
-	}
-
-	err = atomix.Uninstall()
+// SetupSuite sets up the benchmark suite
+func (s *ChartBenchmarkSuite) SetupSuite(ctx context.Context) error {
+	err := s.Helm().Install("atomix-controller", "./controller/chart").
+		Wait().
+		Do(ctx)
 	if err != nil {
 		return err
 	}
 	return nil
-
 }
 
-// SetupWorker :: benchmark
-func (s *ChartBenchmarkSuite) SetupWorker(b *input.Context) error {
-	s.value = input.RandomString(8)
+// BenchmarkFoo is an example benchmark
+func (s *ChartBenchmarkSuite) BenchmarkFoo(ctx context.Context) error {
+	println(gofakeit.Animal())
+	time.Sleep(time.Duration(rand.Intn(250)) * time.Millisecond)
 	return nil
 }
 
-// BenchmarkTest :: benchmark
-func (s *ChartBenchmarkSuite) BenchmarkTest(b *benchmark.Benchmark) error {
-	println(s.value.Next().String())
-	time.Sleep(time.Second)
+// BenchmarkBar is an example benchmark
+func (s *ChartBenchmarkSuite) BenchmarkBar(ctx context.Context) error {
+	println(gofakeit.Animal())
+	time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
 	return nil
+}
+
+// BenchmarkBaz is an example benchmark
+func (s *ChartBenchmarkSuite) BenchmarkBaz(ctx context.Context) error {
+	println(gofakeit.Animal())
+	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	return nil
+}
+
+// TearDownSuite tears down the benchmark suite
+func (s *ChartBenchmarkSuite) TearDownSuite(ctx context.Context) error {
+	err := s.Helm().Uninstall("atomix-controller").
+		Wait().
+		Do(ctx)
+	if err != nil {
+		return err
+	}
+	return err
 }
