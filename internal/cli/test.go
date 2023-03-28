@@ -92,7 +92,7 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().Bool("until-failure", false, "run until an error is detected")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following tests")
 	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
-	cmd.Flags().StringToString("args", map[string]string{}, "a mapping of named test arguments")
+	cmd.Flags().StringToString("arg", map[string]string{}, "a mapping of named test arguments")
 	return cmd
 }
 

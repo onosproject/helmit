@@ -89,7 +89,7 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().IntP("iterations", "", 0, "the number of iterations to run")
 	cmd.Flags().DurationP("duration", "d", 0, "the duration for which to run the test")
 	cmd.Flags().DurationP("report-interval", "r", 5*time.Second, "the interval at which to report benchmark results")
-	cmd.Flags().StringToStringP("args", "a", map[string]string{}, "a mapping of named benchmark arguments")
+	cmd.Flags().StringToString("arg", map[string]string{}, "a mapping of named benchmark arguments")
 	cmd.Flags().Duration("timeout", 10*time.Minute, "benchmark timeout")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following benchmarks")
 	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
