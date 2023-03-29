@@ -130,6 +130,23 @@ func (j *Job[T]) createJob(ctx context.Context, log logging.Logger) error {
 		},
 	}
 
+	if j.Secrets != nil && len(j.Secrets) > 0 {
+		volumes = append(volumes, corev1.Volume{
+			Name: "secrets",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: j.ID,
+				},
+			},
+		})
+
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "secrets",
+			MountPath: secretsPath,
+			ReadOnly:  true,
+		})
+	}
+
 	var containerPorts []corev1.ContainerPort
 	readinessProbe := &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
@@ -347,7 +364,7 @@ func (j *Job[T]) createSecrets(ctx context.Context, log logging.Logger) error {
 
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      helmitSecretsName,
+			Name:      j.ID,
 			Namespace: j.Namespace,
 			Labels: map[string]string{
 				"job": j.ID,
@@ -364,6 +381,8 @@ func (j *Job[T]) createSecrets(ctx context.Context, log logging.Logger) error {
 		Data: secretData,
 	}
 	log.Logf("Creating Secret %s", secret.Name)
-	_, _ = j.client.CoreV1().Secrets(j.Namespace).Create(ctx, secret, metav1.CreateOptions{})
+	if _, err := j.client.CoreV1().Secrets(j.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+		return err
+	}
 	return nil
 }

@@ -24,6 +24,10 @@ type TestingSuite interface {
 	SetConfig(config *rest.Config)
 	// Config returns the Kubernetes REST configuration
 	Config() *rest.Config
+	// SetSecrets sets the test secrets
+	SetSecrets(secrets map[string]string)
+	// Secret returns a secret by name
+	Secret(name string) string
 	// SetArgs sets the test arguments
 	SetArgs(args map[string]types.Value)
 	// Arg gets an argument by name
@@ -43,6 +47,7 @@ type Suite struct {
 	namespace string
 	config    *rest.Config
 	helm      *helm.Helm
+	secrets   map[string]string
 	args      map[string]types.Value
 }
 
@@ -75,6 +80,16 @@ func (suite *Suite) SetHelm(helm *helm.Helm) {
 // Helm returns the Helm client
 func (suite *Suite) Helm() *helm.Helm {
 	return suite.helm
+}
+
+// SetSecrets sets the test secrets
+func (suite *Suite) SetSecrets(secrets map[string]string) {
+	suite.secrets = secrets
+}
+
+// Secret returns a test secret by name
+func (suite *Suite) Secret(name string) string {
+	return suite.secrets[name]
 }
 
 // SetArgs sets the test arguments

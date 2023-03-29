@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	configPath = "/etc/helmit"
-	configFile = "config.json"
-	readyFile  = "/tmp/bin-ready"
+	configPath  = "/etc/helmit/config"
+	secretsPath = "/etc/helmit/secrets"
+	configFile  = "config.json"
+	readyFile   = "/tmp/bin-ready"
 	// HomeDir is the home directory of the helmit-runner container
 	HomeDir = "/home/helmit"
 	// ContextDir is the directory to which job contexts will be copied if specified
@@ -31,12 +32,14 @@ const (
 const (
 	defaultRoleBindingName = "cluster-test"
 	defaultRoleName        = "cluster-admin"
-	helmitSecretsName      = "helmit"
 )
 
 // Bootstrap bootstraps the job
-func Bootstrap(config any) error {
-	return loadConfig(&config)
+func Bootstrap(config any) (map[string]string, error) {
+	if err := loadConfig(&config); err != nil {
+		return nil, err
+	}
+	return loadSecrets()
 }
 
 // loadConfig loads the job configuration
@@ -50,6 +53,28 @@ func loadConfig(config any) error {
 		return err
 	}
 	return nil
+}
+
+// loadSecrets loads the job secrets
+func loadSecrets() (map[string]string, error) {
+	secrets := make(map[string]string)
+	files, err := os.ReadDir(secretsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return secrets, nil
+		}
+		return nil, err
+	}
+	for _, file := range files {
+		if !file.IsDir() {
+			bytes, err := os.ReadFile(file.Name())
+			if err != nil {
+				return nil, err
+			}
+			secrets[filepath.Base(file.Name())] = string(bytes)
+		}
+	}
+	return secrets, nil
 }
 
 // Job manages the lifecycle of a Kubernetes job

@@ -38,7 +38,8 @@ func Main(suites []InternalBenchmarkSuite) {
 // run runs a benchmark
 func run(suites []InternalBenchmarkSuite) error {
 	var config Config
-	if err := job.Bootstrap(&config); err != nil {
+	secrets, err := job.Bootstrap(&config)
+	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
@@ -50,6 +51,8 @@ func run(suites []InternalBenchmarkSuite) error {
 	if err != nil {
 		return err
 	}
+
+	suite.SetSecrets(secrets)
 
 	args := make(map[string]types.Value)
 	for key, value := range config.Args {

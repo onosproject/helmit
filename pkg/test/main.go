@@ -25,7 +25,8 @@ import (
 // Main runs a test
 func Main(suites []InternalTestSuite) {
 	var config Config
-	if err := job.Bootstrap(&config); err != nil {
+	secrets, err := job.Bootstrap(&config)
+	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
@@ -37,7 +38,7 @@ func Main(suites []InternalTestSuite) {
 				if ok, _ := regexp.MatchString(match, suite.Name); ok {
 					tests = append(tests, testing.InternalTest{
 						Name: suite.Name,
-						F:    getSuiteFunc(config, suite.Suite),
+						F:    getSuiteFunc(config, secrets, suite.Suite),
 					})
 				}
 			}
@@ -46,7 +47,7 @@ func Main(suites []InternalTestSuite) {
 		for _, suite := range suites {
 			tests = append(tests, testing.InternalTest{
 				Name: suite.Name,
-				F:    getSuiteFunc(config, suite.Suite),
+				F:    getSuiteFunc(config, secrets, suite.Suite),
 			})
 		}
 	}
@@ -62,7 +63,7 @@ func Main(suites []InternalTestSuite) {
 	testing.Main(func(_, _ string) (bool, error) { return true, nil }, tests, nil, nil)
 }
 
-func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
+func getSuiteFunc(config Config, secrets map[string]string, suite TestingSuite) func(*testing.T) {
 	return func(t *testing.T) {
 		defer recoverAndFailOnPanic(t)
 
@@ -70,6 +71,7 @@ func getSuiteFunc(config Config, suite TestingSuite) func(*testing.T) {
 		defer cancel()
 
 		suite.SetT(t)
+		suite.SetSecrets(secrets)
 
 		args := make(map[string]types.Value)
 		for key, value := range config.Args {
