@@ -77,7 +77,9 @@ func run(suites []BenchmarkingSuite) error {
 		return fmt.Errorf("unknown benchmark suite %s", config.Suite)
 	}
 
-	suite.Init(config, secrets)
+	if err := suite.Init(config, secrets); err != nil {
+		return err
+	}
 
 	switch config.Type {
 	case SetupType:

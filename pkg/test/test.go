@@ -6,6 +6,7 @@ package test
 
 import (
 	"context"
+	"github.com/onosproject/helmit/internal/k8s"
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/types"
 	"github.com/stretchr/testify/suite"
@@ -98,9 +99,13 @@ func (suite *Suite) Init(config Config, secrets map[string]string) {
 	}
 	suite.args = args
 
-	if restConfig, err := rest.InClusterConfig(); err == nil {
-		suite.restConfig = restConfig
-	}
+	restConfig, err := k8s.GetConfig()
+	suite.NoError(err)
+	suite.restConfig = restConfig
+
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	suite.NoError(err)
+	suite.Clientset = clientset
 
 	suite.helm = helm.NewClient(helm.Context{
 		Namespace:  config.Namespace,

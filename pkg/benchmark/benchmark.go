@@ -6,6 +6,7 @@ package benchmark
 
 import (
 	"context"
+	"github.com/onosproject/helmit/internal/k8s"
 	"github.com/onosproject/helmit/pkg/helm"
 	"github.com/onosproject/helmit/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -15,7 +16,7 @@ import (
 // BenchmarkingSuite is a suite of benchmarks
 type BenchmarkingSuite interface {
 	// Init initializes the suite
-	Init(config Config, secrets map[string]string)
+	Init(config Config, secrets map[string]string) error
 	// Namespace returns the suite namespace
 	Namespace() string
 	// Config returns the Kubernetes REST configuration
@@ -79,7 +80,7 @@ type Suite struct {
 }
 
 // Init initializes the benchmark suite
-func (suite *Suite) Init(config Config, secrets map[string]string) {
+func (suite *Suite) Init(config Config, secrets map[string]string) error {
 	suite.config = config
 	suite.secrets = secrets
 
@@ -89,9 +90,17 @@ func (suite *Suite) Init(config Config, secrets map[string]string) {
 	}
 	suite.args = args
 
-	if restConfig, err := rest.InClusterConfig(); err == nil {
-		suite.restConfig = restConfig
+	restConfig, err := k8s.GetConfig()
+	if err != nil {
+		return err
 	}
+	suite.restConfig = restConfig
+
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return err
+	}
+	suite.Clientset = clientset
 
 	suite.helm = helm.NewClient(helm.Context{
 		Namespace:  config.Namespace,
@@ -99,6 +108,7 @@ func (suite *Suite) Init(config Config, secrets map[string]string) {
 		Values:     config.Values,
 		ValueFiles: config.ValueFiles,
 	})
+	return nil
 }
 
 // Namespace returns the suite namespace
