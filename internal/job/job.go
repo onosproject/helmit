@@ -118,9 +118,10 @@ func (j *Job[T]) GetStatus(ctx context.Context) (string, int, error) {
 		if err != nil {
 			return "", 0, err
 		} else if pod != nil {
-			state := pod.Status.ContainerStatuses[0].State
-			if state.Terminated != nil {
-				return state.Terminated.Message, int(state.Terminated.ExitCode), nil
+			for _, containerStatus := range pod.Status.ContainerStatuses {
+				if containerStatus.Name == "job" && containerStatus.State.Terminated != nil {
+					return containerStatus.State.Terminated.Message, int(containerStatus.State.Terminated.ExitCode), nil
+				}
 			}
 		}
 		time.Sleep(100 * time.Millisecond)
