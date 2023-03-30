@@ -33,7 +33,7 @@ type Context struct {
 
 func (c *Context) getReleaseValues(release string, defaultValues map[string]any, defaultFiles []string) (map[string]any, error) {
 	var valueFiles []string
-	for _, valueFile := range append(c.ValueFiles[release], defaultFiles...) {
+	for _, valueFile := range append(defaultFiles, c.ValueFiles[release]...) {
 		absPath, err := filepath.Abs(valueFile)
 		if err != nil {
 			return nil, err
