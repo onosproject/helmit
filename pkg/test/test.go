@@ -87,6 +87,7 @@ type Suite struct {
 	ctx        context.Context
 }
 
+// Init initializes the test suite
 func (suite *Suite) Init(config Config, secrets map[string]string) {
 	suite.config = config
 	suite.secrets = secrets

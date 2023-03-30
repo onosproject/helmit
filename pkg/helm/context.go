@@ -7,7 +7,6 @@ package helm
 import (
 	"encoding/csv"
 	"fmt"
-	"github.com/iancoleman/strcase"
 	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/cli/values"
@@ -54,11 +53,11 @@ func (c *Context) getReleaseValues(release string, defaultValues map[string]any,
 }
 
 func mergeValues(a, b map[string]any) (map[string]any, error) {
-	if m, err := normalizeMap(a); err != nil {
+	m, err := normalizeMap(a)
+	if err != nil {
 		return nil, err
-	} else {
-		return mergeMaps(m, b), nil
 	}
+	return mergeMaps(m, b), nil
 }
 
 func mergeMaps(a, b map[string]any) map[string]any {
@@ -160,11 +159,11 @@ func normalize(value any) (any, error) {
 func normalizeMap(values map[string]any) (map[string]any, error) {
 	normalized := make(map[string]any)
 	for key, value := range values {
-		if v, err := normalize(value); err != nil {
+		v, err := normalize(value)
+		if err != nil {
 			return nil, err
-		} else {
-			normalized[key] = v
 		}
+		normalized[key] = v
 	}
 	return normalized, nil
 }
@@ -172,21 +171,13 @@ func normalizeMap(values map[string]any) (map[string]any, error) {
 func normalizeSlice(values []any) ([]any, error) {
 	normalized := make([]any, len(values))
 	for i, value := range values {
-		if v, err := normalize(value); err != nil {
+		v, err := normalize(value)
+		if err != nil {
 			return nil, err
-		} else {
-			normalized[i] = v
 		}
+		normalized[i] = v
 	}
 	return normalized, nil
-}
-
-func normalizeField(field reflect.StructField) string {
-	tag := field.Tag.Get("yaml")
-	if tag != "" {
-		return strings.Split(tag, ",")[0]
-	}
-	return strcase.ToLowerCamel(field.Name)
 }
 
 func isChartInstallable(ch *chart.Chart) (bool, error) {
