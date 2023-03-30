@@ -88,6 +88,7 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().StringArray("set", []string{}, "chart value overrides")
 	cmd.Flags().StringSliceP("suite", "s", []string{"TestSuite$"}, "regular expressions to filter the names of test suite(s)")
 	cmd.Flags().StringSliceP("test", "t", []string{".*/^Test"}, "regular expressions to filter the names of tests")
+	cmd.Flags().StringSliceP("method", "m", []string{"^Test"}, "regular expressions to filter the names of test suite methods")
 	cmd.Flags().Duration("timeout", 10*time.Minute, "test timeout")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following tests")
 	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
@@ -110,7 +111,8 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	files, _ := cmd.Flags().GetStringArray("values")
 	sets, _ := cmd.Flags().GetStringArray("set")
 	suites, _ := cmd.Flags().GetStringSlice("suite")
-	testNames, _ := cmd.Flags().GetStringSlice("test")
+	tests, _ := cmd.Flags().GetStringSlice("test")
+	methods, _ := cmd.Flags().GetStringSlice("method")
 	timeout, _ := cmd.Flags().GetDuration("timeout")
 	imagePullPolicy, _ := cmd.Flags().GetString("image-pull-policy")
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
@@ -167,7 +169,9 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 
 	config := test.Config{
 		Namespace:  namespace,
-		Tests:      testNames,
+		Suites:     suites,
+		Tests:      tests,
+		Methods:    methods,
 		Values:     values,
 		Verbose:    verbose,
 		Args:       testArgs,

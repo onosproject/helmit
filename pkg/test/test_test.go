@@ -17,13 +17,13 @@ func TestGetSuiteName(t *testing.T) {
 }
 
 func TestPatterns(t *testing.T) {
-	assert.True(t, isSuiteRunnable("FooSuite", []string{}))
-	assert.True(t, isSuiteRunnable("FooSuite", []string{"FooSuite"}))
-	assert.True(t, isSuiteRunnable("FooSuite", []string{"Suite$"}))
-	assert.True(t, isSuiteRunnable("FooSuite", []string{"Suite$", "NotSuite$"}))
-	assert.True(t, isSuiteRunnable("FooSuite", []string{"Suite$/^Test"}))
-	assert.True(t, isSuiteRunnable("FooSuite", []string{"Suite$/^Test", "NotSuite$"}))
-	assert.False(t, isSuiteRunnable("FooSuite", []string{"NotSuite$"}))
+	assert.True(t, isRunnable("FooSuite", []string{}))
+	assert.True(t, isRunnable("FooSuite", []string{"FooSuite"}))
+	assert.True(t, isRunnable("FooSuite", []string{"Suite$"}))
+	assert.True(t, isRunnable("FooSuite", []string{"Suite$", "NotSuite$"}))
+	assert.True(t, isRunnable("FooSuite", []string{"Suite$/^Test"}))
+	assert.True(t, isRunnable("FooSuite", []string{"Suite$/^Test", "NotSuite$"}))
+	assert.False(t, isRunnable("FooSuite", []string{"NotSuite$"}))
 
 	assert.True(t, isTestRunnable(t, "TestFoo", []string{}))
 	assert.True(t, isTestRunnable(t, "TestFoo", []string{"TestPatterns"}))

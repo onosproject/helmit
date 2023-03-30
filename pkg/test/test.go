@@ -194,7 +194,11 @@ func (suite *Suite) Run(name string, subtest func()) bool {
 
 // RunSuite runs a test suite
 func (suite *Suite) RunSuite(subsuite TestingSuite) bool {
-	return suite.Run(getSuiteName(subsuite), func() {
+	name := getSuiteName(subsuite)
+	if !isRunnable(name, suite.config.Suites) {
+		return true
+	}
+	return suite.Run(name, func() {
 		run(suite.T(), subsuite, suite.config, suite.secrets)
 	})
 }
@@ -218,6 +222,9 @@ func run(t *testing.T, suite TestingSuite, config Config, secrets map[string]str
 	for i := 0; i < methodFinder.NumMethod(); i++ {
 		method := methodFinder.Method(i)
 
+		if !isRunnable(method.Name, config.Methods) {
+			continue
+		}
 		if !isTestRunnable(t, method.Name, config.Tests) {
 			continue
 		}
@@ -283,7 +290,7 @@ func getSuiteName(suite TestingSuite) string {
 	return t.Name()
 }
 
-func isSuiteRunnable(name string, patterns []string) bool {
+func isRunnable(name string, patterns []string) bool {
 	if len(patterns) == 0 {
 		return true
 	}

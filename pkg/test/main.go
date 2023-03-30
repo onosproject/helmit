@@ -15,7 +15,9 @@ import (
 // Config is a test configuration
 type Config struct {
 	Namespace  string              `json:"namespace,omitempty"`
+	Suites     []string            `json:"suites,omitempty"`
 	Tests      []string            `json:"tests,omitempty"`
+	Methods    []string            `json:"methods,omitempty"`
 	Verbose    bool                `json:"verbose,omitempty"`
 	Args       map[string]string   `json:"args,omitempty"`
 	Context    string              `json:"context,omitempty"`
@@ -41,7 +43,7 @@ func Main(suites []TestingSuite) {
 	var tests []testing.InternalTest
 	for _, suite := range suites {
 		name := getSuiteName(suite)
-		if isSuiteRunnable(name, config.Tests) {
+		if isRunnable(name, config.Tests) {
 			tests = append(tests, func(suite TestingSuite) testing.InternalTest {
 				return testing.InternalTest{
 					Name: name,
