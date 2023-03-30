@@ -14,98 +14,22 @@ import (
 
 // BenchmarkingSuite is a suite of benchmarks
 type BenchmarkingSuite interface {
-	// SetNamespace sets the suite namespace
-	SetNamespace(namespace string)
+	// Init initializes the suite
+	Init(config Config, secrets map[string]string)
 	// Namespace returns the suite namespace
 	Namespace() string
-	// SetConfig sets the Kubernetes REST configuration
-	SetConfig(config *rest.Config)
 	// Config returns the Kubernetes REST configuration
 	Config() *rest.Config
-	// SetHelm sets the Helm client
-	SetHelm(helm *helm.Helm)
-	// Helm returns the Helm client
-	Helm() *helm.Helm
-	// SetSecrets sets the test secrets
-	SetSecrets(secrets map[string]string)
 	// Secret returns a secret by name
 	Secret(name string) string
-	// SetArgs sets the test arguments
-	SetArgs(args map[string]types.Value)
+	// Secrets returns the injected secrets
+	Secrets() map[string]string
 	// Arg gets an argument by name
 	Arg(name string) types.Value
 	// Args returns a map of all test arguments
 	Args() map[string]types.Value
-}
-
-// Suite is the base for a benchmark suite
-type Suite struct {
-	*kubernetes.Clientset
-	namespace string
-	config    *rest.Config
-	helm      *helm.Helm
-	secrets   map[string]string
-	args      map[string]types.Value
-}
-
-// SetNamespace sets the suite namespace
-func (suite *Suite) SetNamespace(namespace string) {
-	suite.namespace = namespace
-}
-
-// Namespace returns the suite namespace
-func (suite *Suite) Namespace() string {
-	return suite.namespace
-}
-
-// SetConfig sets the Kubernetes REST configuration
-func (suite *Suite) SetConfig(config *rest.Config) {
-	suite.config = config
-	suite.Clientset = kubernetes.NewForConfigOrDie(config)
-}
-
-// Config returns the Kubernetes REST configuration
-func (suite *Suite) Config() *rest.Config {
-	return suite.config
-}
-
-// SetHelm sets the Helm client
-func (suite *Suite) SetHelm(helm *helm.Helm) {
-	suite.helm = helm
-}
-
-// Helm returns the Helm client
-func (suite *Suite) Helm() *helm.Helm {
-	return suite.helm
-}
-
-// SetSecrets sets the test secrets
-func (suite *Suite) SetSecrets(secrets map[string]string) {
-	suite.secrets = secrets
-}
-
-// Secret returns a test secret by name
-func (suite *Suite) Secret(name string) string {
-	return suite.secrets[name]
-}
-
-// SetArgs sets the test arguments
-func (suite *Suite) SetArgs(args map[string]types.Value) {
-	suite.args = args
-}
-
-// Arg returns a test argument by name
-func (suite *Suite) Arg(name string) types.Value {
-	value, ok := suite.args[name]
-	if !ok {
-		return types.NewValue(nil)
-	}
-	return value
-}
-
-// Args returns the test arguments
-func (suite *Suite) Args() map[string]types.Value {
-	return suite.args
+	// Helm returns the Helm client
+	Helm() *helm.Helm
 }
 
 // SetupSuite is an interface for setting up a suite of benchmarks
@@ -144,8 +68,75 @@ type TearDownBenchmark interface {
 	TearDownBenchmark(ctx context.Context) error
 }
 
-// InternalBenchmarkSuite is an internal named benchmark suite
-type InternalBenchmarkSuite struct {
-	Name  string
-	Suite BenchmarkingSuite
+// Suite is the base for a benchmark suite
+type Suite struct {
+	*kubernetes.Clientset
+	config     Config
+	secrets    map[string]string
+	restConfig *rest.Config
+	helm       *helm.Helm
+	args       map[string]types.Value
 }
+
+func (suite *Suite) Init(config Config, secrets map[string]string) {
+	suite.config = config
+	suite.secrets = secrets
+
+	args := make(map[string]types.Value)
+	for key, value := range config.Args {
+		args[key] = types.NewValue(value)
+	}
+	suite.args = args
+
+	if restConfig, err := rest.InClusterConfig(); err == nil {
+		suite.restConfig = restConfig
+	}
+
+	suite.helm = helm.NewClient(helm.Context{
+		Namespace:  config.Namespace,
+		WorkDir:    config.Context,
+		Values:     config.Values,
+		ValueFiles: config.ValueFiles,
+	})
+}
+
+// Namespace returns the suite namespace
+func (suite *Suite) Namespace() string {
+	return suite.config.Namespace
+}
+
+// Config returns the Kubernetes REST configuration
+func (suite *Suite) Config() *rest.Config {
+	return suite.restConfig
+}
+
+// Helm returns the Helm client
+func (suite *Suite) Helm() *helm.Helm {
+	return suite.helm
+}
+
+// Secret returns a test secret by name
+func (suite *Suite) Secret(name string) string {
+	return suite.secrets[name]
+}
+
+// Secrets returns the injected secrets
+func (suite *Suite) Secrets() map[string]string {
+	return suite.secrets
+}
+
+// Arg returns a test argument by name
+func (suite *Suite) Arg(name string) types.Value {
+	value, ok := suite.args[name]
+	if !ok {
+		return types.NewValue(nil)
+	}
+	return value
+}
+
+// Args returns the test arguments
+func (suite *Suite) Args() map[string]types.Value {
+	return suite.args
+}
+
+var _ BenchmarkingSuite = (*Suite)(nil)

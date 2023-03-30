@@ -76,7 +76,7 @@ func getTestCommand() *cobra.Command {
 		Args:    cobra.ArbitraryArgs,
 		RunE:    runTestCommand,
 	}
-	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the tests")
+	cmd.Flags().StringP("namespace", "n", "", "the namespace in which to run the tests")
 	cmd.Flags().Bool("create-namespace", false, "whether to create the namespace when running the test")
 	cmd.Flags().String("service-account", "", "the name of the service account to use to run test pods")
 	cmd.Flags().StringP("context", "c", "", "the test context")
@@ -87,11 +87,8 @@ func getTestCommand() *cobra.Command {
 	cmd.Flags().StringArrayP("values", "f", []string{}, "release values paths")
 	cmd.Flags().StringArray("set", []string{}, "chart value overrides")
 	cmd.Flags().StringSliceP("suite", "s", []string{"TestSuite$"}, "regular expressions to filter the names of test suite(s)")
-	cmd.Flags().StringSliceP("test", "t", []string{}, "the name of the test method to run")
-	cmd.Flags().BoolP("parallel", "p", false, "whether to run test tests in parallel")
+	cmd.Flags().StringSliceP("test", "t", []string{".*/^Test"}, "regular expressions to filter the names of tests")
 	cmd.Flags().Duration("timeout", 10*time.Minute, "test timeout")
-	cmd.Flags().Int("iterations", 1, "number of iterations")
-	cmd.Flags().Bool("until-failure", false, "run until an error is detected")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following tests")
 	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
 	cmd.Flags().StringToString("arg", map[string]string{}, "a mapping of named test arguments")
@@ -114,24 +111,29 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	sets, _ := cmd.Flags().GetStringArray("set")
 	suites, _ := cmd.Flags().GetStringSlice("suite")
 	testNames, _ := cmd.Flags().GetStringSlice("test")
-	parallel, _ := cmd.Flags().GetBool("parallel")
 	timeout, _ := cmd.Flags().GetDuration("timeout")
 	imagePullPolicy, _ := cmd.Flags().GetString("image-pull-policy")
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
-	iterations, _ := cmd.Flags().GetInt("iterations")
-	untilFailure, _ := cmd.Flags().GetBool("until-failure")
 	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
 	secretsArray, _ := cmd.Flags().GetStringSlice("secret")
 	testArgs, _ := cmd.Flags().GetStringToString("args")
-
-	if untilFailure {
-		iterations = -1
-	}
 
 	// Either a command package or image must be specified
 	pkgPaths := args
 	if len(pkgPaths) == 0 && image == "" {
 		return errors.New("must specify either a test package or --image to run")
+	}
+
+	// Generate a unique test ID
+	testID := petname.Generate(2, "-")
+
+	// If the create-namespace is enabled, generate a default namespace if not specified.
+	if namespace == "" {
+		if createNamespace {
+			namespace = testID
+		} else {
+			namespace = "default"
+		}
 	}
 
 	valueFiles, err := parseFiles(files)
@@ -149,9 +151,6 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Generate a unique test ID
-	testID := petname.Generate(2, "-")
-
 	var executable string
 	if len(pkgPaths) > 0 {
 		step := logging.NewStep(testID, "Preparing artifacts")
@@ -168,10 +167,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 
 	config := test.Config{
 		Namespace:  namespace,
-		Suites:     suites,
 		Tests:      testNames,
-		Parallel:   parallel,
-		Iterations: iterations,
 		Values:     values,
 		Verbose:    verbose,
 		Args:       testArgs,

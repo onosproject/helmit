@@ -12,6 +12,7 @@ import (
 )
 
 func TestBuildBenchmarks(t *testing.T) {
-	t.SkipNow()
-	assert.NoError(t, Benchmarks(logging.NewLogger(os.Stdout)).Build("test-benchmarks", "github.com/onosproject/helmit/test/..."))
+	defer os.Remove("test-benchmarks")
+	assert.NoError(t, Benchmarks(logging.NewLogger(os.Stdout)).
+		Build("test-benchmarks", "github.com/onosproject/helmit/test/..."))
 }

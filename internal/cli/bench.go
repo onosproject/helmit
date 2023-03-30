@@ -72,7 +72,7 @@ func getBenchCommand() *cobra.Command {
 		Args:    cobra.ArbitraryArgs,
 		RunE:    runBenchCommand,
 	}
-	cmd.Flags().StringP("namespace", "n", "default", "the namespace in which to run the benchmarks")
+	cmd.Flags().StringP("namespace", "n", "", "the namespace in which to run the benchmarks")
 	cmd.Flags().Bool("create-namespace", false, "whether to create the namespace when running the test")
 	cmd.Flags().String("service-account", "", "the name of the service account to use to run worker pods")
 	cmd.Flags().StringToStringP("label", "l", map[string]string{}, "labels to apply to the worker pods")
@@ -93,6 +93,7 @@ func getBenchCommand() *cobra.Command {
 	cmd.Flags().Duration("timeout", 10*time.Minute, "benchmark timeout")
 	cmd.Flags().Bool("no-teardown", false, "do not tear down clusters following benchmarks")
 	cmd.Flags().StringSlice("secret", []string{}, "secrets to pass to the kubernetes pod")
+	_ = cmd.MarkFlagRequired("suite")
 	_ = cmd.MarkFlagRequired("benchmark")
 	return cmd
 }
@@ -130,6 +131,18 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 		return errors.New("must specify either a benchmark package or --image to run")
 	}
 
+	// Generate a unique benchmark ID
+	benchID := petname.Generate(2, "-")
+
+	// If the create-namespace is enabled, generate a default namespace if not specified.
+	if namespace == "" {
+		if createNamespace {
+			namespace = benchID
+		} else {
+			namespace = "default"
+		}
+	}
+
 	// If a context was provided, convert the context to its absolute path
 	if contextPath != "" {
 		path, err := filepath.Abs(contextPath)
@@ -153,9 +166,6 @@ func runBenchCommand(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	// Generate a unique benchmark ID
-	benchID := petname.Generate(2, "-")
 
 	var executable string
 	if len(pkgPaths) > 0 {
@@ -253,6 +263,7 @@ func setupBenchmark(job job.Job[benchmark.Config], timeout time.Duration) error 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	job.Config.Type = benchmark.SetupType
+	job.DeleteNamespace = false
 	step := logging.NewStep(job.ID, "Setting up benchmark")
 	step.Start()
 	if err := runJob(ctx, job, step); err != nil {
@@ -409,6 +420,7 @@ func tearDownBenchmark(job job.Job[benchmark.Config], timeout time.Duration) err
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	job.Config.Type = benchmark.TearDownType
+	job.CreateNamespace = false
 	step := logging.NewStep(job.ID, "Tearing down benchmark")
 	step.Start()
 	if err := runJob(ctx, job, step); err != nil {

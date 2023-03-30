@@ -21,12 +21,9 @@ import (
 )
 
 func main() {
-	test.Main([]test.InternalTestSuite{
+	test.Main([]test.TestingSuite{
 		{{- range .Suites }}
-		{
-			Name:  "{{ .Name }}",
-			Suite: new({{ .Import.Alias }}.{{ .Name }}),
-		},
+		new({{ .Import.Alias }}.{{ .Name }}),
 		{{- end }}
 	})
 }

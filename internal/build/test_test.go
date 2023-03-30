@@ -12,6 +12,7 @@ import (
 )
 
 func TestBuildTests(t *testing.T) {
-	t.SkipNow()
-	assert.NoError(t, Tests(logging.NewLogger(os.Stdout)).Build("test-tests", "github.com/onosproject/helmit/test/..."))
+	defer os.Remove("test-tests")
+	assert.NoError(t, Tests(logging.NewLogger(os.Stdout)).
+		Build("test-tests", "github.com/onosproject/helmit/test/..."))
 }

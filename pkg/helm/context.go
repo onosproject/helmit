@@ -8,6 +8,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/iancoleman/strcase"
+	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/cli/values"
 	"helm.sh/helm/v3/pkg/getter"
@@ -49,12 +50,15 @@ func (c *Context) getReleaseValues(release string, defaultValues map[string]any,
 	if err != nil {
 		return nil, err
 	}
-	overrides = mergeValues(defaultValues, overrides)
-	return overrides, nil
+	return mergeValues(defaultValues, overrides)
 }
 
-func mergeValues(a, b map[string]any) map[string]any {
-	return mergeMaps(normalizeMap(a), b)
+func mergeValues(a, b map[string]any) (map[string]any, error) {
+	if m, err := normalizeMap(a); err != nil {
+		return nil, err
+	} else {
+		return mergeMaps(m, b), nil
+	}
 }
 
 func mergeMaps(a, b map[string]any) map[string]any {
@@ -129,45 +133,52 @@ func getPathAndKey(path []string) ([]string, string) {
 	return path[:len(path)-1], path[len(path)-1]
 }
 
-func normalize(value any) any {
-	kind := reflect.ValueOf(value).Kind()
-	switch kind {
+func normalize(value any) (any, error) {
+	t := reflect.TypeOf(value)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	switch t.Kind() {
 	case reflect.Struct:
-		return normalizeStruct(value.(struct{}))
+		bytes, err := yaml.Marshal(value)
+		if err != nil {
+			return nil, err
+		}
+		value = make(map[string]any)
+		if err := yaml.Unmarshal(bytes, &value); err != nil {
+			return nil, err
+		}
+		return value, nil
 	case reflect.Map:
 		return normalizeMap(value.(map[string]any))
 	case reflect.Slice:
 		return normalizeSlice(value.([]any))
 	}
-	return value
+	return value, nil
 }
 
-func normalizeStruct(value struct{}) any {
-	elem := reflect.ValueOf(value).Elem()
-	elemType := elem.Type()
-	normalized := make(map[string]any)
-	for i := 0; i < elem.NumField(); i++ {
-		key := normalizeField(elemType.Field(i))
-		value := normalize(elem.Field(i).Interface())
-		normalized[key] = value
-	}
-	return normalized
-}
-
-func normalizeMap(values map[string]any) map[string]any {
+func normalizeMap(values map[string]any) (map[string]any, error) {
 	normalized := make(map[string]any)
 	for key, value := range values {
-		normalized[key] = normalize(value)
+		if v, err := normalize(value); err != nil {
+			return nil, err
+		} else {
+			normalized[key] = v
+		}
 	}
-	return normalized
+	return normalized, nil
 }
 
-func normalizeSlice(values []any) any {
+func normalizeSlice(values []any) ([]any, error) {
 	normalized := make([]any, len(values))
 	for i, value := range values {
-		normalized[i] = normalize(value)
+		if v, err := normalize(value); err != nil {
+			return nil, err
+		} else {
+			normalized[i] = v
+		}
 	}
-	return normalized
+	return normalized, nil
 }
 
 func normalizeField(field reflect.StructField) string {

@@ -9,13 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/onosproject/helmit/internal/job"
-	"github.com/onosproject/helmit/pkg/helm"
-	"github.com/onosproject/helmit/pkg/types"
-	"k8s.io/client-go/rest"
 	"math"
 	"os"
 	"reflect"
-	"regexp"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -23,11 +19,36 @@ import (
 
 const shutdownFile = "/tmp/shutdown"
 
-// The executor is the entrypoint for benchmark images. It takes the input and environment and runs
-// the image in the appropriate context according to the arguments.
+// Type is a benchmark job type
+type Type string
+
+const (
+	// SetupType is a benchmark setup job type
+	SetupType Type = "Setup"
+	// WorkerType is a benchmark worker job type
+	WorkerType Type = "Worker"
+	// TearDownType is a benchmark tear down job type
+	TearDownType Type = "TearDown"
+)
+
+// Config is a benchmark configuration
+type Config struct {
+	Type           Type                `json:"type,omitempty"`
+	Namespace      string              `json:"namespace,omitempty"`
+	Suite          string              `json:"suite,omitempty"`
+	Benchmark      string              `json:"benchmark,omitempty"`
+	Parallelism    int                 `json:"parallelism,omitempty"`
+	ReportInterval time.Duration       `json:"reportInterval,omitempty"`
+	Timeout        time.Duration       `json:"timeout,omitempty"`
+	Context        string              `json:"context,omitempty"`
+	Values         map[string][]string `json:"values,omitempty"`
+	ValueFiles     map[string][]string `json:"valueFiles,omitempty"`
+	Args           map[string]string   `json:"args,omitempty"`
+	NoTeardown     bool                `json:"verbose,omitempty"`
+}
 
 // Main runs a benchmark
-func Main(suites []InternalBenchmarkSuite) {
+func Main(suites []BenchmarkingSuite) {
 	if err := run(suites); err != nil {
 		println("Benchmark failed " + err.Error())
 		os.Exit(1)
@@ -36,9 +57,13 @@ func Main(suites []InternalBenchmarkSuite) {
 }
 
 // run runs a benchmark
-func run(suites []InternalBenchmarkSuite) error {
+func run(suites []BenchmarkingSuite) error {
 	var config Config
-	secrets, err := job.Bootstrap(&config)
+	if err := job.LoadConfig(&config); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	secrets, err := job.LoadSecrets()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -47,32 +72,12 @@ func run(suites []InternalBenchmarkSuite) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	suite, err := getSuite(config, suites)
-	if err != nil {
-		return err
+	suite, ok := getSuite(config, suites)
+	if !ok {
+		return fmt.Errorf("unknown benchmark suite %s", config.Suite)
 	}
 
-	suite.SetSecrets(secrets)
-
-	args := make(map[string]types.Value)
-	for key, value := range config.Args {
-		args[key] = types.NewValue(value)
-	}
-	suite.SetArgs(args)
-
-	suite.SetNamespace(config.Namespace)
-	raftConfig, err := rest.InClusterConfig()
-	if err != nil {
-		return err
-	}
-	suite.SetConfig(raftConfig)
-
-	suite.SetHelm(helm.NewClient(helm.Context{
-		Namespace:  config.Namespace,
-		WorkDir:    config.Context,
-		Values:     config.Values,
-		ValueFiles: config.ValueFiles,
-	}))
+	suite.Init(config, secrets)
 
 	switch config.Type {
 	case SetupType:
@@ -85,13 +90,21 @@ func run(suites []InternalBenchmarkSuite) error {
 	return nil
 }
 
-func getSuite(config Config, suites []InternalBenchmarkSuite) (BenchmarkingSuite, error) {
-	for _, s := range suites {
-		if ok, _ := regexp.MatchString(config.Suite, s.Name); ok {
-			return s.Suite, nil
+func getSuite(config Config, suites []BenchmarkingSuite) (BenchmarkingSuite, bool) {
+	for _, suite := range suites {
+		if getSuiteName(suite) == config.Suite {
+			return suite, true
 		}
 	}
-	return nil, fmt.Errorf("no suite matching pattern %s", config.Suite)
+	return nil, false
+}
+
+func getSuiteName(suite BenchmarkingSuite) string {
+	t := reflect.TypeOf(suite)
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t.Name()
 }
 
 func runSetup(ctx context.Context, config Config, suite BenchmarkingSuite) error {
@@ -214,6 +227,7 @@ func runWorker(ctx context.Context, config Config, suite BenchmarkingSuite) erro
 					return err
 				}
 			}
+			return nil
 		}
 	}
 }

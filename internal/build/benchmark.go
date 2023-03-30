@@ -21,12 +21,9 @@ import (
 )
 
 func main() {
-	benchmark.Main([]benchmark.InternalBenchmarkSuite{
+	benchmark.Main([]benchmark.BenchmarkingSuite{
 		{{- range .Suites }}
-		{
-			Name:  "{{ .Name }}",
-			Suite: new({{ .Import.Alias }}.{{ .Name }}),
-		},
+		new({{ .Import.Alias }}.{{ .Name }}),
 		{{- end }}
 	})
 }

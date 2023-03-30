@@ -189,10 +189,14 @@ func (cmd *InstallCmd) Get(ctx context.Context) (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
+	values, err := mergeValues(release.Chart.Values, release.Config)
+	if err != nil {
+		return nil, err
+	}
 	return &Release{
 		Namespace: release.Namespace,
 		Name:      release.Name,
-		values:    mergeValues(release.Chart.Values, release.Config),
+		values:    values,
 	}, nil
 }
 
@@ -264,10 +268,14 @@ func (cmd *UpgradeCmd) Get(ctx context.Context) (*Release, error) {
 	if err != nil {
 		return nil, err
 	}
+	values, err := mergeValues(release.Chart.Values, release.Config)
+	if err != nil {
+		return nil, err
+	}
 	return &Release{
 		Namespace: release.Namespace,
 		Name:      release.Name,
-		values:    mergeValues(release.Chart.Values, release.Config),
+		values:    values,
 	}, nil
 }
 

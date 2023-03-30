@@ -34,16 +34,8 @@ const (
 	defaultRoleName        = "cluster-admin"
 )
 
-// Bootstrap bootstraps the job
-func Bootstrap(config any) (map[string]string, error) {
-	if err := loadConfig(&config); err != nil {
-		return nil, err
-	}
-	return loadSecrets()
-}
-
-// loadConfig loads the job configuration
-func loadConfig(config any) error {
+// LoadConfig loads the job configuration
+func LoadConfig(config any) error {
 	bytes, err := os.ReadFile(filepath.Join(configPath, configFile))
 	if err != nil {
 		return err
@@ -55,8 +47,8 @@ func loadConfig(config any) error {
 	return nil
 }
 
-// loadSecrets loads the job secrets
-func loadSecrets() (map[string]string, error) {
+// LoadSecrets loads the job secrets
+func LoadSecrets() (map[string]string, error) {
 	secrets := make(map[string]string)
 	files, err := os.ReadDir(secretsPath)
 	if err != nil {
