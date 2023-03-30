@@ -15,7 +15,9 @@ import (
 	"github.com/onosproject/helmit/internal/logging"
 	"math/rand"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/onosproject/helmit/internal/job"
@@ -223,38 +225,60 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	step = logging.NewStep(testID, "Running tests")
 	step.Start()
 
-	// Open a log stream for the job
-	stream, err := job.GetLogs(context.Background())
-	if err != nil {
-		return err
-	}
-	defer stream.Close()
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
+	doneCh := make(chan struct{})
 
-	scanner := bufio.NewScanner(stream)
-	for scanner.Scan() {
-		fmt.Fprintf(cmd.OutOrStdout(), "    %s\n", scanner.Text())
-	}
+	go func() {
+		defer close(doneCh)
 
-	// Get the exit code for the job.
-	_, code, err := job.GetStatus(ctx)
-	if err != nil {
-		return err
-	}
-	step.Complete()
+		// Open a log stream for the job
+		stream, err := job.GetLogs(ctx)
+		if err != nil {
+			step.Fail(err)
+			return
+		}
+		defer stream.Close()
 
-	step = logging.NewStep(testID, "Cleaning up tests")
-	step.Start()
-	if err := job.Delete(ctx, step); err != nil {
-		step.Fail(err)
-		return err
-	}
-	step.Complete()
+		scanner := bufio.NewScanner(stream)
+		for scanner.Scan() {
+			fmt.Fprintf(cmd.OutOrStdout(), "    %s\n", scanner.Text())
+		}
+	}()
 
-	if code == 0 {
-		successColor.Fprintf(cmd.OutOrStdout(), "%s Tests passed!\n", successIcon)
-	} else {
-		failureColor.Fprintf(cmd.OutOrStdout(), "%s Tests failed!\n", failureIcon)
+	select {
+	case <-signalCh:
+		step.Fail(errors.New("tests canceled"))
+
+		step = logging.NewStep(testID, "Cancelling test job")
+		step.Start()
+		if err := job.Delete(ctx, step); err != nil {
+			step.Fail(err)
+			return err
+		}
+		step.Complete()
+	case <-doneCh:
+		// Get the exit code for the job.
+		_, code, err := job.GetStatus(ctx)
+		if err != nil {
+			return err
+		}
+		step.Complete()
+
+		step = logging.NewStep(testID, "Cleaning up tests")
+		step.Start()
+		if err := job.Delete(ctx, step); err != nil {
+			step.Fail(err)
+			return err
+		}
+		step.Complete()
+
+		if code == 0 {
+			successColor.Fprintf(cmd.OutOrStdout(), "%s Tests passed!\n", successIcon)
+		} else {
+			failureColor.Fprintf(cmd.OutOrStdout(), "%s Tests failed!\n", failureIcon)
+		}
+		os.Exit(code)
 	}
-	os.Exit(code)
 	return nil
 }
