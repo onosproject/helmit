@@ -25,6 +25,7 @@ func TestReleaseValues(t *testing.T) {
 		"a": "b",
 		"b": map[string]any{
 			"c": 1,
+			"d": nil,
 		},
 	}
 	defaultFiles := []string{

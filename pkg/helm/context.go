@@ -133,6 +133,9 @@ func getPathAndKey(path []string) ([]string, string) {
 }
 
 func normalize(value any) (any, error) {
+	if value == nil {
+		return nil, nil
+	}
 	t := reflect.TypeOf(value)
 	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
@@ -158,24 +161,31 @@ func normalize(value any) (any, error) {
 
 func normalizeMap(values map[string]any) (map[string]any, error) {
 	normalized := make(map[string]any)
+	if values == nil {
+		return normalized, nil
+	}
 	for key, value := range values {
-		v, err := normalize(value)
-		if err != nil {
-			return nil, err
+		if value != nil {
+			v, err := normalize(value)
+			if err != nil {
+				return nil, err
+			}
+			normalized[key] = v
 		}
-		normalized[key] = v
 	}
 	return normalized, nil
 }
 
 func normalizeSlice(values []any) ([]any, error) {
-	normalized := make([]any, len(values))
-	for i, value := range values {
-		v, err := normalize(value)
-		if err != nil {
-			return nil, err
+	normalized := make([]any, 0, len(values))
+	for _, value := range values {
+		if value != nil {
+			v, err := normalize(value)
+			if err != nil {
+				return nil, err
+			}
+			normalized = append(normalized, v)
 		}
-		normalized[i] = v
 	}
 	return normalized, nil
 }
