@@ -56,11 +56,9 @@ func Main(suites []TestingSuite) {
 	}
 
 	// Hack to enable verbose testing.
-	if config.Verbose {
-		os.Args = []string{
-			os.Args[0],
-			"-test.v",
-		}
+	os.Args = []string{
+		os.Args[0],
+		"-test.v",
 	}
 
 	testing.Main(func(_, _ string) (bool, error) { return true, nil }, tests, nil, nil)
