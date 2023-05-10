@@ -118,7 +118,7 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 	pullPolicy := corev1.PullPolicy(imagePullPolicy)
 	noTeardown, _ := cmd.Flags().GetBool("no-teardown")
 	secretsArray, _ := cmd.Flags().GetStringSlice("secret")
-	testArgs, _ := cmd.Flags().GetStringToString("args")
+	testArgs, _ := cmd.Flags().GetStringToString("arg")
 
 	// Either a command package or image must be specified
 	pkgPaths := args
