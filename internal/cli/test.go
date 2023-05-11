@@ -159,7 +159,9 @@ func runTestCommand(cmd *cobra.Command, args []string) error {
 		step.Start()
 		executable = filepath.Join(os.TempDir(), "helmit", testID)
 		defer os.RemoveAll(executable)
-		image = defaultRunnerImage
+		if image == "" {
+			image = defaultRunnerImage
+		}
 		if err := build.Tests(step, suites...).Build(executable, pkgPaths...); err != nil {
 			step.Fail(err)
 			return err
